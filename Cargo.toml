@@ -1,0 +1,12 @@
+[package]
+name = "arpeggio-rs"
+version = "0.1.0"
+description = "A port of the Arpeggio library for Rust"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
+pdbtbx = { version = "0.11.0", features = ["rayon", "rstar"] }
+rayon = "1.10.0"
