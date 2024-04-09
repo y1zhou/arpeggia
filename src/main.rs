@@ -1,8 +1,12 @@
+mod chains;
+mod interactions;
+mod residues;
 mod utils;
 
 use crate::utils::load_model;
-use crate::utils::ResidueExt;
+use chains::ChainExt;
 use clap::Parser;
+use interactions::InteractionComplex;
 use std::path::{Path, PathBuf};
 
 /// Simple program to greet a person
@@ -44,36 +48,33 @@ fn main() {
     let input_file: String = input_path.to_str().unwrap().parse().unwrap();
 
     // Prepare output directory
-    let file_id = input_path.file_stem().unwrap();
-    let output_path = Path::new(&args.output)
-        .canonicalize()
-        .unwrap()
-        .join(file_id);
+    // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
+    let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(&output_path);
-    let output_dir: String = output_path.to_str().unwrap().parse().unwrap();
+    let output_dir = output_path.to_str().unwrap();
     if args.verbose > 0 {
         println!("Using input file {input_file}");
         println!("Saving results to {output_dir}");
     }
 
     // Load file as complex structure
-    let (mut pdb, errors) = load_model(&input_file);
+    let (pdb, errors) = load_model(&input_file);
     if args.verbose > 1 {
         for err in errors {
             eprintln!("{err}");
         }
     }
 
-    // Load the amino acid sequence for each chain
-    for chain in pdb.chains() {
-        let chain_seq: Vec<_> = chain.residues().map(|res| res.resn().unwrap()).collect();
-
-        println!(">{}\n{}", chain.id(), chain_seq.join(""));
+    if args.verbose > 0 {
+        println!("Loaded {} chains", pdb.chain_count());
+        for chain in pdb.chains() {
+            println!(">{}\n{}", chain.id(), chain.pdb_seq().join(""));
+        }
     }
 
-    // let _ = pdbtbx::save(
-    //     &pdb,
-    //     format!("{output_dir}/{file_id}.pdb"),
-    //     pdbtbx::StrictnessLevel::Loose,
-    // );
+    let _i_complex = InteractionComplex {
+        model: pdb,
+        vdw_comp_factor: args.vdw_comp,
+        interacting_threshold: args.dist_cutoff,
+    };
 }
