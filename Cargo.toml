@@ -1,5 +1,5 @@
 [package]
-name = "arpeggio-rs"
+name = "arpeggia"
 version = "0.1.0"
 description = "A port of the Arpeggio library for Rust"
 edition = "2021"
