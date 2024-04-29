@@ -79,5 +79,7 @@ fn main() {
 
     let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
 
-    i_complex.get_atomic_contacts();
+    let hbonds = i_complex.get_atomic_contacts();
+    println!("Found {} hydrogen bonds", hbonds.len());
+    hbonds.iter().for_each(|h| println!("{h}"));
 }

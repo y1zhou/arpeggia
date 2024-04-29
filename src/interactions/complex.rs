@@ -1,8 +1,8 @@
-use pdbtbx::*;
-// use rstar::RTree;
 use std::collections::HashSet;
 
-use crate::residues::{is_hydrogen_acceptor, is_hydrogen_donor};
+use crate::interactions::hbond::*;
+use crate::interactions::structs::{InteractingEntity, Interaction, ResultEntry};
+use pdbtbx::*;
 
 pub struct InteractionComplex {
     pub model: PDB,
@@ -62,38 +62,9 @@ impl InteractionComplex {
     }
 }
 
-#[allow(dead_code)]
-enum Interaction {
-    StericClash,
-    Covalent,
-    VanDerWaals,
-
-    Electrostatic,
-    Aromatic,
-
-    Hydrophobic,
-}
-
-#[allow(dead_code)]
-enum Electrostatic {
-    Ionic,
-    HydrogenBond,
-    WeakHydrogenBond, // C-H...O hydrogen bond
-    // HalogenBond
-    Polar, // hydrogen bonding without angle terms
-}
-
-#[allow(dead_code)]
-enum Aromatic {
-    PiDisplaced, // staggered stacking, parallel displaced
-    PiT,         // perpendicular T-shaped
-    PiSandwich,  // direct stacking, repulsive
-    CationPi,
-}
-
 pub trait Interactions {
     fn get_ppi(&self);
-    fn get_atomic_contacts(&self) -> HashSet<usize>;
+    fn get_atomic_contacts(&self) -> Vec<ResultEntry>;
     fn get_ring_contacts(&self);
 }
 
@@ -102,51 +73,42 @@ impl Interactions for InteractionComplex {
         // self.get_atomic_contacts()
     }
 
-    fn get_atomic_contacts(&self) -> HashSet<usize> {
+    fn get_atomic_contacts(&self) -> Vec<ResultEntry> {
         let tree = self.model.create_hierarchy_rtree();
+        let max_radius_squared = self.interacting_threshold * self.interacting_threshold;
 
         // Find all atoms within the radius of the ligand
-        let ligand_neighbors: HashSet<usize> = self
+        let ligand_neighbors: Vec<ResultEntry> = self
             .model
             .atoms_with_hierarchy()
             .filter(|x| self.ligand.contains(x.chain().id()))
-            .filter(|x| is_hydrogen_donor(x.residue(), x.atom()))
+            .filter(|x| is_hydrogen_donor(x.conformer(), x.atom()))
             .flat_map(|x| {
                 // TODO: x.conformer().alternative_location() may also be needed
-                let neighbor_atoms_idx: HashSet<usize> = tree
-                    .locate_within_distance(
-                        x.atom().pos(),
-                        self.interacting_threshold * self.interacting_threshold,
-                    )
+                let neighbor_entities: Vec<InteractingEntity> = tree
+                    .locate_within_distance(x.atom().pos(), max_radius_squared)
                     .filter(|y| {
                         (y.chain().id() != x.chain().id())
-                            && (is_hydrogen_acceptor(y.residue(), y.atom()))
+                            && (is_hydrogen_acceptor(y.conformer(), y.atom()))
                     })
-                    .map(|y| {
-                        println!(
-                            "Chain {}, {}{} Atom {} ({})",
-                            y.chain().id(),
-                            y.residue().name().unwrap(),
-                            y.residue().serial_number(),
-                            y.atom().serial_number(),
-                            y.atom().name()
-                        );
-                        y.atom().serial_number()
-                    })
+                    .map(|y| hierarchy_to_entity(y))
                     .collect();
 
-                if !neighbor_atoms_idx.is_empty() {
-                    println!(
-                        "└─Chain {}, {}{} Atom {} ({}) neighbors",
-                        x.chain().id(),
-                        x.residue().name().unwrap(),
-                        x.residue().serial_number(),
-                        x.atom().serial_number(),
-                        x.atom().name()
-                    );
-                }
+                match neighbor_entities.is_empty() {
+                    false => {
+                        let x_entity = hierarchy_to_entity(&x);
 
-                neighbor_atoms_idx
+                        neighbor_entities
+                            .iter()
+                            .map(|y| ResultEntry {
+                                interaction: Interaction::HydrogenBond,
+                                ligand: x_entity.clone(),
+                                receptor: y.clone(),
+                            })
+                            .collect()
+                    }
+                    true => vec![],
+                }
             })
             .collect();
 
@@ -155,5 +117,20 @@ impl Interactions for InteractionComplex {
 
     fn get_ring_contacts(&self) {
         todo!()
+    }
+}
+
+fn hierarchy_to_entity(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
+    InteractingEntity {
+        chain: hierarchy.chain().id().to_string(),
+        resn: hierarchy.residue().name().unwrap().to_string(),
+        resi: hierarchy.residue().serial_number(),
+        altloc: hierarchy
+            .conformer()
+            .alternative_location()
+            .unwrap_or("")
+            .to_string(),
+        atomn: hierarchy.atom().name().to_string(),
+        atomi: hierarchy.atom().serial_number(),
     }
 }
