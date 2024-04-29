@@ -4,9 +4,9 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 
 # Features
 
-- [ ] Parse PDB and mmCIF files
-- [ ] Parse user selection of atoms/residues
-- [ ] Extract protein chains and residues
+- [x] Parse PDB and mmCIF files
+- [x] Parse user selection of chain groups
+- [x] Extract protein chains and residues
 - [ ] Calculate distances between residues
 - [ ] Identify protein-protein interactions
   - [ ] Steric clashes
