@@ -10,3 +10,4 @@ edition = "2021"
 clap = { version = "4.5.4", features = ["derive"] }
 pdbtbx = { version = "0.11.0", features = ["rayon", "rstar"] }
 rayon = "1.10.0"
+rstar = "0.12.0"

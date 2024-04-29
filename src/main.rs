@@ -6,7 +6,7 @@ mod utils;
 use crate::utils::load_model;
 use chains::ChainExt;
 use clap::Parser;
-use interactions::InteractionComplex;
+use interactions::{InteractionComplex, Interactions};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -94,5 +94,7 @@ fn main() {
         println!("{} Residue types: {res_types:?}", res_types.len());
     }
 
-    let _i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
+    let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
+
+    i_complex.get_atomic_contacts();
 }
