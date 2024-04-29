@@ -3,11 +3,10 @@ mod interactions;
 mod residues;
 mod utils;
 
+use crate::chains::ChainExt;
+use crate::interactions::complex::{InteractionComplex, Interactions};
 use crate::utils::load_model;
-use chains::ChainExt;
 use clap::Parser;
-use interactions::{InteractionComplex, Interactions};
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Simple program to greet a person
@@ -76,22 +75,6 @@ fn main() {
         for chain in pdb.chains() {
             println!(">{}\n{}", chain.id(), chain.pdb_seq().join(""));
         }
-    }
-
-    // Debug information on the atom and residue types in the model
-    if args.verbose > 2 {
-        let mut atom_types = HashSet::new();
-        let mut res_types = HashSet::new();
-
-        for atom in pdb.atoms() {
-            atom_types.insert(atom.name());
-        }
-        for res in pdb.residues() {
-            res_types.insert(res.name().unwrap());
-        }
-
-        println!("Atom types: {atom_types:?}");
-        println!("{} Residue types: {res_types:?}", res_types.len());
     }
 
     let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
