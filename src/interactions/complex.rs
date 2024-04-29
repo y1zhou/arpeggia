@@ -19,7 +19,7 @@ impl InteractionComplex {
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
 
-        debug!("Parsed ligands {ligand:?}; receptors {receptor:?}");
+        debug!("Parsed ligand chains {ligand:?}; receptor chains {receptor:?}");
         Self {
             model,
             ligand,
@@ -45,42 +45,55 @@ impl Interactions for InteractionComplex {
         let tree = self.model.create_hierarchy_rtree();
         let max_radius_squared = self.interacting_threshold * self.interacting_threshold;
 
-        // Find all atoms within the radius of the ligand
-        let ligand_neighbors: Vec<ResultEntry> = self
+        // Find all atoms within the radius of the ligand atoms
+        let ligand_neighbors: Vec<(
+            AtomConformerResidueChainModel,
+            AtomConformerResidueChainModel,
+        )> = self
             .model
             .atoms_with_hierarchy()
             .filter(|x| self.ligand.contains(x.chain().id()))
-            .filter(|x| is_hydrogen_donor(x.conformer(), x.atom()))
             .flat_map(|x| {
                 // TODO: x.conformer().alternative_location() may also be needed
-                let neighbor_entities: Vec<InteractingEntity> = tree
+                let neighbor_entities: Vec<(
+                    AtomConformerResidueChainModel,
+                    AtomConformerResidueChainModel,
+                )> = tree
                     .locate_within_distance(x.atom().pos(), max_radius_squared)
-                    .filter(|y| {
-                        (y.chain().id() != x.chain().id())
-                            && (is_hydrogen_acceptor(y.conformer(), y.atom()))
-                    })
-                    .map(|y| hierarchy_to_entity(y))
+                    .filter(|y| self.receptor.contains(y.chain().id()))
+                    .map(|y| (x.clone(), y.clone()))
                     .collect();
 
-                match neighbor_entities.is_empty() {
-                    false => {
-                        let x_entity = hierarchy_to_entity(&x);
-
-                        neighbor_entities
-                            .iter()
-                            .map(|y| ResultEntry {
-                                interaction: Interaction::HydrogenBond,
-                                ligand: x_entity.clone(),
-                                receptor: y.clone(),
-                            })
-                            .collect()
-                    }
-                    true => vec![],
+                match neighbor_entities.len() {
+                    0 => vec![],
+                    _ => neighbor_entities,
                 }
             })
             .collect();
 
-        ligand_neighbors
+        // Hydrogen bonds
+        let hbonds: Vec<ResultEntry> = ligand_neighbors
+            .par_iter()
+            .filter_map(|x| {
+                let g1_is_donor = is_hydrogen_donor(x.0.conformer().name(), x.0.atom().name());
+                let g2_is_acceptor =
+                    is_hydrogen_acceptor(x.1.conformer().name(), x.1.atom().name());
+                let g1_is_acceptor =
+                    is_hydrogen_acceptor(x.0.conformer().name(), x.0.atom().name());
+                let g2_is_donor = is_hydrogen_donor(x.1.conformer().name(), x.1.atom().name());
+
+                match (g1_is_donor & g2_is_acceptor) | (g1_is_acceptor & g2_is_donor) {
+                    true => Some(ResultEntry {
+                        interaction: Interaction::HydrogenBond,
+                        ligand: hierarchy_to_entity(&x.0),
+                        receptor: hierarchy_to_entity(&x.1),
+                    }),
+                    false => None,
+                }
+            })
+            .collect();
+
+        hbonds
     }
 
     fn get_ring_contacts(&self) {

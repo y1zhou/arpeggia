@@ -64,7 +64,7 @@ fn main() {
     // Information on the sequence of the chains in the model
     info!("Loaded {} chains", pdb.chain_count());
     for chain in pdb.chains() {
-        debug!("\n>{}\n{}", chain.id(), chain.pdb_seq().join(""));
+        debug!(">{}: {}", chain.id(), chain.pdb_seq().join(""));
     }
 
     let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);

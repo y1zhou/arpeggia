@@ -2,14 +2,14 @@ use std::collections::HashSet;
 
 use pdbtbx::*;
 
-pub fn is_hydrogen_acceptor(rotamer: &Conformer, atom: &Atom) -> bool {
+pub fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
     // all the carbonyl oxygens in the main chain and on the terminals
     let oxygens = HashSet::from(["O", "OXT"]);
-    if oxygens.contains(atom.name()) && rotamer.name() != "HOH" {
+    if oxygens.contains(atom_name) && res_name != "HOH" {
         return true;
     }
     matches!(
-        (rotamer.name(), atom.name()),
+        (res_name, atom_name),
         ("ASN", "OD1")
             // | ("ASN", "ND2")
             | ("ASP", "OD1")
@@ -27,13 +27,13 @@ pub fn is_hydrogen_acceptor(rotamer: &Conformer, atom: &Atom) -> bool {
     )
 }
 
-pub fn is_hydrogen_donor(rotamer: &Conformer, atom: &Atom) -> bool {
+pub fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     // All amide niteogens in the main chain except proline
-    if atom.name() == "CA" {
+    if atom_name == "CA" {
         return true;
     }
     matches!(
-        (rotamer.name(), atom.name()),
+        (res_name, atom_name),
         ("ARG", "NE")
             | ("ARG", "NH1")
             | ("ARG", "NH2")
