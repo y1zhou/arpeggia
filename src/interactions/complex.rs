@@ -1,5 +1,6 @@
 use crate::interactions::hbond::*;
 use crate::interactions::structs::{InteractingEntity, Interaction, ResultEntry};
+use crate::utils::parse_groups;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -15,42 +16,8 @@ pub struct InteractionComplex {
 
 impl InteractionComplex {
     pub fn new(model: PDB, groups: &str, vdw_comp_factor: f64, interacting_threshold: f64) -> Self {
-        // Parse the first two fields in groups
-        let sel_vec: Vec<&str> = groups.split('/').collect();
-        let ligand_chains = sel_vec.first().unwrap();
-        let receptor_chains = sel_vec.get(1).unwrap();
-
-        // Create a HashSet of chains for the ligand and receptor
-        let mut ligand: HashSet<String> = ligand_chains
-            .split(',')
-            .map(|c| c.to_string())
-            .filter(|c| !c.is_empty())
-            .collect();
-        let mut receptor: HashSet<String> = receptor_chains
-            .split(',')
-            .map(|c| c.to_string())
-            .filter(|c| !c.is_empty())
-            .collect();
-
-        // If there are no ligand or receptor chains, use all remaining chains
-        if ligand.is_empty() ^ receptor.is_empty() {
-            if ligand.is_empty() {
-                ligand = model
-                    .chains()
-                    .map(|c| c.id().to_string())
-                    .filter(|c| !receptor.contains(c))
-                    .collect();
-            } else {
-                receptor = model
-                    .chains()
-                    .map(|c| c.id().to_string())
-                    .filter(|c| !ligand.contains(c))
-                    .collect();
-            }
-        }
-        if ligand.is_empty() && receptor.is_empty() {
-            panic!("No ligand or receptor chains passed!")
-        }
+        let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
+        let (ligand, receptor) = parse_groups(&all_chains, groups);
 
         debug!("Parsed ligands {ligand:?}; receptors {receptor:?}");
         Self {
