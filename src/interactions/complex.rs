@@ -1,8 +1,9 @@
-use std::collections::HashSet;
-
 use crate::interactions::hbond::*;
 use crate::interactions::structs::{InteractingEntity, Interaction, ResultEntry};
 use pdbtbx::*;
+use rayon::prelude::*;
+use std::collections::HashSet;
+use tracing::debug;
 
 pub struct InteractionComplex {
     pub model: PDB,
@@ -51,7 +52,7 @@ impl InteractionComplex {
             panic!("No ligand or receptor chains passed!")
         }
 
-        println!("Parsed ligands {ligand:?}; receptors {receptor:?}");
+        debug!("Parsed ligands {ligand:?}; receptors {receptor:?}");
         Self {
             model,
             ligand,
