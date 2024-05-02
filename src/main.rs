@@ -49,8 +49,8 @@ fn main() {
 
     // Prepare output directory
     // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
-    let output_path = Path::new(&args.output).canonicalize().unwrap();
-    let _ = std::fs::create_dir_all(&output_path);
+    let output_path = Path::new(&args.output);
+    let _ = std::fs::create_dir_all(output_path);
     let output_dir = output_path.to_str().unwrap();
     debug!("Using input file {input_file}");
     debug!("Results will be saved to {output_dir}");
