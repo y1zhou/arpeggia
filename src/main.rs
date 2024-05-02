@@ -6,6 +6,7 @@ mod utils;
 use crate::chains::ChainExt;
 use crate::interactions::complex::{InteractionComplex, Interactions};
 use crate::utils::load_model;
+
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, trace, warn};

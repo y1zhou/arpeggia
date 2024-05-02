@@ -1,6 +1,7 @@
 use crate::interactions::hbond::*;
-use crate::interactions::structs::{InteractingEntity, Interaction, ResultEntry};
+use crate::interactions::structs::{InteractingEntity, ResultEntry};
 use crate::utils::parse_groups;
+
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -74,16 +75,13 @@ impl Interactions for InteractionComplex {
         // Hydrogen bonds
         let hbonds: Vec<ResultEntry> = ligand_neighbors
             .par_iter()
-            .filter_map(
-                |x| match has_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor) {
-                    true => Some(ResultEntry {
-                        interaction: Interaction::HydrogenBond,
-                        ligand: hierarchy_to_entity(&x.0),
-                        receptor: hierarchy_to_entity(&x.1),
-                    }),
-                    false => None,
-                },
-            )
+            .filter_map(|x| {
+                find_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor).map(|intxn| ResultEntry {
+                    interaction: intxn,
+                    ligand: hierarchy_to_entity(&x.0),
+                    receptor: hierarchy_to_entity(&x.1),
+                })
+            })
             .collect();
 
         hbonds
