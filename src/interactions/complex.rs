@@ -1,6 +1,6 @@
 use super::hbond::*;
-use super::structs::Interaction;
-use super::structs::{InteractingEntity, ResultEntry};
+use super::ionic::*;
+use super::structs::{InteractingEntity, Interaction, ResultEntry};
 use super::vdw::*;
 use crate::utils::parse_groups;
 
@@ -119,6 +119,15 @@ impl Interactions for InteractionComplex {
                         }
                     });
                 atomic_contacts.extend(weak_hbonds);
+
+                // Ionic bonds
+                let ionic_bonds = find_ionic_bond(&x.0, &x.1).map(|intxn| ResultEntry {
+                    interaction: intxn,
+                    ligand: hierarchy_to_entity(&x.0),
+                    receptor: hierarchy_to_entity(&x.1),
+                    distance: x.0.atom().distance(x.1.atom()),
+                });
+                atomic_contacts.extend(ionic_bonds);
 
                 Some(atomic_contacts)
             })
