@@ -38,12 +38,23 @@ struct Args {
     /// Distance cutoff for grid points to be 'interacting' with the entity
     #[arg(short, long, default_value_t = 4.5)]
     dist_cutoff: f64,
+
+    /// Number of threads to use for parallel processing
+    #[arg(short = 'j', long = "num-threads", default_value_t = 0)]
+    num_threads: usize,
 }
 
 fn main() {
     let args = Args::parse();
     tracing_subscriber::fmt::init();
     trace!("{args:?}");
+
+    // Create Rayon thread pool
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(args.num_threads)
+        .build_global()
+        .unwrap();
+    debug!("Using {} thread(s)", rayon::current_num_threads());
 
     // Make sure `input` exists
     let input_path = Path::new(&args.input).canonicalize().unwrap();
