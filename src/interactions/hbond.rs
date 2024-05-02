@@ -51,6 +51,43 @@ pub fn find_hydrogen_bond(
     }
 }
 
+pub fn find_weak_hydrogen_bond(
+    entity1: &AtomConformerResidueChainModel,
+    entity2: &AtomConformerResidueChainModel,
+    vdw_comp_factor: f64,
+) -> Option<Interaction> {
+    if let Some((donor, acceptor)) = is_weak_donor_acceptor_pair(entity1, entity2) {
+        let donor_h: Vec<&Atom> = donor
+            .residue()
+            .par_atoms()
+            .filter(|atom| atom.element().unwrap() == &Element::H)
+            .collect();
+
+        // Hydrogen bonds are stricter as they have angle restrictions
+        let acceptor_vdw: f64 = acceptor
+            .atom()
+            .element()
+            .unwrap()
+            .atomic_radius()
+            .van_der_waals
+            .unwrap();
+        let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
+        if donor_h.par_iter().any(|h| {
+            (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
+                & (donor.atom().angle(h, acceptor.atom()) >= 130.0)
+        }) {
+            Some(Interaction::WeakHydrogenBond)
+        } else if donor.atom().distance(acceptor.atom()) <= HYDROGEN_BOND_POLAR_DIST {
+            // Polar interactions are more relaxed as only distance is checked
+            Some(Interaction::WeakPolarContact)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 fn is_donor_acceptor_pair<'a>(
     entity1: &'a AtomConformerResidueChainModel<'a>,
     entity2: &'a AtomConformerResidueChainModel<'a>,
@@ -119,6 +156,27 @@ fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
             | ("TYR", "OH")
             | ("CYS", "SG") // 10.1002/prot.22327
     )
+}
+
+fn is_weak_donor_acceptor_pair<'a>(
+    entity1: &'a AtomConformerResidueChainModel<'a>,
+    entity2: &'a AtomConformerResidueChainModel<'a>,
+) -> Option<(
+    &'a AtomConformerResidueChainModel<'a>,
+    &'a AtomConformerResidueChainModel<'a>,
+)> {
+    let e1_conformer = entity1.conformer().name();
+    let e2_conformer = entity2.conformer().name();
+    let e1_atom = entity1.atom().name();
+    let e2_atom = entity2.atom().name();
+
+    if is_weak_hydrogen_donor(entity1.atom()) & is_hydrogen_acceptor(e2_conformer, e2_atom) {
+        Some((entity1, entity2))
+    } else if is_weak_hydrogen_donor(entity2.atom()) & is_hydrogen_acceptor(e1_conformer, e1_atom) {
+        Some((entity2, entity1))
+    } else {
+        None
+    }
 }
 
 fn is_weak_hydrogen_donor(atom: &Atom) -> bool {

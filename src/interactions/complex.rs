@@ -72,6 +72,8 @@ impl Interactions for InteractionComplex {
             })
             .collect();
 
+        let mut atomic_contacts: Vec<ResultEntry> = vec![];
+
         // Hydrogen bonds
         let hbonds: Vec<ResultEntry> = ligand_neighbors
             .par_iter()
@@ -84,7 +86,20 @@ impl Interactions for InteractionComplex {
             })
             .collect();
 
-        hbonds
+        let weak_hbonds: Vec<ResultEntry> = ligand_neighbors
+            .par_iter()
+            .filter_map(|x| {
+                find_weak_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor).map(|intxn| ResultEntry {
+                    interaction: intxn,
+                    ligand: hierarchy_to_entity(&x.0),
+                    receptor: hierarchy_to_entity(&x.1),
+                })
+            })
+            .collect();
+
+        atomic_contacts.extend(hbonds);
+        atomic_contacts.extend(weak_hbonds);
+        atomic_contacts
     }
 
     fn get_ring_contacts(&self) {

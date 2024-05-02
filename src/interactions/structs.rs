@@ -12,7 +12,8 @@ pub enum Interaction {
     HydrogenBond,
     WeakHydrogenBond, // C-H...O hydrogen bond
     // HalogenBond
-    PolarContact, // hydrogen bonding without angle terms
+    PolarContact,     // hydrogen bonding without angle terms
+    WeakPolarContact, // C-H...O bonding without angle terms
 
     // Aromatic
     PiDisplacedStacking, // staggered stacking, parallel displaced
