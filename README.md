@@ -7,16 +7,16 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 - [x] Parse PDB and mmCIF files
 - [x] Parse user selection of chain groups
 - [x] Extract protein chains and residues
-- [ ] Calculate distances between residues
-- [ ] Identify protein-protein interactions
-  - [ ] Steric clashes
-  - [ ] VdW interactions
+- [x] Calculate distances between residues
+- Identify protein-protein interactions
+  - [x] Steric clashes
+  - [x] VdW interactions
   - [ ] Hydrophobic interactions
   - [ ] Aromatic interactions
   - [ ] Cation-pi interactions
   - [ ] Ionic interactions
-  - [ ] Hydrogen bonds
-  - [ ] Weak hydrogen bonds
+  - [x] Hydrogen bonds
+  - [x] Weak hydrogen bonds
   - [ ] Covalent bonds
 - [ ] Output results in various formats (e.g., JSON, CSV)
 - [ ] Bundle into a `PyO3` extension module
