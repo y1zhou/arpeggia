@@ -4,23 +4,23 @@ use core::fmt;
 #[derive(Debug, Clone)]
 pub enum Interaction {
     StericClash,
-    Covalent,
-    VanDerWaals,
+    CovalentBond,
+    VanDerWaalsContact,
 
     // Electrostatic,
-    Ionic,
+    IonicBond,
     HydrogenBond,
     WeakHydrogenBond, // C-H...O hydrogen bond
     // HalogenBond
-    Polar, // hydrogen bonding without angle terms
+    PolarContact, // hydrogen bonding without angle terms
 
     // Aromatic
-    PiDisplaced, // staggered stacking, parallel displaced
-    PiT,         // perpendicular T-shaped
-    PiSandwich,  // direct stacking, repulsive
+    PiDisplacedStacking, // staggered stacking, parallel displaced
+    PiTStacking,         // perpendicular T-shaped
+    PiSandwichStacking,  // direct stacking, repulsive
     CationPi,
 
-    Hydrophobic,
+    HydrophobicContact,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
