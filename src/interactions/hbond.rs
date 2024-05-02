@@ -1,8 +1,70 @@
 use std::collections::HashSet;
 
 use pdbtbx::*;
+use rayon::prelude::*;
 
-pub fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
+const HYDROGEN_BOND_POLAR_DIST: f64 = 3.5;
+
+/// Hydrogen bond criteria
+///
+/// `vdw_comp_factor` is the compensation factor for VdW radii dependent interaction types.
+///
+/// See details in:
+/// https://pymolwiki.org/index.php/Displaying_Biochemical_Properties#Hydrogen_bonds_and_Polar_Contacts
+pub fn has_hydrogen_bond(
+    entity1: &AtomConformerResidueChainModel,
+    entity2: &AtomConformerResidueChainModel,
+    vdw_comp_factor: f64,
+) -> bool {
+    if let Some((donor, acceptor)) = is_donor_acceptor_pair(entity1, entity2) {
+        let donor_h: Vec<&Atom> = donor
+            .residue()
+            .par_atoms()
+            .filter(|atom| atom.element().unwrap() == &Element::H)
+            .collect();
+
+        donor_h.par_iter().any(|h| {
+            let h_dist = h.distance(acceptor.atom());
+            (h_dist
+                <= Element::H.atomic_radius().van_der_waals.unwrap()
+                    + acceptor
+                        .atom()
+                        .element()
+                        .unwrap()
+                        .atomic_radius()
+                        .van_der_waals
+                        .unwrap()
+                    + vdw_comp_factor)
+                & (donor.atom().angle(h, acceptor.atom()) >= 90.0)
+        })
+    } else {
+        false
+    }
+}
+
+fn is_donor_acceptor_pair<'a>(
+    entity1: &'a AtomConformerResidueChainModel<'a>,
+    entity2: &'a AtomConformerResidueChainModel<'a>,
+) -> Option<(
+    &'a AtomConformerResidueChainModel<'a>,
+    &'a AtomConformerResidueChainModel<'a>,
+)> {
+    let e1_conformer = entity1.conformer().name();
+    let e2_conformer = entity2.conformer().name();
+    let e1_atom = entity1.atom().name();
+    let e2_atom = entity2.atom().name();
+
+    if is_hydrogen_donor(e1_conformer, e1_atom) & is_hydrogen_acceptor(e2_conformer, e2_atom) {
+        Some((entity1, entity2))
+    } else if is_hydrogen_donor(e2_conformer, e2_atom) & is_hydrogen_acceptor(e1_conformer, e1_atom)
+    {
+        Some((entity2, entity1))
+    } else {
+        None
+    }
+}
+
+fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
     // all the carbonyl oxygens in the main chain and on the terminals
     let oxygens = HashSet::from(["O", "OXT"]);
     if oxygens.contains(atom_name) && res_name != "HOH" {
@@ -27,9 +89,9 @@ pub fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
     )
 }
 
-pub fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
+fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     // All amide niteogens in the main chain except proline
-    if atom_name == "CA" {
+    if atom_name == "N" {
         return true;
     }
     matches!(
@@ -50,7 +112,7 @@ pub fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     )
 }
 
-pub fn is_weak_hydrogen_donor(atom: &Atom) -> bool {
+fn is_weak_hydrogen_donor(atom: &Atom) -> bool {
     // All the non-carbonyl carbon atoms
-    (atom.element().unwrap().to_string() == "C") && atom.name() != "C"
+    (atom.element().unwrap() == &Element::C) && atom.name() != "C"
 }

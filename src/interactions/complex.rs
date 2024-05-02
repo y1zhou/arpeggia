@@ -74,23 +74,16 @@ impl Interactions for InteractionComplex {
         // Hydrogen bonds
         let hbonds: Vec<ResultEntry> = ligand_neighbors
             .par_iter()
-            .filter_map(|x| {
-                let g1_is_donor = is_hydrogen_donor(x.0.conformer().name(), x.0.atom().name());
-                let g2_is_acceptor =
-                    is_hydrogen_acceptor(x.1.conformer().name(), x.1.atom().name());
-                let g1_is_acceptor =
-                    is_hydrogen_acceptor(x.0.conformer().name(), x.0.atom().name());
-                let g2_is_donor = is_hydrogen_donor(x.1.conformer().name(), x.1.atom().name());
-
-                match (g1_is_donor & g2_is_acceptor) | (g1_is_acceptor & g2_is_donor) {
+            .filter_map(
+                |x| match has_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor) {
                     true => Some(ResultEntry {
                         interaction: Interaction::HydrogenBond,
                         ligand: hierarchy_to_entity(&x.0),
                         receptor: hierarchy_to_entity(&x.1),
                     }),
                     false => None,
-                }
-            })
+                },
+            )
             .collect();
 
         hbonds
