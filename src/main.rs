@@ -5,6 +5,7 @@ mod utils;
 
 use crate::chains::ChainExt;
 use crate::interactions::complex::{InteractionComplex, Interactions};
+use crate::interactions::structs::Interaction;
 use crate::utils::load_model;
 
 use clap::Parser;
@@ -35,7 +36,7 @@ struct Args {
     vdw_comp: f64,
 
     /// Distance cutoff for grid points to be 'interacting' with the entity
-    #[arg(short, long, default_value_t = 5.0)]
+    #[arg(short, long, default_value_t = 4.5)]
     dist_cutoff: f64,
 }
 
@@ -72,5 +73,10 @@ fn main() {
 
     let atomic_contacts = i_complex.get_atomic_contacts();
     info!("Found {} atom-atom contacts", atomic_contacts.len());
-    atomic_contacts.iter().for_each(|h| debug!("{h}"));
+    atomic_contacts.iter().for_each(|h| {
+        match h.interaction {
+            Interaction::StericClash => warn!("{h}"),
+            _ => debug!("{h}"),
+        };
+    })
 }

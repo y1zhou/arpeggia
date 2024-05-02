@@ -1,5 +1,7 @@
-use crate::interactions::hbond::*;
-use crate::interactions::structs::{InteractingEntity, ResultEntry};
+use super::hbond::*;
+use super::structs::Interaction;
+use super::structs::{InteractingEntity, ResultEntry};
+use super::vdw::*;
 use crate::utils::parse_groups;
 
 use pdbtbx::*;
@@ -53,15 +55,19 @@ impl Interactions for InteractionComplex {
         )> = self
             .model
             .atoms_with_hierarchy()
-            .filter(|x| self.ligand.contains(x.chain().id()))
+            .filter(|x| {
+                self.ligand.contains(x.chain().id()) & (x.atom().element().unwrap() != &Element::H)
+            })
             .flat_map(|x| {
-                // TODO: x.conformer().alternative_location() may also be needed
                 let neighbor_entities: Vec<(
                     AtomConformerResidueChainModel,
                     AtomConformerResidueChainModel,
                 )> = tree
                     .locate_within_distance(x.atom().pos(), max_radius_squared)
-                    .filter(|y| self.receptor.contains(y.chain().id()))
+                    .filter(|y| {
+                        self.receptor.contains(y.chain().id())
+                            & (y.atom().element().unwrap() != &Element::H)
+                    })
                     .map(|y| (x.clone(), y.clone()))
                     .collect();
 
@@ -72,34 +78,52 @@ impl Interactions for InteractionComplex {
             })
             .collect();
 
-        let mut atomic_contacts: Vec<ResultEntry> = vec![];
-
-        // Hydrogen bonds
-        let hbonds: Vec<ResultEntry> = ligand_neighbors
+        ligand_neighbors
             .par_iter()
             .filter_map(|x| {
-                find_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor).map(|intxn| ResultEntry {
-                    interaction: intxn,
-                    ligand: hierarchy_to_entity(&x.0),
-                    receptor: hierarchy_to_entity(&x.1),
-                })
-            })
-            .collect();
+                let mut atomic_contacts: Vec<ResultEntry> = vec![];
 
-        let weak_hbonds: Vec<ResultEntry> = ligand_neighbors
-            .par_iter()
-            .filter_map(|x| {
-                find_weak_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor).map(|intxn| ResultEntry {
-                    interaction: intxn,
-                    ligand: hierarchy_to_entity(&x.0),
-                    receptor: hierarchy_to_entity(&x.1),
-                })
-            })
-            .collect();
+                // Clashes and VdW contacts
+                let vdw =
+                    find_vdw_contact(&x.0, &x.1, self.vdw_comp_factor).map(|intxn| ResultEntry {
+                        interaction: intxn,
+                        ligand: hierarchy_to_entity(&x.0),
+                        receptor: hierarchy_to_entity(&x.1),
+                        distance: x.0.atom().distance(x.1.atom()),
+                    });
+                atomic_contacts.extend(vdw.clone());
 
-        atomic_contacts.extend(hbonds);
-        atomic_contacts.extend(weak_hbonds);
-        atomic_contacts
+                // Skip checking for other interactions if there is a clash
+                if vdw.is_some_and(|x| x.interaction == Interaction::StericClash) {
+                    return Some(atomic_contacts);
+                }
+
+                // Hydrogen bonds and polar contacts
+                let hbonds =
+                    find_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor).map(|intxn| ResultEntry {
+                        interaction: intxn,
+                        ligand: hierarchy_to_entity(&x.0),
+                        receptor: hierarchy_to_entity(&x.1),
+                        distance: x.0.atom().distance(x.1.atom()),
+                    });
+                atomic_contacts.extend(hbonds);
+
+                // C-H...O bonds
+                let weak_hbonds =
+                    find_weak_hydrogen_bond(&x.0, &x.1, self.vdw_comp_factor).map(|intxn| {
+                        ResultEntry {
+                            interaction: intxn,
+                            ligand: hierarchy_to_entity(&x.0),
+                            receptor: hierarchy_to_entity(&x.1),
+                            distance: x.0.atom().distance(x.1.atom()),
+                        }
+                    });
+                atomic_contacts.extend(weak_hbonds);
+
+                Some(atomic_contacts)
+            })
+            .flatten()
+            .collect::<Vec<ResultEntry>>()
     }
 
     fn get_ring_contacts(&self) {
