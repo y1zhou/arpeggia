@@ -1,7 +1,7 @@
 use core::fmt;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Interaction {
     StericClash,
     CovalentBond,
@@ -38,6 +38,7 @@ pub struct ResultEntry {
     pub interaction: Interaction,
     pub ligand: InteractingEntity,
     pub receptor: InteractingEntity,
+    pub distance: f64,
 }
 
 impl fmt::Display for InteractingEntity {
@@ -59,10 +60,11 @@ impl fmt::Display for ResultEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Ligand [{ligand}] has {intxn:?} with Receptor [{receptor}]",
+            "Ligand [{ligand}] has {intxn:?} with Receptor [{receptor}], d={dist:.3}Å",
             ligand = self.ligand,
             intxn = self.interaction,
-            receptor = self.receptor
+            receptor = self.receptor,
+            dist = self.distance
         )
     }
 }
