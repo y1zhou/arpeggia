@@ -7,7 +7,6 @@ use crate::utils::parse_groups;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
-use tracing::debug;
 
 pub struct InteractionComplex {
     pub model: PDB,
@@ -22,7 +21,6 @@ impl InteractionComplex {
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
 
-        debug!("Parsed ligand chains {ligand:?}; receptor chains {receptor:?}");
         Self {
             model,
             ligand,

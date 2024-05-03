@@ -1,3 +1,10 @@
+//! # Arpeggia
+//! Analyze protein-protein interactions in the interface.
+//!
+//! This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library to Rust,
+//! with a focus on identifying certain protein-protein interactions in PDB and mmCIF files.
+#![warn(missing_docs)]
+
 mod chains;
 mod interactions;
 mod residues;
@@ -12,8 +19,6 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, trace, warn};
 
-/// Analyze protein-protein interactions in the interface.
-/// Verbosity can be controlled with the `RUST_LOG` environment variable.
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
@@ -44,6 +49,7 @@ struct Args {
     num_threads: usize,
 }
 
+/// Verbosity can be controlled with the `RUST_LOG` environment variable.
 fn main() {
     let args = Args::parse();
     tracing_subscriber::fmt::init();
@@ -81,6 +87,11 @@ fn main() {
     }
 
     let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
+    debug!(
+        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
+        lig = i_complex.ligand,
+        receptor = i_complex.receptor
+    );
 
     let atomic_contacts = i_complex.get_atomic_contacts();
     info!("Found {} atom-atom contacts", atomic_contacts.len());
