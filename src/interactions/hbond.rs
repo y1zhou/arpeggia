@@ -8,10 +8,22 @@ const HYDROGEN_BOND_POLAR_DIST: f64 = 3.5;
 
 /// Search for hydrogen bonds and polar contacts.
 ///
-/// `vdw_comp_factor` is the compensation factor for VdW radii dependent interaction types.
+/// ## Details
 ///
-/// See details in:
-/// https://pymolwiki.org/index.php/Displaying_Biochemical_Properties#Hydrogen_bonds_and_Polar_Contacts
+/// It first checks if the two input residues are hydrogen bond donors and acceptors.
+/// If so, it collects all the hydrogen atoms of the donor residue and checks if any of them satisfy:
+///
+/// * dist(H, acceptor) <= vdw_radius(H) + vdw_radius(acceptor) + vdw_comp_factor, and
+/// * angle(donor, H, acceptor) >= 90°,
+///
+/// where `vdw_comp_factor` is the compensation factor for VdW radii dependent interactions.
+/// If the conditions are met, it returns [`Interaction::HydrogenBond`].
+/// If not, it checks for [`Interaction::PolarContact`] by: dist(donor, acceptor) <= [`HYDROGEN_BOND_POLAR_DIST`].
+///
+/// For further details, see:
+///
+/// * [PyMOL wiki](https://pymolwiki.org/index.php/Displaying_Biochemical_Properties#Hydrogen_bonds_and_Polar_Contacts)
+/// * [Arpeggio implementation](https://github.com/PDBeurope/arpeggio/blob/258855b8ba13447f2776b232ca32884d637c6a9c/arpeggio/core/utils.py#L73)
 ///
 /// TODO: add special case for water-mediated hydrogen bonds
 pub fn find_hydrogen_bond(
@@ -51,6 +63,12 @@ pub fn find_hydrogen_bond(
     }
 }
 
+/// Search for weak hydrogen bonds and weak polar contacts.
+///
+/// Overall the same as [`find_hydrogen_bond`], except for:
+///
+/// * Seeks for C-H...O bonds instead of the usual N and O donors.
+/// * Checks for angle(donor, H, acceptor) >= 130° instead of 90°.
 pub fn find_weak_hydrogen_bond(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
@@ -88,6 +106,7 @@ pub fn find_weak_hydrogen_bond(
     }
 }
 
+/// Determine if the two entities are a valid hydrogen bond donor-acceptor pair
 fn is_donor_acceptor_pair<'a>(
     entity1: &'a AtomConformerResidueChainModel<'a>,
     entity2: &'a AtomConformerResidueChainModel<'a>,
@@ -110,6 +129,7 @@ fn is_donor_acceptor_pair<'a>(
     }
 }
 
+/// Determine if the atom in the residue is a hydrogen acceptor
 fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
     // all the carbonyl oxygens in the main chain and on the terminals
     let oxygens = HashSet::from(["O", "OXT"]);
@@ -135,6 +155,7 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
     )
 }
 
+/// Determine if the atom in the residue is a hydrogen donor
 fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     // All amide niteogens in the main chain except proline
     if atom_name == "N" {
@@ -158,6 +179,7 @@ fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     )
 }
 
+/// Determine if the two entities are a valid weak hydrogen bond donor-acceptor pair
 fn is_weak_donor_acceptor_pair<'a>(
     entity1: &'a AtomConformerResidueChainModel<'a>,
     entity2: &'a AtomConformerResidueChainModel<'a>,
@@ -179,6 +201,7 @@ fn is_weak_donor_acceptor_pair<'a>(
     }
 }
 
+/// Determine if the atom is a weak hydrogen donor
 fn is_weak_hydrogen_donor(atom: &Atom) -> bool {
     // All the non-carbonyl carbon atoms
     (atom.element().unwrap() == &Element::C) && atom.name() != "C"
