@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::residues::ResidueExt;
 use pdbtbx::*;
 
+/// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
 pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
     // Load file as complex structure
     let (mut pdb, errors) = pdbtbx::open(input_file, StrictnessLevel::Loose).unwrap();
@@ -13,6 +14,9 @@ pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
     (pdb, errors)
 }
 
+/// Parse the chain groups from the input string.
+/// Only checks the first two fields separated by `/`.
+/// If one of the groups is unspecified, all remaining chains from `all_chains` are used.
 pub fn parse_groups(
     all_chains: &HashSet<String>,
     groups: &str,
