@@ -14,7 +14,7 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   - [ ] Hydrophobic interactions
   - [ ] Aromatic interactions
   - [ ] Cation-pi interactions
-  - [ ] Ionic interactions
+  - [x] Ionic interactions
   - [x] Hydrogen bonds
   - [x] Weak hydrogen bonds
   - [ ] Covalent bonds
