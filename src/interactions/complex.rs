@@ -7,13 +7,18 @@ use crate::utils::parse_groups;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
-use tracing::debug;
 
+/// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex {
+    /// All information present in the atomic model
     pub model: PDB,
+    /// All ligand chains
     pub ligand: HashSet<String>,
+    /// All receptor chains
     pub receptor: HashSet<String>,
+    /// Compensation factor for VdW radii dependent interaction types
     pub vdw_comp_factor: f64,
+    /// Distance cutoff when searching for neighboring atoms
     pub interacting_threshold: f64,
 }
 
@@ -22,7 +27,6 @@ impl InteractionComplex {
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
 
-        debug!("Parsed ligand chains {ligand:?}; receptor chains {receptor:?}");
         Self {
             model,
             ligand,
@@ -34,14 +38,17 @@ impl InteractionComplex {
 }
 
 pub trait Interactions {
+    /// Get all protein-protein interactions between the ligand and receptor
     fn get_ppi(&self);
+    /// Get all atomic interactions between the ligand and receptor
     fn get_atomic_contacts(&self) -> Vec<ResultEntry>;
+    /// Get all ring interactions between the ligand and receptor
     fn get_ring_contacts(&self);
 }
 
 impl Interactions for InteractionComplex {
     fn get_ppi(&self) {
-        // self.get_atomic_contacts()
+        todo!()
     }
 
     fn get_atomic_contacts(&self) -> Vec<ResultEntry> {
@@ -140,6 +147,7 @@ impl Interactions for InteractionComplex {
     }
 }
 
+/// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a human-readable format
 fn hierarchy_to_entity(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
     InteractingEntity {
         chain: hierarchy.chain().id().to_string(),

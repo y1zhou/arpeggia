@@ -4,6 +4,10 @@ use pdbtbx::*;
 
 const IONIC_BOND_DIST: f64 = 4.0;
 
+/// Search for ionic bonds.
+///
+/// Check if the distance between a positive and a negative ionizable atom
+/// is within [`IONIC_BOND_DIST`].
 pub fn find_ionic_bond(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
@@ -20,6 +24,7 @@ pub fn find_ionic_bond(
     }
 }
 
+/// Check if the two entities are a pair of ionizables.
 fn is_ionic_pair<'a>(
     entity1: &'a AtomConformerResidueChainModel<'a>,
     entity2: &'a AtomConformerResidueChainModel<'a>,
@@ -41,6 +46,7 @@ fn is_ionic_pair<'a>(
     }
 }
 
+/// Check if the entity contains ionizable groups that are positively charged at pH 7.0.
 fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
     matches!(
         (res_name, atom_name),
@@ -57,6 +63,7 @@ fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
     )
 }
 
+/// Check if the entity contains ionizable groups that are negatively charged at pH 7.0.
 fn is_neg_ionizable(res_name: &str, atom_name: &str) -> bool {
     matches!(
         (res_name, atom_name),

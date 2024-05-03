@@ -1,43 +1,70 @@
 use core::fmt;
 
+/// Interaction types.
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Interaction {
+    /// Within covalent radii
     StericClash,
+    /// Covalent bonded
     CovalentBond,
+    /// Within van der Waals radii
     VanDerWaalsContact,
 
-    // Electrostatic,
+    // Electrostatic
+    /// Negative and positive charged ions
     IonicBond,
+    /// Donor-H-acceptor hydrogen bonds
     HydrogenBond,
-    WeakHydrogenBond, // C-H...O hydrogen bond
-    // HalogenBond
-    PolarContact,     // hydrogen bonding without angle terms
-    WeakPolarContact, // C-H...O bonding without angle terms
+    /// C-H...O hydrogen bond
+    WeakHydrogenBond,
+    // HalogenBond,
+    /// Hydrogen bonding without angle terms
+    PolarContact,
+    /// C-H...O bonding without angle terms
+    WeakPolarContact,
 
     // Aromatic
-    PiDisplacedStacking, // staggered stacking, parallel displaced
-    PiTStacking,         // perpendicular T-shaped
-    PiSandwichStacking,  // direct stacking, repulsive
+    /// Pi-pi staggered stacking, parallel displaced
+    PiDisplacedStacking,
+    /// Pi-pi perpendicular T-shaped stacking
+    PiTStacking,
+    /// Pi-pi direct stacking, repulsive
+    PiSandwichStacking,
+    /// Cation-pi interaction
     CationPi,
 
+    /// Hydrophobic interaction
     HydrophobicContact,
 }
 
+/// Entity interacting with another.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct InteractingEntity {
+    /// Chain identifier
     pub chain: String,
+    /// Residue name
     pub resn: String,
+    /// Residue index
     pub resi: isize,
+    /// Alternate location identifier
     pub altloc: String,
+    /// Atom name
     pub atomn: String,
+    /// Atom index
     pub atomi: usize,
 }
+
+/// Entry passed to the results.
 #[derive(Debug, Clone)]
 pub struct ResultEntry {
+    /// Interaction type
     pub interaction: Interaction,
+    /// Ligand residue and atom
     pub ligand: InteractingEntity,
+    /// Receptor residue and atom
     pub receptor: InteractingEntity,
+    /// Distance between ligand and receptor atoms
     pub distance: f64,
 }
 

@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![doc = include_str!("../README.md")]
+
 mod chains;
 mod interactions;
 mod residues;
@@ -12,8 +15,6 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, trace, warn};
 
-/// Analyze protein-protein interactions in the interface.
-/// Verbosity can be controlled with the `RUST_LOG` environment variable.
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
@@ -35,7 +36,7 @@ struct Args {
     #[arg(short = 'c', long = "vdw-comp", default_value_t = 0.1)]
     vdw_comp: f64,
 
-    /// Distance cutoff for grid points to be 'interacting' with the entity
+    /// Distance cutoff when searching for neighboring atoms
     #[arg(short, long, default_value_t = 4.5)]
     dist_cutoff: f64,
 
@@ -44,6 +45,7 @@ struct Args {
     num_threads: usize,
 }
 
+/// Entry to the CLI tool. Verbosity can be controlled with the `RUST_LOG` environment variable.
 fn main() {
     let args = Args::parse();
     tracing_subscriber::fmt::init();
@@ -81,6 +83,11 @@ fn main() {
     }
 
     let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
+    debug!(
+        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
+        lig = i_complex.ligand,
+        receptor = i_complex.receptor
+    );
 
     let atomic_contacts = i_complex.get_atomic_contacts();
     info!("Found {} atom-atom contacts", atomic_contacts.len());
