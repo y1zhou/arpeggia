@@ -1,12 +1,12 @@
 use super::{
     find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond, find_vdw_contact,
-    find_weak_hydrogen_bond, InteractingEntity, Interaction, ResultEntry,
+    find_weak_hydrogen_bond, Interaction, ResultEntry,
 };
-use crate::utils::parse_groups;
+use crate::utils::{hierarchy_to_entity, parse_groups};
 
 use pdbtbx::*;
 use rayon::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex {
@@ -20,6 +20,9 @@ pub struct InteractionComplex {
     pub vdw_comp_factor: f64,
     /// Distance cutoff when searching for neighboring atoms
     pub interacting_threshold: f64,
+
+    /// Maps residue names to unique indices
+    res2idx: HashMap<String, HashMap<(isize, String), usize>>,
 }
 
 impl InteractionComplex {
@@ -27,12 +30,42 @@ impl InteractionComplex {
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
 
+        let res2idx = build_residue_index(&model);
+
         Self {
             model,
             ligand,
             receptor,
             vdw_comp_factor,
             interacting_threshold,
+            res2idx,
+        }
+    }
+
+    fn is_neighboring_res_pair(
+        &self,
+        x: &AtomConformerResidueChainModel,
+        y: &AtomConformerResidueChainModel,
+    ) -> bool {
+        if x.chain().id() != y.chain().id() {
+            return false;
+        }
+        let (x_resi, x_insertion) = x.residue().id();
+        let x_altloc = match x_insertion {
+            Some(insertion) => insertion.to_string(),
+            None => "".to_string(),
+        };
+        let x_idx = self.res2idx[x.chain().id()][&(x_resi, x_altloc)];
+        let (y_resi, y_insertion) = y.residue().id();
+        let y_altloc = match y_insertion {
+            Some(insertion) => insertion.to_string(),
+            None => "".to_string(),
+        };
+        let y_idx = self.res2idx[y.chain().id()][&(y_resi, y_altloc)];
+
+        match x_idx {
+            0 => y_idx == x_idx + 1,
+            _ => (y_idx == x_idx - 1) | (y_idx == x_idx + 1),
         }
     }
 }
@@ -74,6 +107,15 @@ impl Interactions for InteractionComplex {
                     .filter(|y| {
                         self.receptor.contains(y.chain().id())
                             & (y.atom().element().unwrap() != &Element::H)
+                            // Skip lower resi if both entities are on the same chain
+                            & !((x.chain().id() == y.chain().id())
+                                & (x.residue().serial_number() > y.residue().serial_number()))
+                            // Skip neighboring residues
+                            & !self.is_neighboring_res_pair(&x, y)
+                            // Skip atoms in the same residue
+                            & !((x.chain().id() == y.chain().id())
+                                & (x.residue().serial_number() == y.residue().serial_number())
+                                & (x.residue().insertion_code() == y.residue().insertion_code()))
                     })
                     .map(|y| (x.clone(), y.clone()))
                     .collect();
@@ -157,18 +199,29 @@ impl Interactions for InteractionComplex {
     }
 }
 
-/// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a human-readable format
-fn hierarchy_to_entity(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
-    InteractingEntity {
-        chain: hierarchy.chain().id().to_string(),
-        resn: hierarchy.residue().name().unwrap().to_string(),
-        resi: hierarchy.residue().serial_number(),
-        altloc: hierarchy
-            .conformer()
-            .alternative_location()
-            .unwrap_or("")
-            .to_string(),
-        atomn: hierarchy.atom().name().to_string(),
-        atomi: hierarchy.atom().serial_number(),
-    }
+/// Find the absolute index of a residue in each chain.
+///
+/// Returns two mappings, one from residue to index, and one from index to residue.
+fn build_residue_index(model: &PDB) -> HashMap<String, HashMap<(isize, String), usize>> {
+    let mut res2idx: HashMap<String, HashMap<(isize, String), usize>> = HashMap::new();
+
+    model.chains().for_each(|chain| {
+        let chain_id = chain.id().to_string();
+        res2idx.insert(
+            chain_id.clone(),
+            chain
+                .residues()
+                .enumerate()
+                .map(|(i, residue)| {
+                    let (resi, insertion) = residue.id();
+                    let altloc = match insertion {
+                        Some(insertion) => insertion.to_string(),
+                        None => "".to_string(),
+                    };
+                    ((resi, altloc), i)
+                })
+                .collect::<HashMap<(isize, String), usize>>(),
+        );
+    });
+    res2idx
 }
