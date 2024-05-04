@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::residues::ResidueExt;
+use crate::{interactions::structs::InteractingEntity, residues::ResidueExt};
 use pdbtbx::*;
 
 /// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
@@ -55,6 +55,22 @@ pub fn parse_groups(
     }
 
     (ligand, receptor)
+}
+
+/// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a human-readable format
+pub fn hierarchy_to_entity(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
+    InteractingEntity {
+        chain: hierarchy.chain().id().to_string(),
+        resn: hierarchy.residue().name().unwrap().to_string(),
+        resi: hierarchy.residue().serial_number(),
+        altloc: hierarchy
+            .conformer()
+            .alternative_location()
+            .unwrap_or("")
+            .to_string(),
+        atomn: hierarchy.atom().name().to_string(),
+        atomi: hierarchy.atom().serial_number(),
+    }
 }
 
 #[cfg(test)]

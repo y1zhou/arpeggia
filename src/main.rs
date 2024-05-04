@@ -7,8 +7,7 @@ mod residues;
 mod utils;
 
 use crate::chains::ChainExt;
-use crate::interactions::complex::{InteractionComplex, Interactions};
-use crate::interactions::structs::Interaction;
+use crate::interactions::{Interaction, InteractionComplex, Interactions};
 use crate::utils::load_model;
 
 use clap::Parser;
