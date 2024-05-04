@@ -8,6 +8,8 @@ pub enum Interaction {
     StericClash,
     /// Covalent bonded
     CovalentBond,
+    // CB-S-S-CB bond
+    Disulfide,
     /// Within van der Waals radii
     VanDerWaalsContact,
 
