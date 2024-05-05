@@ -2,8 +2,12 @@ use super::{
     find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond, find_vdw_contact,
     find_weak_hydrogen_bond, Interaction, ResultEntry,
 };
-use crate::utils::{hierarchy_to_entity, parse_groups};
+use crate::{
+    residues::ResidueExt,
+    utils::{hierarchy_to_entity, parse_groups},
+};
 
+use nalgebra as na;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -23,14 +27,20 @@ pub struct InteractionComplex {
 
     /// Maps residue names to unique indices
     res2idx: HashMap<String, HashMap<(isize, String), usize>>,
+    rings: HashMap<String, HashMap<(isize, String), (na::Vector3<f64>, na::Vector3<f64>)>>,
 }
 
 impl InteractionComplex {
     pub fn new(model: PDB, groups: &str, vdw_comp_factor: f64, interacting_threshold: f64) -> Self {
+        // Parse all chains and input chain groups
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
 
+        // Build a mapping of residue names to indices
         let res2idx = build_residue_index(&model);
+
+        // Build a mapping of ring residue names to ring centers and normals
+        let rings = build_ring_positions(&model);
 
         Self {
             model,
@@ -39,6 +49,7 @@ impl InteractionComplex {
             vdw_comp_factor,
             interacting_threshold,
             res2idx,
+            rings,
         }
     }
 
@@ -224,4 +235,32 @@ fn build_residue_index(model: &PDB) -> HashMap<String, HashMap<(isize, String), 
         );
     });
     res2idx
+}
+
+fn build_ring_positions(
+    model: &PDB,
+) -> HashMap<String, HashMap<(isize, String), (na::Vector3<f64>, na::Vector3<f64>)>> {
+    let mut rings: HashMap<String, HashMap<(isize, String), (na::Vector3<f64>, na::Vector3<f64>)>> =
+        HashMap::new();
+
+    model.chains().for_each(|chain| {
+        let chain_id = chain.id().to_string();
+        let ring_res = HashSet::from(["HIS", "PHE", "TYR", "TRP"]);
+        rings.insert(
+            chain_id.clone(),
+            chain
+                .residues()
+                .filter(|r| ring_res.contains(r.name().unwrap()))
+                .map(|residue| {
+                    let (resi, insertion) = residue.id();
+                    let altloc = match insertion {
+                        Some(insertion) => insertion.to_string(),
+                        None => "".to_string(),
+                    };
+                    ((resi, altloc), residue.ring_center_and_normal().unwrap())
+                })
+                .collect::<HashMap<(isize, String), (na::Vector3<f64>, na::Vector3<f64>)>>(),
+        );
+    });
+    rings
 }
