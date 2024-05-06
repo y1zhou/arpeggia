@@ -85,17 +85,20 @@ impl ResidueExt for Residue {
                 [coord.0, coord.1, coord.2].into_iter()
             }),
         );
-
         let center = atom_coords.column_mean();
 
         // Center the matrix and perform SVD
         // Ref: https://en.wikipedia.org/wiki/Singular_value_decomposition#Total_least_squares_minimization
+        // Ref: https://math.stackexchange.com/a/2810220
         for i in 0..atom_coords.ncols() {
             atom_coords.set_column(i, &(atom_coords.column(i) - center));
         }
 
         let svd = atom_coords.svd(true, true);
-        let normal = svd.v_t.unwrap().column(2).fixed_resize::<3, 1>(0.0);
+        let normal = svd.u.unwrap().column(2).clone_owned();
+        // Sanity check the normal is orthogonal to the plane vectors
+        // let dot_products = atom_coords.transpose() * normal;
+        // debug!("Dot products:\n{:?}", dot_products);
 
         Some((center, normal))
     }
