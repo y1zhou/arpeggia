@@ -2,6 +2,7 @@ use nalgebra as na;
 use pdbtbx::*;
 use rayon::prelude::*;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Ring {
     pub center: na::Vector3<f64>,
     pub normal: na::Vector3<f64>,

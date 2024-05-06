@@ -47,7 +47,7 @@ fn is_ionic_pair<'a>(
 }
 
 /// Check if the entity contains ionizable groups that are positively charged at pH 7.0.
-fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
+pub fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
     matches!(
         (res_name, atom_name),
         ("ARG", "NE")
