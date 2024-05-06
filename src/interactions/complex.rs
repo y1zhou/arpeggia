@@ -3,11 +3,10 @@ use super::{
     find_weak_hydrogen_bond, Interaction, ResultEntry,
 };
 use crate::{
-    residues::ResidueExt,
+    residues::{ResidueExt, Ring},
     utils::{hierarchy_to_entity, parse_groups},
 };
 
-use nalgebra as na;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -27,7 +26,7 @@ pub struct InteractionComplex {
 
     /// Maps residue names to unique indices
     res2idx: HashMap<String, HashMap<(isize, String), usize>>,
-    rings: HashMap<String, HashMap<(isize, String), (na::Vector3<f64>, na::Vector3<f64>)>>,
+    rings: HashMap<(String, isize, String), Ring>,
 }
 
 impl InteractionComplex {

@@ -2,13 +2,18 @@ use nalgebra as na;
 use pdbtbx::*;
 use rayon::prelude::*;
 
+pub struct Ring {
+    pub center: na::Vector3<f64>,
+    pub normal: na::Vector3<f64>,
+}
+
 pub trait ResidueExt {
     /// The residue one-letter code, or `None` if it's not an amino acid.
     fn resn(&self) -> Option<&str>;
     /// Return the atoms in the aromatic ring of the residue.
     fn ring_atoms(&self) -> Vec<&Atom>;
     ///
-    fn ring_center_and_normal(&self) -> Option<(na::Vector3<f64>, na::Vector3<f64>)>;
+    fn ring_center_and_normal(&self) -> Option<Ring>;
 }
 
 impl ResidueExt for Residue {
@@ -71,7 +76,7 @@ impl ResidueExt for Residue {
         }
     }
 
-    fn ring_center_and_normal(&self) -> Option<(na::Vector3<f64>, na::Vector3<f64>)> {
+    fn ring_center_and_normal(&self) -> Option<Ring> {
         let ring_atoms = self.ring_atoms();
         if ring_atoms.is_empty() {
             return None;
@@ -100,6 +105,6 @@ impl ResidueExt for Residue {
         // let dot_products = atom_coords.transpose() * normal;
         // debug!("Dot products:\n{:?}", dot_products);
 
-        Some((center, normal))
+        Some(Ring { center, normal })
     }
 }
