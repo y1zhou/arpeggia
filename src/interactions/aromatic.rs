@@ -5,6 +5,11 @@ use crate::residues::Ring;
 use nalgebra as na;
 use pdbtbx::*;
 
+const CATION_PI_ANGLE_THRESHOLD: f64 = 30.0;
+const CATION_PI_DIST_THRESHOLD: f64 = 4.5;
+const PI_PI_DIST_THRESHOLD: f64 = 6.0;
+
+/// Identify cation-pi interactions.
 pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> Option<Interaction> {
     if is_pos_ionizable(entity.residue().name().unwrap(), entity.atom().name()) {
         let atom_coord = entity.atom().pos();
@@ -12,13 +17,31 @@ pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> O
         let dist = point_ring_dist(ring, &atom_coord);
         let theta = point_ring_angle(ring, &atom_point);
 
-        if (theta <= 30.0) & (dist <= 4.5) {
+        if (theta <= CATION_PI_ANGLE_THRESHOLD) & (dist <= CATION_PI_DIST_THRESHOLD) {
             Some(Interaction::CationPi)
         } else {
             None
         }
     } else {
         None
+    }
+}
+
+/// Identify pi-pi interactions using the classification in [CREDO](https://doi.org/10.1111/j.1747-0285.2008.00762.x).
+pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
+    let angle_vec = ring1.center - ring2.center;
+    let dist = (angle_vec).norm();
+    if dist > PI_PI_DIST_THRESHOLD {
+        None
+    } else {
+        let dihedral = ring_ring_angle(ring1, ring2);
+        let theta = point_ring_angle(ring1, &angle_vec);
+
+        match (dihedral, theta) {
+            (x, _) if (x > 30.0) => Some(Interaction::PiTStacking),
+            (_, y) if (y > 20.0) => Some(Interaction::PiDisplacedStacking),
+            _ => Some(Interaction::PiSandwichStacking),
+        }
     }
 }
 

@@ -8,7 +8,7 @@ mod residues;
 mod utils;
 
 use crate::chains::ChainExt;
-use crate::interactions::{Interaction, InteractionComplex, Interactions};
+use crate::interactions::{Interaction, InteractionComplex, Interactions, ResultEntry};
 use crate::utils::load_model;
 
 use clap::Parser;
@@ -89,6 +89,7 @@ fn main() {
         receptor = i_complex.receptor
     );
 
+    // Find interactions
     let atomic_contacts = i_complex.get_atomic_contacts();
     info!("Found {} atom-atom contacts", atomic_contacts.len());
     atomic_contacts.iter().for_each(|h| {
@@ -96,5 +97,11 @@ fn main() {
             Interaction::StericClash => warn!("{h}"),
             _ => debug!("{h}"),
         };
-    })
+    });
+
+    let mut ring_contacts: Vec<ResultEntry> = Vec::new();
+    ring_contacts.extend(i_complex.get_ring_atom_contacts());
+    ring_contacts.extend(i_complex.get_ring_ring_contacts());
+    info!("Found {} ring contacts", ring_contacts.len());
+    ring_contacts.iter().for_each(|h| debug!("{h}"));
 }
