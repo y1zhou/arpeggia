@@ -12,7 +12,7 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   - [x] Steric clashes
   - [x] VdW interactions
   - [x] Hydrophobic interactions
-  - [ ] Aromatic interactions
+  - [x] Aromatic interactions
   - [x] Cation-pi interactions
   - [x] Ionic interactions
   - [x] Hydrogen bonds
