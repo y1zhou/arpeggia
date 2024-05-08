@@ -12,12 +12,12 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   - [x] Steric clashes
   - [x] VdW interactions
   - [x] Hydrophobic interactions
-  - [ ] Aromatic interactions
-  - [ ] Cation-pi interactions
+  - [x] Aromatic interactions
+  - [x] Cation-pi interactions
   - [x] Ionic interactions
   - [x] Hydrogen bonds
   - [x] Weak hydrogen bonds
-  - [ ] Disulfide bonds
+  - [x] Disulfide bonds
   - [ ] Covalent bonds
 - [ ] Output results in various formats (e.g., JSON, CSV)
 - [ ] Bundle into a `PyO3` extension module
