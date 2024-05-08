@@ -27,12 +27,18 @@ pub enum Interaction {
     WeakPolarContact,
 
     // Aromatic
-    /// Pi-pi staggered stacking, parallel displaced
+    /// Pi-pi staggered stacking, parallel displaced (`of`)
     PiDisplacedStacking,
-    /// Pi-pi perpendicular T-shaped stacking
+    /// Pi-pi perpendicular T-shaped stacking (`fe` and `ef`)
     PiTStacking,
-    /// Pi-pi direct stacking, repulsive
+    /// Pi-pi direct stacking, repulsive (`ff`)
     PiSandwichStacking,
+    /// Pi-pi parallel in-plane interactions (`ee`)
+    PiParallelInPlaneStacking,
+    /// Pi-pi tilted interactions (`ft`, `ot`, and `et`)
+    PiTiltedStacking,
+    /// Pi-pi cogwheel or L-shaped interactions (`oe`)
+    PiLStacking,
     /// Cation-pi interaction
     CationPi,
 
