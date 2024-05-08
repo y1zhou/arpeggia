@@ -55,16 +55,23 @@ pub fn point_ring_dist(ring: &Ring, point: &(f64, f64, f64)) -> f64 {
 /// the ring center to the point.
 fn point_ring_angle(ring: &Ring, point: &na::Vector3<f64>) -> f64 {
     let v = point - ring.center;
-    let mut rad = (ring.normal.dot(&v) / (ring.normal.norm() * point.norm())).acos();
+    let mut rad = (ring.normal.dot(&v) / (ring.normal.norm() * v.norm())).acos();
 
     // Convert to degrees
     if rad > std::f64::consts::FRAC_PI_2 {
-        rad -= std::f64::consts::PI;
+        rad = std::f64::consts::PI - rad;
     }
     rad.to_degrees()
 }
 
 /// Calculate the angle between two rings.
 fn ring_ring_angle(ring1: &Ring, ring2: &Ring) -> f64 {
-    point_ring_angle(ring1, &ring2.normal)
+    let mut rad =
+        (ring1.normal.dot(&ring2.normal) / (ring1.normal.norm() * ring2.normal.norm())).acos();
+
+    // Convert to degrees
+    if rad > std::f64::consts::FRAC_PI_2 {
+        rad = std::f64::consts::PI - rad;
+    }
+    rad.to_degrees()
 }
