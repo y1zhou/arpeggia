@@ -21,3 +21,46 @@ jobs:
           draft: true
           # (Required) GitHub token for creating GitHub Releases.
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-assets:
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-pc-windows-gnu
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
+          # Note that glob pattern is not supported yet.
+          bin: arpeggia
+          # (optional) Target triple, default is host triple.
+          # This is optional but it is recommended that this always be set to
+          # clarify which target you are building for if macOS is included in
+          # the matrix because GitHub Actions changed the default architecture
+          # of macos-latest since macos-14.
+          target: ${{ matrix.target }}
+          # (optional) Comma-separated list of additional files to be included to archive.
+          # Note that glob pattern is not supported yet.
+          include: LICENSE,README.md
+          # (optional) Whether to create the leading directory in the archive or not. default to false.
+          leading-dir: true
+          # (required) GitHub token for uploading assets to GitHub Releases.
+          token: ${{ secrets.GITHUB_TOKEN }}
