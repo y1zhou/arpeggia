@@ -12,6 +12,7 @@ use crate::interactions::{Interaction, InteractionComplex, Interactions, ResultE
 use crate::utils::load_model;
 
 use clap::Parser;
+use polars::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, trace, warn};
 
@@ -82,6 +83,7 @@ fn main() {
         debug!(">{}: {}", chain.id(), chain.pdb_seq().join(""));
     }
 
+    config_polars_output();
     let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
     debug!(
         "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
@@ -91,17 +93,69 @@ fn main() {
 
     // Find interactions
     let atomic_contacts = i_complex.get_atomic_contacts();
-    info!("Found {} atom-atom contacts", atomic_contacts.len());
-    atomic_contacts.iter().for_each(|h| {
-        match h.interaction {
-            Interaction::StericClash => warn!("{h}"),
-            _ => debug!("{h}"),
-        };
-    });
+    atomic_contacts
+        .iter()
+        .filter(|x| x.interaction == Interaction::StericClash)
+        .for_each(|x| warn!("{x}"));
+    let mut df_atomic = results_to_df(&atomic_contacts);
+
+    info!(
+        "Found {} atom-atom contacts\n{}",
+        atomic_contacts.len(),
+        df_atomic
+    );
 
     let mut ring_contacts: Vec<ResultEntry> = Vec::new();
     ring_contacts.extend(i_complex.get_ring_atom_contacts());
     ring_contacts.extend(i_complex.get_ring_ring_contacts());
-    info!("Found {} ring contacts", ring_contacts.len());
-    ring_contacts.iter().for_each(|h| debug!("{h}"));
+    let mut df_ring = results_to_df(&ring_contacts)
+        .drop_many(&["from_atomn", "from_atomi", "to_atomn", "to_atomi"])
+        .sort(
+            [
+                "from_chain",
+                "from_resi",
+                "from_altloc",
+                "to_chain",
+                "to_resi",
+                "to_altloc",
+            ],
+            Default::default(),
+        )
+        .unwrap();
+
+    info!("Found {} ring contacts\n{}", ring_contacts.len(), df_ring);
+    // ring_contacts.iter().for_each(|h| debug!("{h}"));
+
+    // Save results to CSV files
+    let mut file = std::fs::File::create(output_path.join("atomic_contacts.csv")).unwrap();
+    CsvWriter::new(&mut file).finish(&mut df_atomic).unwrap();
+    let mut file = std::fs::File::create(output_path.join("ring_contacts.csv")).unwrap();
+    CsvWriter::new(&mut file).finish(&mut df_ring).unwrap();
+}
+
+fn config_polars_output() {
+    std::env::set_var("POLARS_FMT_TABLE_HIDE_DATAFRAME_SHAPE_INFORMATION", "1");
+    std::env::set_var("POLARS_FMT_TABLE_HIDE_COLUMN_DATA_TYPES", "1");
+    std::env::set_var("POLARS_FMT_TABLE_ROUNDED_CORNERS", "1");
+    std::env::set_var("POLARS_FMT_MAX_COLS", "14");
+}
+
+fn results_to_df(res: &[ResultEntry]) -> DataFrame {
+    df!(
+        "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
+        "distance" => res.iter().map(|x| x.distance).collect::<Vec<f64>>(),
+        "from_chain" => res.iter().map(|x| x.ligand.chain.to_owned()).collect::<Vec<String>>(),
+        "from_resn" => res.iter().map(|x| x.ligand.resn.to_owned()).collect::<Vec<String>>(),
+        "from_resi" => res.iter().map(|x| x.ligand.resi as i64).collect::<Vec<i64>>(),
+        "from_altloc" => res.iter().map(|x| x.ligand.altloc.to_owned()).collect::<Vec<String>>(),
+        "from_atomn" => res.iter().map(|x| x.ligand.atomn.to_owned()).collect::<Vec<String>>(),
+        "from_atomi" => res.iter().map(|x| x.ligand.atomi as i64).collect::<Vec<i64>>(),
+        "to_chain" => res.iter().map(|x| x.receptor.chain.to_owned()).collect::<Vec<String>>(),
+        "to_resn" => res.iter().map(|x| x.receptor.resn.to_owned()).collect::<Vec<String>>(),
+        "to_resi" => res.iter().map(|x| x.receptor.resi as i64).collect::<Vec<i64>>(),
+        "to_altloc" => res.iter().map(|x| x.receptor.altloc.to_owned()).collect::<Vec<String>>(),
+        "to_atomn" => res.iter().map(|x| x.receptor.atomn.to_owned()).collect::<Vec<String>>(),
+        "to_atomi" => res.iter().map(|x| x.receptor.atomi as i64).collect::<Vec<i64>>(),
+    )
+    .unwrap()
 }
