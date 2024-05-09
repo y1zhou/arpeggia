@@ -13,7 +13,7 @@ pub trait ResidueExt {
     fn resn(&self) -> Option<&str>;
     /// Return the atoms in the aromatic ring of the residue.
     fn ring_atoms(&self) -> Vec<&Atom>;
-    ///
+    /// Return the center and normal of the aromatic ring of the residue.
     fn ring_center_and_normal(&self) -> Option<Ring>;
 }
 
