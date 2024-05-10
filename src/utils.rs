@@ -4,14 +4,14 @@ use crate::{interactions::structs::InteractingEntity, residues::ResidueExt};
 use pdbtbx::*;
 
 /// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
-pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
+pub fn load_model(input_file: &String) -> Result<(PDB, Vec<PDBError>), Vec<PDBError>> {
     // Load file as complex structure
-    let (mut pdb, errors) = pdbtbx::open(input_file, StrictnessLevel::Loose).unwrap();
+    let (mut pdb, errors) = pdbtbx::open(input_file, StrictnessLevel::Loose)?;
 
     // Remove non-protein residues from model
     pdb.remove_residues_by(|res| res.resn().is_none());
 
-    (pdb, errors)
+    Ok((pdb, errors))
 }
 
 /// Parse the chain groups from the input string.

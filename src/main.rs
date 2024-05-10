@@ -3,18 +3,17 @@
 #![doc = include_str!("../README.md")]
 
 mod chains;
+mod core;
 mod interactions;
 mod residues;
 mod utils;
 
 use crate::chains::ChainExt;
-use crate::interactions::{Interaction, InteractionComplex, Interactions, ResultEntry};
-use crate::utils::load_model;
 
 use clap::Parser;
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -59,78 +58,77 @@ fn main() {
         .unwrap();
     debug!("Using {} thread(s)", rayon::current_num_threads());
 
-    // Make sure `input` exists
-    let input_path = Path::new(&args.input).canonicalize().unwrap();
-    let input_file: String = input_path.to_str().unwrap().parse().unwrap();
-
-    // Prepare output directory
-    // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
-    let output_path = Path::new(&args.output);
-    let _ = std::fs::create_dir_all(output_path);
-    let output_dir = output_path.to_str().unwrap();
-    debug!("Using input file {input_file}");
-    debug!("Results will be saved to {output_dir}");
-
-    // Load file as complex structure
-    let (pdb, errors) = load_model(&input_file);
-    if !errors.is_empty() {
-        warn!("{errors:?}");
-    }
-
-    // Information on the sequence of the chains in the model
-    info!("Loaded {} chains", pdb.chain_count());
-    for chain in pdb.chains() {
-        debug!(">{}: {}", chain.id(), chain.pdb_seq().join(""));
-    }
-
-    config_polars_output();
-    let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
-    debug!(
-        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
-        lig = i_complex.ligand,
-        receptor = i_complex.receptor
+    let run_result = core::core(
+        args.input,
+        args.groups.as_str(),
+        args.vdw_comp,
+        args.dist_cutoff,
     );
+    match run_result {
+        Err(e) => {
+            e.iter().for_each(|e| match e.level() {
+                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
+                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
+                _ => warn!("{e}"),
+            });
+            std::process::exit(1);
+        }
+        Ok((mut df_atomic, mut df_ring, i_complex, pdb_warnings)) => {
+            // Notify of any PDB warnings
+            if !pdb_warnings.is_empty() {
+                pdb_warnings.iter().for_each(|e| warn!("{e}"));
+            }
 
-    // Find interactions
-    let atomic_contacts = i_complex.get_atomic_contacts();
-    atomic_contacts
-        .iter()
-        .filter(|x| x.interaction == Interaction::StericClash)
-        .for_each(|x| warn!("{x}"));
-    let mut df_atomic = results_to_df(&atomic_contacts);
+            // Information on the sequence of the chains in the model
+            info!(
+                "Loaded {} {}",
+                i_complex.model.chain_count(),
+                match i_complex.model.chain_count() {
+                    1 => "chain",
+                    _ => "chains",
+                }
+            );
+            for chain in i_complex.model.chains() {
+                debug!(">{}: {}", chain.id(), chain.pdb_seq().join(""));
+            }
 
-    info!(
-        "Found {} atom-atom contacts\n{}",
-        atomic_contacts.len(),
-        df_atomic
-    );
+            debug!(
+                "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
+                lig = i_complex.ligand,
+                receptor = i_complex.receptor
+            );
 
-    let mut ring_contacts: Vec<ResultEntry> = Vec::new();
-    ring_contacts.extend(i_complex.get_ring_atom_contacts());
-    ring_contacts.extend(i_complex.get_ring_ring_contacts());
-    let mut df_ring = results_to_df(&ring_contacts)
-        .drop_many(&["from_atomn", "from_atomi", "to_atomn", "to_atomi"])
-        .sort(
-            [
-                "from_chain",
-                "from_resi",
-                "from_altloc",
-                "to_chain",
-                "to_resi",
-                "to_altloc",
-            ],
-            Default::default(),
-        )
-        .unwrap();
+            // Prepare output directory
+            // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
+            let output_path = Path::new(&args.output);
+            let _ = std::fs::create_dir_all(output_path);
+            let output_dir = output_path.to_str().unwrap();
 
-    info!("Found {} ring contacts\n{}", ring_contacts.len(), df_ring);
-    // ring_contacts.iter().for_each(|h| debug!("{h}"));
+            debug!("Results will be saved to {output_dir}");
 
-    // Save results to CSV files
-    let mut file = std::fs::File::create(output_path.join("atomic_contacts.csv")).unwrap();
-    CsvWriter::new(&mut file).finish(&mut df_atomic).unwrap();
-    let mut file = std::fs::File::create(output_path.join("ring_contacts.csv")).unwrap();
-    CsvWriter::new(&mut file).finish(&mut df_ring).unwrap();
+            // Save results and log the identified interactions
+            config_polars_output();
+            info!(
+                "Found {} atom-atom contacts\n{}",
+                df_atomic.shape().0,
+                df_atomic
+            );
+            let df_clash = df_atomic
+                .clone()
+                .lazy()
+                .filter(col("interaction").eq(lit("StericClash")))
+                .collect()
+                .unwrap();
+            if df_clash.height() > 0 {
+                warn!("Found {} steric clashes\n{}", df_clash.shape().0, df_clash);
+            }
+            info!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
+
+            // Save results to CSV files
+            write_df_to_csv(&mut df_atomic, output_path.join("atomic_contacts.csv"));
+            write_df_to_csv(&mut df_ring, output_path.join("ring_contacts.csv"));
+        }
+    }
 }
 
 fn config_polars_output() {
@@ -140,22 +138,7 @@ fn config_polars_output() {
     std::env::set_var("POLARS_FMT_MAX_COLS", "14");
 }
 
-fn results_to_df(res: &[ResultEntry]) -> DataFrame {
-    df!(
-        "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
-        "distance" => res.iter().map(|x| x.distance).collect::<Vec<f64>>(),
-        "from_chain" => res.iter().map(|x| x.ligand.chain.to_owned()).collect::<Vec<String>>(),
-        "from_resn" => res.iter().map(|x| x.ligand.resn.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.iter().map(|x| x.ligand.resi as i64).collect::<Vec<i64>>(),
-        "from_altloc" => res.iter().map(|x| x.ligand.altloc.to_owned()).collect::<Vec<String>>(),
-        "from_atomn" => res.iter().map(|x| x.ligand.atomn.to_owned()).collect::<Vec<String>>(),
-        "from_atomi" => res.iter().map(|x| x.ligand.atomi as i64).collect::<Vec<i64>>(),
-        "to_chain" => res.iter().map(|x| x.receptor.chain.to_owned()).collect::<Vec<String>>(),
-        "to_resn" => res.iter().map(|x| x.receptor.resn.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.iter().map(|x| x.receptor.resi as i64).collect::<Vec<i64>>(),
-        "to_altloc" => res.iter().map(|x| x.receptor.altloc.to_owned()).collect::<Vec<String>>(),
-        "to_atomn" => res.iter().map(|x| x.receptor.atomn.to_owned()).collect::<Vec<String>>(),
-        "to_atomi" => res.iter().map(|x| x.receptor.atomi as i64).collect::<Vec<i64>>(),
-    )
-    .unwrap()
+fn write_df_to_csv(df: &mut DataFrame, file_path: PathBuf) {
+    let mut file = std::fs::File::create(file_path).unwrap();
+    CsvWriter::new(&mut file).finish(df).unwrap();
 }
