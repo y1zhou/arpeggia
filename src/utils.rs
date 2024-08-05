@@ -6,7 +6,10 @@ use pdbtbx::*;
 /// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
 pub fn load_model(input_file: &String) -> Result<(PDB, Vec<PDBError>), Vec<PDBError>> {
     // Load file as complex structure
-    let (mut pdb, errors) = pdbtbx::open(input_file, StrictnessLevel::Loose)?;
+    let (mut pdb, errors) = pdbtbx::ReadOptions::default()
+        .set_only_atomic_coords(true)
+        .set_level(pdbtbx::StrictnessLevel::Loose)
+        .read(input_file)?;
 
     // Remove non-protein residues from model
     pdb.remove_residues_by(|res| res.resn().is_none());
