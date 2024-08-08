@@ -103,3 +103,11 @@ impl fmt::Display for ResultEntry {
         )
     }
 }
+
+impl fmt::Display for Interaction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+        // or, alternatively:
+        // fmt::Debug::fmt(self, f)
+    }
+}

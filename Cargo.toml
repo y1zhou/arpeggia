@@ -1,6 +1,6 @@
 [package]
 name = "arpeggia"
-version = "0.1.0"
+version = "0.2.0"
 description = "A port of the Arpeggio library for Rust"
 edition = "2021"
 
@@ -9,7 +9,8 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
 nalgebra = "0.32.5"
-pdbtbx = { version = "0.11.0", features = ["rayon", "rstar"] }
+pdbtbx = { version = "0.11.0", features = ["rayon", "rstar"], git = "https://github.com/douweschulte/pdbtbx", rev = "1298c60e8573efbc3f7c77a9a2d6f0656fa8c638" }
+polars = { version = "0.39.2", features = ["lazy"] }
 rayon = "1.10.0"
 rstar = "0.12.0"
 tracing = "0.1.40"

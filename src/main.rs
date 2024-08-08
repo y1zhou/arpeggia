@@ -3,17 +3,17 @@
 #![doc = include_str!("../README.md")]
 
 mod chains;
+mod core;
 mod interactions;
 mod residues;
 mod utils;
 
 use crate::chains::ChainExt;
-use crate::interactions::{Interaction, InteractionComplex, Interactions, ResultEntry};
-use crate::utils::load_model;
 
 use clap::Parser;
+use polars::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -58,50 +58,95 @@ fn main() {
         .unwrap();
     debug!("Using {} thread(s)", rayon::current_num_threads());
 
-    // Make sure `input` exists
-    let input_path = Path::new(&args.input).canonicalize().unwrap();
-    let input_file: String = input_path.to_str().unwrap().parse().unwrap();
-
-    // Prepare output directory
-    // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
-    let output_path = Path::new(&args.output);
-    let _ = std::fs::create_dir_all(output_path);
-    let output_dir = output_path.to_str().unwrap();
-    debug!("Using input file {input_file}");
-    debug!("Results will be saved to {output_dir}");
-
-    // Load file as complex structure
-    let (pdb, errors) = load_model(&input_file);
-    if !errors.is_empty() {
-        warn!("{errors:?}");
-    }
-
-    // Information on the sequence of the chains in the model
-    info!("Loaded {} chains", pdb.chain_count());
-    for chain in pdb.chains() {
-        debug!(">{}: {}", chain.id(), chain.pdb_seq().join(""));
-    }
-
-    let i_complex = InteractionComplex::new(pdb, &args.groups, args.vdw_comp, args.dist_cutoff);
-    debug!(
-        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
-        lig = i_complex.ligand,
-        receptor = i_complex.receptor
+    let run_result = core::core(
+        args.input,
+        args.groups.as_str(),
+        args.vdw_comp,
+        args.dist_cutoff,
     );
+    match run_result {
+        Err(e) => {
+            e.iter().for_each(|e| match e.level() {
+                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
+                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
+                _ => warn!("{e}"),
+            });
+            std::process::exit(1);
+        }
+        Ok((df_atomic, df_ring, i_complex, pdb_warnings)) => {
+            // Notify of any PDB warnings
+            if !pdb_warnings.is_empty() {
+                pdb_warnings.iter().for_each(|e| warn!("{e}"));
+            }
 
-    // Find interactions
-    let atomic_contacts = i_complex.get_atomic_contacts();
-    info!("Found {} atom-atom contacts", atomic_contacts.len());
-    atomic_contacts.iter().for_each(|h| {
-        match h.interaction {
-            Interaction::StericClash => warn!("{h}"),
-            _ => debug!("{h}"),
-        };
-    });
+            // Information on the sequence of the chains in the model
+            info!(
+                "Loaded {} {}",
+                i_complex.model.chain_count(),
+                match i_complex.model.chain_count() {
+                    1 => "chain",
+                    _ => "chains",
+                }
+            );
+            for chain in i_complex.model.chains() {
+                debug!(">{}: {}", chain.id(), chain.pdb_seq().join(""));
+            }
 
-    let mut ring_contacts: Vec<ResultEntry> = Vec::new();
-    ring_contacts.extend(i_complex.get_ring_atom_contacts());
-    ring_contacts.extend(i_complex.get_ring_ring_contacts());
-    info!("Found {} ring contacts", ring_contacts.len());
-    ring_contacts.iter().for_each(|h| debug!("{h}"));
+            debug!(
+                "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
+                lig = i_complex.ligand,
+                receptor = i_complex.receptor
+            );
+
+            // Prepare output directory
+            // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
+            let output_path = Path::new(&args.output).canonicalize().unwrap();
+            let _ = std::fs::create_dir_all(output_path.clone());
+            let output_dir = output_path.to_str().unwrap();
+
+            debug!("Results will be saved to {output_dir}/contacts.csv");
+
+            // Save results and log the identified interactions
+            config_polars_output();
+            info!(
+                "Found {} atom-atom contacts\n{}",
+                df_atomic.shape().0,
+                df_atomic
+            );
+            let df_clash = df_atomic
+                .clone()
+                .lazy()
+                .filter(col("interaction").eq(lit("StericClash")))
+                .collect()
+                .unwrap();
+            if df_clash.height() > 0 {
+                warn!("Found {} steric clashes\n{}", df_clash.shape().0, df_clash);
+            }
+            info!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
+
+            // Concatenate dataframes for saving to CSV
+            let mut df_contacts = concat(
+                [df_atomic.clone().lazy(), df_ring.clone().lazy()],
+                UnionArgs::default(),
+            )
+            .unwrap()
+            .collect()
+            .unwrap();
+
+            // Save results to CSV files
+            write_df_to_csv(&mut df_contacts, output_path.join("contacts.csv"));
+        }
+    }
+}
+
+fn config_polars_output() {
+    std::env::set_var("POLARS_FMT_TABLE_HIDE_DATAFRAME_SHAPE_INFORMATION", "1");
+    std::env::set_var("POLARS_FMT_TABLE_HIDE_COLUMN_DATA_TYPES", "1");
+    std::env::set_var("POLARS_FMT_TABLE_ROUNDED_CORNERS", "1");
+    std::env::set_var("POLARS_FMT_MAX_COLS", "14");
+}
+
+fn write_df_to_csv(df: &mut DataFrame, file_path: PathBuf) {
+    let mut file = std::fs::File::create(file_path).unwrap();
+    CsvWriter::new(&mut file).finish(df).unwrap();
 }
