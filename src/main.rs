@@ -73,7 +73,7 @@ fn main() {
             });
             std::process::exit(1);
         }
-        Ok((mut df_atomic, mut df_ring, i_complex, pdb_warnings)) => {
+        Ok((df_atomic, df_ring, i_complex, pdb_warnings)) => {
             // Notify of any PDB warnings
             if !pdb_warnings.is_empty() {
                 pdb_warnings.iter().for_each(|e| warn!("{e}"));
@@ -100,11 +100,11 @@ fn main() {
 
             // Prepare output directory
             // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
-            let output_path = Path::new(&args.output);
-            let _ = std::fs::create_dir_all(output_path);
+            let output_path = Path::new(&args.output).canonicalize().unwrap();
+            let _ = std::fs::create_dir_all(output_path.clone());
             let output_dir = output_path.to_str().unwrap();
 
-            debug!("Results will be saved to {output_dir}");
+            debug!("Results will be saved to {output_dir}/contacts.csv");
 
             // Save results and log the identified interactions
             config_polars_output();
@@ -124,9 +124,17 @@ fn main() {
             }
             info!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
 
+            // Concatenate dataframes for saving to CSV
+            let mut df_contacts = concat(
+                [df_atomic.clone().lazy(), df_ring.clone().lazy()],
+                UnionArgs::default(),
+            )
+            .unwrap()
+            .collect()
+            .unwrap();
+
             // Save results to CSV files
-            write_df_to_csv(&mut df_atomic, output_path.join("atomic_contacts.csv"));
-            write_df_to_csv(&mut df_ring, output_path.join("ring_contacts.csv"));
+            write_df_to_csv(&mut df_contacts, output_path.join("contacts.csv"));
         }
     }
 }
