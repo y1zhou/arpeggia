@@ -1,4 +1,5 @@
 use crate::interactions::{InteractionComplex, Interactions, ResultEntry};
+use crate::sasa::get_atom_sasa;
 use crate::utils::load_model;
 
 use pdbtbx::*;
@@ -11,13 +12,25 @@ pub fn core(
     groups: &str,
     vdw_comp: f64,
     dist_cutoff: f64,
-) -> Result<(DataFrame, DataFrame, InteractionComplex, Vec<PDBError>), Vec<PDBError>> {
+) -> Result<
+    (
+        DataFrame,
+        DataFrame,
+        DataFrame,
+        InteractionComplex,
+        Vec<PDBError>,
+    ),
+    Vec<PDBError>,
+> {
     // Make sure `input` exists
     let input_path = Path::new(&input_file).canonicalize().unwrap();
     let input_file: String = input_path.to_str().unwrap().parse().unwrap();
 
     // Load file as complex structure
     let (pdb, errors) = load_model(&input_file)?;
+
+    // Dump SASA
+    let df_sasa = get_atom_sasa(&pdb);
 
     let i_complex = InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff);
 
@@ -43,7 +56,7 @@ pub fn core(
         )
         .unwrap();
 
-    Ok((df_atomic, df_ring, i_complex, errors))
+    Ok((df_atomic, df_ring, df_sasa, i_complex, errors))
 }
 
 fn results_to_df(res: &[ResultEntry]) -> DataFrame {

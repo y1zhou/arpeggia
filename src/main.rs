@@ -6,6 +6,7 @@ mod chains;
 mod core;
 mod interactions;
 mod residues;
+mod sasa;
 mod utils;
 
 use crate::chains::ChainExt;
@@ -73,7 +74,7 @@ fn main() {
             });
             std::process::exit(1);
         }
-        Ok((df_atomic, df_ring, i_complex, pdb_warnings)) => {
+        Ok((df_atomic, df_ring, mut df_sasa, i_complex, pdb_warnings)) => {
             // Notify of any PDB warnings
             if !pdb_warnings.is_empty() {
                 pdb_warnings.iter().for_each(|e| warn!("{e}"));
@@ -135,6 +136,7 @@ fn main() {
 
             // Save results to CSV files
             write_df_to_csv(&mut df_contacts, output_path.join("contacts.csv"));
+            write_df_to_csv(&mut df_sasa, output_path.join("sasa.csv"));
         }
     }
 }
