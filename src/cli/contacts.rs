@@ -84,15 +84,14 @@ pub(crate) fn run(args: &Args) {
     );
 
     // Prepare output directory
-    // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
-    let output_dir = output_path.to_str().unwrap();
+    let output_file = output_path.join("contacts.csv");
 
-    debug!("Results will be saved to {output_dir}/contacts.csv");
+    let output_file_str = output_file.to_str().unwrap();
+    debug!("Results will be saved to {output_file_str}");
 
     // Save results and log the identified interactions
-
     info!(
         "Found {} atom-atom contacts\n{}",
         df_atomic.shape().0,
@@ -119,7 +118,7 @@ pub(crate) fn run(args: &Args) {
     .unwrap();
 
     // Save res to CSV files
-    write_df_to_csv(&mut df_contacts, output_path.join("contacts.csv"));
+    write_df_to_csv(&mut df_contacts, output_file);
 }
 
 pub fn get_contacts(
