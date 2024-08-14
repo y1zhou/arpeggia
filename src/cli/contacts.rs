@@ -1,4 +1,3 @@
-use crate::chains::ChainExt;
 use crate::interactions::{InteractionComplex, Interactions, ResultEntry};
 use crate::utils::{load_model, write_df_to_csv};
 use clap::Parser;
@@ -65,17 +64,15 @@ pub(crate) fn run(args: &Args) {
         get_contacts(pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
 
     // Information on the sequence of the chains in the model
+    let num_chains = i_complex.ligand.len() + i_complex.receptor.len();
     info!(
         "Loaded {} {}",
-        i_complex.model.chain_count(),
-        match i_complex.model.chain_count() {
+        num_chains,
+        match num_chains {
             1 => "chain",
             _ => "chains",
         }
     );
-    for chain in i_complex.model.chains() {
-        debug!(">{}: {}", chain.id(), chain.pdb_seq().join(""));
-    }
 
     debug!(
         "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",

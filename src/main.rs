@@ -23,6 +23,8 @@ enum Commands {
     Contacts(crate::cli::contacts::Args),
     /// Calculate the solvent accessible surface area (SASA) of each atom in a PDB or mmCIF file
     Sasa(crate::cli::sasa::Args),
+    /// Print the sequences of all chains in a PDB or mmCIF file
+    Seq(crate::cli::pdb2seq::Args),
 }
 
 /// Entry to the CLI tool. Verbosity can be controlled with the `RUST_LOG` environment variable.
@@ -37,6 +39,9 @@ fn main() {
         }
         Commands::Sasa(args) => {
             crate::cli::sasa::run(args);
+        }
+        Commands::Seq(args) => {
+            crate::cli::pdb2seq::run(args);
         }
     }
 }
