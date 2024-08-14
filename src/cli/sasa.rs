@@ -1,19 +1,13 @@
-use crate::utils::hierarchy_to_entity;
-use crate::utils::load_model;
-use crate::utils::write_df_to_csv;
-use clap::Parser;
-use std::path::PathBuf;
-
-use polars::prelude::*;
-use std::path::Path;
-use tracing::{debug, error, info, trace, warn};
-
+use crate::interactions::InteractingEntity;
 use crate::residues::ResidueExt;
+use crate::utils::{hierarchy_to_entity, load_model, write_df_to_csv};
+use clap::Parser;
 use pdbtbx::*;
+use polars::prelude::*;
 use rust_sasa::calculate_sasa_internal;
 use rust_sasa::Atom as SASAAtom;
-
-use crate::interactions::InteractingEntity;
+use std::path::{Path, PathBuf};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]

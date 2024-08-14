@@ -1,15 +1,11 @@
 use crate::chains::ChainExt;
-use clap::Parser;
-use std::path::PathBuf;
-
 use crate::interactions::{InteractionComplex, Interactions, ResultEntry};
-use crate::utils::load_model;
-use crate::utils::write_df_to_csv;
-use polars::prelude::*;
-use std::path::Path;
-use tracing::{debug, error, info, trace, warn};
-
+use crate::utils::{load_model, write_df_to_csv};
+use clap::Parser;
 use pdbtbx::*;
+use polars::prelude::*;
+use std::path::{Path, PathBuf};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
