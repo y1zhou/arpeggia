@@ -22,7 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - PLACEHOLDER
-- 
+
+## [0.3.0] - 2024-08-14
+
+### Added
+
+- `sasa` command to calculate the atom level SASA
+- `seq` command to extract protein sequences from PDB files
+
+### Fixed
+
+- Only report chains that are part of the ligand or receptor for `contacts`
+
+### Changed
+
+- Moved previous top-level command to `contacts` sub-command
+- Better path parsing
+
 ## [0.2.0] - 2024-08-08
 
 ### Added
@@ -46,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.2.0...HEAD
-[0.1.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.1.0
+[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.3.0...HEAD
+[0.2.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.0
 [0.2.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.2.0
+[0.1.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.1.0
