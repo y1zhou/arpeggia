@@ -1,20 +1,22 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 use crate::{interactions::structs::InteractingEntity, residues::ResidueExt};
 use pdbtbx::*;
+use polars::prelude::*;
 
 /// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
-pub fn load_model(input_file: &String) -> Result<(PDB, Vec<PDBError>), Vec<PDBError>> {
+pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
     // Load file as complex structure
     let (mut pdb, errors) = pdbtbx::ReadOptions::default()
         .set_only_atomic_coords(true)
         .set_level(pdbtbx::StrictnessLevel::Loose)
-        .read(input_file)?;
+        .read(input_file)
+        .unwrap();
 
     // Remove non-protein residues from model
     pdb.remove_residues_by(|res| res.resn().is_none());
 
-    Ok((pdb, errors))
+    (pdb, errors)
 }
 
 /// Parse the chain groups from the input string.
@@ -74,6 +76,12 @@ pub fn hierarchy_to_entity(hierarchy: &AtomConformerResidueChainModel<'_>) -> In
         atomn: hierarchy.atom().name().to_string(),
         atomi: hierarchy.atom().serial_number(),
     }
+}
+
+/// Write a DataFrame to a CSV file
+pub(crate) fn write_df_to_csv(df: &mut DataFrame, file_path: PathBuf) {
+    let mut file = std::fs::File::create(file_path).unwrap();
+    CsvWriter::new(&mut file).finish(df).unwrap();
 }
 
 #[cfg(test)]
