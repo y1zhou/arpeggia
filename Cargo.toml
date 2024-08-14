@@ -1,8 +1,9 @@
 [package]
 name = "arpeggia"
-version = "0.2.0"
+version = "0.3.0"
 description = "A port of the Arpeggio library for Rust"
 edition = "2021"
+authors = ["Yi Zhou <me@y1zhou.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
