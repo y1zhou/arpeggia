@@ -29,10 +29,10 @@ pub fn parse_groups(
     // Parse the first two fields in groups
     let sel_vec: Vec<&str> = groups.split('/').collect();
     if sel_vec.len() < 2 {
-        panic!("Invalid chain groups format!")
+        panic!("Invalid chain groups format! Use '/' for all-to-all comparisons.")
     }
-    let ligand_chains = sel_vec.first().unwrap();
-    let receptor_chains = sel_vec.get(1).unwrap();
+    let ligand_chains = sel_vec.first().unwrap_or(&"");
+    let receptor_chains = sel_vec.get(1).unwrap_or(&"");
 
     // Create a HashSet of chains for the ligand and receptor
     let mut ligand: HashSet<String> = ligand_chains
@@ -46,15 +46,19 @@ pub fn parse_groups(
         .filter(|c| !c.is_empty())
         .collect();
 
-    // If there are no ligand or receptor chains, use all remaining chains
-    if ligand.is_empty() ^ receptor.is_empty() {
-        if ligand.is_empty() {
-            ligand = all_chains.difference(&receptor).cloned().collect();
-        } else {
-            receptor = all_chains.difference(&ligand).cloned().collect();
-        }
+    // If both groups are empty, perform all-to-all comparisons
+    if ligand.is_empty() && receptor.is_empty() {
+        return (all_chains.clone(), all_chains.clone());
     }
 
+    // If there are no ligand or receptor chains, use all remaining chains
+    if ligand.is_empty() {
+        ligand = all_chains.difference(&receptor).cloned().collect();
+    } else if receptor.is_empty() {
+        receptor = all_chains.difference(&ligand).cloned().collect();
+    }
+
+    // Panic if there are no chains in one of the groups
     if ligand.is_empty() || receptor.is_empty() {
         panic!("Empty chain groups!")
     }
@@ -109,10 +113,11 @@ mod tests {
             ),
             parse_groups(&chains, "C/")
         );
+        assert_eq!((chains.clone(), chains.clone()), parse_groups(&chains, "/"));
     }
 
     #[test]
-    #[should_panic(expected = "Invalid chain groups format!")]
+    #[should_panic(expected = "Invalid chain groups format! Use '/' for all-to-all comparisons.")]
     fn empty_group_splits() {
         // Nothing passed
         let chains: HashSet<String> = HashSet::from(["A", "B", "C", "D"].map(|c| c.to_string()));
@@ -123,7 +128,7 @@ mod tests {
     #[should_panic(expected = "Empty chain groups!")]
     fn missing_groups_in_split() {
         // Nothing passed
-        let chains: HashSet<String> = HashSet::from(["A", "B", "C", "D"].map(|c| c.to_string()));
-        parse_groups(&chains, "/");
+        let chains: HashSet<String> = HashSet::from(["A", "B", "C"].map(|c| c.to_string()));
+        parse_groups(&chains, "A,B,C/");
     }
 }
