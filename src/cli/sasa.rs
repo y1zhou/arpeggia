@@ -1,6 +1,6 @@
 use crate::interactions::InteractingEntity;
 use crate::residues::ResidueExt;
-use crate::utils::{hierarchy_to_entity, load_model, write_df_to_csv};
+use crate::utils::{load_model, write_df_to_csv};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -114,7 +114,7 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame
     // Create a DataFrame with the results
     let atom_annotations = pdb
         .atoms_with_hierarchy()
-        .map(|x| hierarchy_to_entity(&x))
+        .map(|x| InteractingEntity::from_hier(&x))
         .collect::<Vec<InteractingEntity>>();
     let atom_annot_df = df!(
         "chain" => atom_annotations.iter().map(|x| x.chain.to_owned()).collect::<Vec<String>>(),

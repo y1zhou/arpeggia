@@ -2,10 +2,53 @@ use nalgebra as na;
 use pdbtbx::*;
 use rayon::prelude::*;
 
+/// The struct for a residue identifier
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub struct ResidueId {
+    /// Chain identifier
+    pub chain: String,
+    /// Residue index
+    pub resi: isize,
+    /// Alternate location identifier
+    pub altloc: String,
+    /// Residue name
+    pub resn: String,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Ring {
     pub center: na::Vector3<f64>,
     pub normal: na::Vector3<f64>,
+}
+
+impl ResidueId {
+    pub fn new(chain: &str, resi: isize, altloc: &str, resn: &str) -> Self {
+        Self {
+            chain: chain.to_string(),
+            resi,
+            altloc: altloc.to_string(),
+            resn: resn.to_string(),
+        }
+    }
+
+    /// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a residue identifier
+    pub fn from_hier(hier: &AtomConformerResidueChainModel) -> Self {
+        let (resi, insertion) = hier.residue().id();
+        let altloc = insertion.unwrap_or("");
+        Self::new(
+            hier.chain().id(),
+            resi,
+            altloc,
+            hier.residue().name().unwrap_or(""),
+        )
+    }
+
+    /// Helper function to convert an [`pdbtbx::Residue`] to a residue identifier
+    pub fn from_residue(residue: &Residue, chain_id: &str) -> Self {
+        let (resi, insertion) = residue.id();
+        let altloc = insertion.unwrap_or("");
+        Self::new(chain_id, resi, altloc, residue.name().unwrap_or(""))
+    }
 }
 
 pub trait ResidueExt {
@@ -51,9 +94,7 @@ impl ResidueExt for Residue {
     }
 
     fn ring_atoms(&self) -> Vec<&Atom> {
-        let res_name = self
-            .name()
-            .unwrap_or("Some conformers have different names!");
+        let res_name = self.name().unwrap_or(""); // Some conformers have different names
 
         match res_name {
             "HIS" => self

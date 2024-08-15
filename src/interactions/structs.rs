@@ -1,4 +1,5 @@
 use core::fmt;
+use pdbtbx::*;
 
 /// Interaction types.
 #[allow(dead_code)]
@@ -74,6 +75,37 @@ pub struct ResultEntry {
     pub receptor: InteractingEntity,
     /// Distance between ligand and receptor atoms
     pub distance: f64,
+}
+
+impl InteractingEntity {
+    pub fn new(
+        chain: &str,
+        resi: isize,
+        altloc: &str,
+        resn: &str,
+        atomn: &str,
+        atomi: usize,
+    ) -> Self {
+        Self {
+            chain: chain.to_string(),
+            resi,
+            altloc: altloc.to_string(),
+            resn: resn.to_string(),
+            atomn: atomn.to_string(),
+            atomi,
+        }
+    }
+    /// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a human-readable format
+    pub fn from_hier(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
+        Self::new(
+            hierarchy.chain().id(),
+            hierarchy.residue().serial_number(),
+            hierarchy.conformer().alternative_location().unwrap_or(""),
+            hierarchy.residue().name().unwrap(),
+            hierarchy.atom().name(),
+            hierarchy.atom().serial_number(),
+        )
+    }
 }
 
 impl fmt::Display for InteractingEntity {
