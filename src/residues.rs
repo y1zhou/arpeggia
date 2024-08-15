@@ -4,15 +4,15 @@ use rayon::prelude::*;
 
 /// The struct for a residue identifier
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct ResidueId {
+pub struct ResidueId<'a> {
     /// Chain identifier
-    pub chain: String,
+    pub chain: &'a str,
     /// Residue index
     pub resi: isize,
     /// Alternate location identifier
-    pub altloc: String,
+    pub altloc: &'a str,
     /// Residue name
-    pub resn: String,
+    pub resn: &'a str,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -21,18 +21,18 @@ pub struct Ring {
     pub normal: na::Vector3<f64>,
 }
 
-impl ResidueId {
-    pub fn new(chain: &str, resi: isize, altloc: &str, resn: &str) -> Self {
+impl<'a> ResidueId<'a> {
+    pub fn new(chain: &'a str, resi: isize, altloc: &'a str, resn: &'a str) -> Self {
         Self {
-            chain: chain.to_string(),
+            chain,
             resi,
-            altloc: altloc.to_string(),
-            resn: resn.to_string(),
+            altloc,
+            resn,
         }
     }
 
     /// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a residue identifier
-    pub fn from_hier(hier: &AtomConformerResidueChainModel) -> Self {
+    pub fn from_hier(hier: &'a AtomConformerResidueChainModel) -> Self {
         let (resi, insertion) = hier.residue().id();
         let altloc = insertion.unwrap_or("");
         Self::new(
@@ -44,7 +44,7 @@ impl ResidueId {
     }
 
     /// Helper function to convert an [`pdbtbx::Residue`] to a residue identifier
-    pub fn from_residue(residue: &Residue, chain_id: &str) -> Self {
+    pub fn from_residue(residue: &'a Residue, chain_id: &'a str) -> Self {
         let (resi, insertion) = residue.id();
         let altloc = insertion.unwrap_or("");
         Self::new(chain_id, resi, altloc, residue.name().unwrap_or(""))

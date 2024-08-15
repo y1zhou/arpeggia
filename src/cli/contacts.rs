@@ -61,7 +61,7 @@ pub(crate) fn run(args: &Args) {
     }
 
     let (df_atomic, df_ring, i_complex) =
-        get_contacts(pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
+        get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
 
     // Information on the sequence of the chains in the model
     let num_chains = i_complex.ligand.len() + i_complex.receptor.len();
@@ -106,24 +106,21 @@ pub(crate) fn run(args: &Args) {
     info!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
 
     // Concate dataframes for saving to CSV
-    let mut df_contacts = concat(
-        [df_atomic.clone().lazy(), df_ring.clone().lazy()],
-        UnionArgs::default(),
-    )
-    .unwrap()
-    .collect()
-    .unwrap();
+    let mut df_contacts = concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
+        .unwrap()
+        .collect()
+        .unwrap();
 
     // Save res to CSV files
     write_df_to_csv(&mut df_contacts, output_file);
 }
 
-pub fn get_contacts(
-    pdb: PDB,
-    groups: &str,
+pub fn get_contacts<'a>(
+    pdb: &'a PDB,
+    groups: &'a str,
     vdw_comp: f64,
     dist_cutoff: f64,
-) -> (DataFrame, DataFrame, InteractionComplex) {
+) -> (DataFrame, DataFrame, InteractionComplex<'a>) {
     let i_complex = InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff);
 
     // Find interactions
