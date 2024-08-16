@@ -27,12 +27,12 @@ pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> O
     }
 }
 
-/// Identify pi-pi interactions using the classification by [Chakrabarti and Bhattacharyya (2007)](https://doi.org/10.1016/j.pbiomolbio.2007.03.016).
+/// Identify pi-pi interactions using the classification by [Chakrabarti and Bhattacharyya (2007)](https://doi.org/10.1016/j.pbiomolbio.2007.03.016), Fig. 11.
 pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
     let angle_vec = ring1.center - ring2.center;
     let dist = (angle_vec).norm();
     if dist <= PI_PI_DIST_THRESHOLD {
-        let theta = point_ring_angle(ring1, &angle_vec);
+        let theta = point_ring_angle(ring1, &ring2.center);
         let dihedral = ring_ring_angle(ring1, ring2);
 
         match dihedral {
