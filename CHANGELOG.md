@@ -23,6 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - PLACEHOLDER
 
+
+## [0.3.1]
+
+### Fixed
+
+- Wrong theta angle specification for pi-pi interactions
+- Reduced unnecessary cloning of objects and strings
+
+### Changed
+
+- Defaults to searching for all intra- and inter-chain interactions when `-g '/'` is passed to `contacts`
+
+
 ## [0.3.0] - 2024-08-14
 
 ### Added
@@ -62,7 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.3.0...HEAD
-[0.2.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.0
+[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.1
+[0.3.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.0
 [0.2.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.2.0
 [0.1.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.1.0

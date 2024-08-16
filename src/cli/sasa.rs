@@ -60,7 +60,6 @@ pub(crate) fn run(args: &Args) {
     let mut df_sasa = get_atom_sasa(&pdb, args.probe_radius, args.n_points);
 
     // Prepare output directory
-    // let file_id = input_path.file_stem().unwrap().to_str().unwrap();
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = match output_path.is_dir() {
