@@ -316,7 +316,10 @@ fn build_ring_positions(model: &PDB) -> HashMap<ResidueId, Ring> {
                 .map(|r| {
                     (
                         ResidueId::from_residue(r, c.id()),
-                        r.ring_center_and_normal().unwrap(),
+                        match r.ring_center_and_normal() {
+                            Some(ring) => ring,
+                            None => panic!("Failed to calculate ring position for residue {:?}", r),
+                        },
                     )
                 })
         })
