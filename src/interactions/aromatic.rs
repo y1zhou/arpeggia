@@ -8,6 +8,7 @@ use pdbtbx::*;
 const CATION_PI_ANGLE_THRESHOLD: f64 = 30.0;
 const CATION_PI_DIST_THRESHOLD: f64 = 4.5;
 const PI_PI_DIST_THRESHOLD: f64 = 6.0;
+const PI_T_DIST_THREHOLD: f64 = 5.0;
 
 /// Identify cation-pi interactions.
 pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> Option<Interaction> {
@@ -28,6 +29,7 @@ pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> O
 }
 
 /// Identify pi-pi interactions using the classification by [Chakrabarti and Bhattacharyya (2007)](https://doi.org/10.1016/j.pbiomolbio.2007.03.016), Fig. 11.
+/// For T-shaped Pi-stacking, the distance threshold is set to 5.0 Å according to [getcontacts](https://getcontacts.github.io/interactions.html).
 pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
     let angle_vec = ring1.center - ring2.center;
     let dist = (angle_vec).norm();
@@ -46,7 +48,10 @@ pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
             d if d <= 60.0 => Some(Interaction::PiTiltedStacking),
             d if d <= 90.0 => match theta {
                 t if (30.0..60.0).contains(&t) => Some(Interaction::PiLStacking), // oe
-                _ => Some(Interaction::PiTStacking),                              // fe and ef
+                _ => match dist <= PI_T_DIST_THREHOLD {
+                    true => Some(Interaction::PiTStacking), // fe and ef
+                    false => None,
+                },
             },
             _ => None,
         }
