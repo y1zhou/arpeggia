@@ -1,8 +1,7 @@
-use std::{collections::HashSet, path::PathBuf};
-
 use crate::residues::ResidueExt;
 use pdbtbx::*;
 use polars::prelude::*;
+use std::{collections::HashSet, path::PathBuf};
 
 /// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
 pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {

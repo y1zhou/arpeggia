@@ -5,23 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.2]
 
 ### Added
 
-- PLACEHOLDER
+- Detection of repulsion between like charges
 
 ### Fixed
 
-- PLACEHOLDER
+- Better error messages when rings have missing atoms for finding the center and normal vector
 
 ### Changed
 
-- PLACEHOLDER
-
-### Removed
-
-- PLACEHOLDER
+- Distance cutoff for T-shaped Pi-stacking lowered from 6Å to 5Å
 
 
 ## [0.3.1]
@@ -75,7 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.3.1...HEAD
+[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.3.2...HEAD
+[0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.2
 [0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.1
 [0.3.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.0
 [0.2.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.2.0

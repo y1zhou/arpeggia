@@ -1,7 +1,7 @@
 use super::{
-    find_cation_pi, find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond, find_pi_pi,
-    find_vdw_contact, find_weak_hydrogen_bond, point_ring_dist, InteractingEntity, Interaction,
-    ResultEntry,
+    find_cation_pi, find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond,
+    find_ionic_repulsion, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond, point_ring_dist,
+    InteractingEntity, Interaction, ResultEntry,
 };
 use crate::{
     residues::{ResidueExt, ResidueId, Ring},
@@ -175,6 +175,15 @@ impl<'a> Interactions for InteractionComplex<'a> {
                     distance: e1.atom().distance(e2.atom()),
                 });
                 atomic_contacts.extend(ionic_bonds);
+
+                // Charge-charge repulsions
+                let charge_repulsions = find_ionic_repulsion(e1, e2).map(|intxn| ResultEntry {
+                    interaction: intxn,
+                    ligand: InteractingEntity::from_hier(e1),
+                    receptor: InteractingEntity::from_hier(e2),
+                    distance: e1.atom().distance(e2.atom()),
+                });
+                atomic_contacts.extend(charge_repulsions);
 
                 // Hydrophobic contacts
                 let hydrophobic_contacts =

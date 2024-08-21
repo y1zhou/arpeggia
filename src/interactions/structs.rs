@@ -26,6 +26,8 @@ pub enum Interaction {
     PolarContact,
     /// C-H...O bonding without angle terms
     WeakPolarContact,
+    /// Like charges repelling each other
+    IonicRepulsion,
 
     // Aromatic
     /// Pi-pi staggered stacking, parallel displaced (`of`)
