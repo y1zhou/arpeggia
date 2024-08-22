@@ -15,13 +15,10 @@ pub fn find_ionic_bond(
     if let Some((pos, neg)) = is_ionic_bond_pair(entity1, entity2) {
         if pos.atom().distance(neg.atom()) <= IONIC_BOND_DIST {
             // Polar interactions are more relaxed as only distance is checked
-            Some(Interaction::IonicBond)
-        } else {
-            None
+            return Some(Interaction::IonicBond);
         }
-    } else {
-        None
     }
+    None
 }
 
 /// Search for like charges that repel each other.
@@ -31,13 +28,10 @@ pub fn find_ionic_repulsion(
 ) -> Option<Interaction> {
     if let Some((hier1, hier2)) = is_same_charge_pair(entity1, entity2) {
         if hier1.atom().distance(hier2.atom()) <= IONIC_BOND_DIST {
-            Some(Interaction::IonicRepulsion)
-        } else {
-            None
+            return Some(Interaction::IonicRepulsion);
         }
-    } else {
-        None
     }
+    None
 }
 
 /// Check if the two entities are a pair of ionizables.
