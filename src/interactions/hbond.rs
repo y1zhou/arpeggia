@@ -4,7 +4,8 @@ use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::HashSet;
 
-const HYDROGEN_BOND_POLAR_DIST: f64 = 3.5;
+const HYDROGEN_BOND_DIST: f64 = 4.0;
+const POLAR_DIST: f64 = 3.5;
 
 /// Search for hydrogen bonds and polar contacts.
 ///
@@ -32,35 +33,35 @@ pub fn find_hydrogen_bond(
     vdw_comp_factor: f64,
 ) -> Option<Interaction> {
     if let Some((donor, acceptor)) = is_donor_acceptor_pair(entity1, entity2) {
-        let donor_h: Vec<&Atom> = donor
-            .residue()
-            .par_atoms()
-            .filter(|atom| atom.element().unwrap() == &Element::H)
-            .collect();
+        let da_dist = donor.atom().distance(acceptor.atom());
+        if da_dist <= HYDROGEN_BOND_DIST {
+            let donor_h: Vec<&Atom> = donor
+                .residue()
+                .par_atoms()
+                .filter(|atom| atom.element().unwrap() == &Element::H)
+                .collect();
 
-        // Hydrogen bonds are stricter as they have angle restrictions
-        let acceptor_vdw: f64 = acceptor
-            .atom()
-            .element()
-            .unwrap()
-            .atomic_radius()
-            .van_der_waals
-            .unwrap();
-        let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
-        if donor_h.par_iter().any(|h| {
-            (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
-                & (donor.atom().angle(h, acceptor.atom()) >= 90.0)
-        }) {
-            Some(Interaction::HydrogenBond)
-        } else if donor.atom().distance(acceptor.atom()) <= HYDROGEN_BOND_POLAR_DIST {
+            // Hydrogen bonds are stricter as they have angle restrictions
+            let acceptor_vdw: f64 = acceptor
+                .atom()
+                .element()
+                .unwrap()
+                .atomic_radius()
+                .van_der_waals
+                .unwrap();
+            let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
+            if donor_h.par_iter().any(|h| {
+                (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
+                    & (donor.atom().angle(h, acceptor.atom()) >= 90.0)
+            }) {
+                return Some(Interaction::HydrogenBond);
+            }
+        } else if da_dist <= POLAR_DIST {
             // Polar interactions are more relaxed as only distance is checked
-            Some(Interaction::PolarContact)
-        } else {
-            None
+            return Some(Interaction::PolarContact);
         }
-    } else {
-        None
     }
+    None
 }
 
 /// Search for weak hydrogen bonds and weak polar contacts.
@@ -75,35 +76,35 @@ pub fn find_weak_hydrogen_bond(
     vdw_comp_factor: f64,
 ) -> Option<Interaction> {
     if let Some((donor, acceptor)) = is_weak_donor_acceptor_pair(entity1, entity2) {
-        let donor_h: Vec<&Atom> = donor
-            .residue()
-            .par_atoms()
-            .filter(|atom| atom.element().unwrap() == &Element::H)
-            .collect();
+        let da_dist = donor.atom().distance(acceptor.atom());
+        if da_dist <= HYDROGEN_BOND_DIST {
+            let donor_h: Vec<&Atom> = donor
+                .residue()
+                .par_atoms()
+                .filter(|atom| atom.element().unwrap() == &Element::H)
+                .collect();
 
-        // Hydrogen bonds are stricter as they have angle restrictions
-        let acceptor_vdw: f64 = acceptor
-            .atom()
-            .element()
-            .unwrap()
-            .atomic_radius()
-            .van_der_waals
-            .unwrap();
-        let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
-        if donor_h.par_iter().any(|h| {
-            (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
-                & (donor.atom().angle(h, acceptor.atom()) >= 130.0)
-        }) {
-            Some(Interaction::WeakHydrogenBond)
-        } else if donor.atom().distance(acceptor.atom()) <= HYDROGEN_BOND_POLAR_DIST {
+            // Hydrogen bonds are stricter as they have angle restrictions
+            let acceptor_vdw: f64 = acceptor
+                .atom()
+                .element()
+                .unwrap()
+                .atomic_radius()
+                .van_der_waals
+                .unwrap();
+            let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
+            if donor_h.par_iter().any(|h| {
+                (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
+                    & (donor.atom().angle(h, acceptor.atom()) >= 130.0)
+            }) {
+                return Some(Interaction::WeakHydrogenBond);
+            }
+        } else if da_dist <= POLAR_DIST {
             // Polar interactions are more relaxed as only distance is checked
-            Some(Interaction::WeakPolarContact)
-        } else {
-            None
+            return Some(Interaction::WeakPolarContact);
         }
-    } else {
-        None
     }
+    None
 }
 
 /// Determine if the two entities are a valid hydrogen bond donor-acceptor pair
