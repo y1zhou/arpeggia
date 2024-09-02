@@ -19,7 +19,7 @@ const POLAR_DIST: f64 = 3.5;
 ///
 /// where `vdw_comp_factor` is the compensation factor for VdW radii dependent interactions.
 /// If the conditions are met, it returns [`Interaction::HydrogenBond`].
-/// If not, it checks for [`Interaction::PolarContact`] by: dist(donor, acceptor) <= [`HYDROGEN_BOND_POLAR_DIST`].
+/// If not, it checks for [`Interaction::PolarContact`] by: dist(donor, acceptor) <= [`POLAR_DIST`].
 ///
 /// For further details, see:
 ///
@@ -56,7 +56,8 @@ pub fn find_hydrogen_bond(
             }) {
                 return Some(Interaction::HydrogenBond);
             }
-        } else if da_dist <= POLAR_DIST {
+        }
+        if da_dist <= POLAR_DIST {
             // Polar interactions are more relaxed as only distance is checked
             return Some(Interaction::PolarContact);
         }
@@ -99,7 +100,8 @@ pub fn find_weak_hydrogen_bond(
             }) {
                 return Some(Interaction::WeakHydrogenBond);
             }
-        } else if da_dist <= POLAR_DIST {
+        }
+        if da_dist <= POLAR_DIST {
             // Polar interactions are more relaxed as only distance is checked
             return Some(Interaction::WeakPolarContact);
         }
