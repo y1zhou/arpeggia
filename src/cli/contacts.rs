@@ -1,5 +1,5 @@
 use crate::interactions::{InteractionComplex, Interactions, ResultEntry};
-use crate::utils::{load_model, write_df_to_csv};
+use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -22,6 +22,10 @@ pub(crate) struct Args {
     /// where chains A and B are the "ligand" and C and D are the "receptor"
     #[arg(short, long)]
     groups: String,
+
+    /// Output file type
+    #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
+    output_format: DataFrameFileType,
 
     /// Compensation factor for VdW radii dependent interaction types
     #[arg(short = 'c', long = "vdw-comp", default_value_t = 0.1)]
@@ -83,7 +87,9 @@ pub(crate) fn run(args: &Args) {
     // Prepare output directory
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
-    let output_file = output_path.join("contacts.csv");
+    let output_file = output_path
+        .join("contacts.csv")
+        .with_extension(args.output_format.to_string());
 
     let output_file_str = output_file.to_str().unwrap();
     debug!("Results will be saved to {output_file_str}");
@@ -112,7 +118,7 @@ pub(crate) fn run(args: &Args) {
         .unwrap();
 
     // Save res to CSV files
-    write_df_to_csv(&mut df_contacts, output_file);
+    write_df_to_file(&mut df_contacts, output_file, args.output_format);
 }
 
 pub fn get_contacts<'a>(

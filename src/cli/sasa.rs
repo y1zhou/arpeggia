@@ -1,6 +1,6 @@
 use crate::interactions::InteractingEntity;
 use crate::residues::ResidueExt;
-use crate::utils::{load_model, write_df_to_csv};
+use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -19,6 +19,10 @@ pub(crate) struct Args {
     /// Output CSV file path
     #[arg(short, long)]
     output: PathBuf,
+
+    /// Output file type
+    #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
+    output_format: DataFrameFileType,
 
     /// Probe radius r (smaller r detects more surface details and reports a larger surface)
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
@@ -65,7 +69,8 @@ pub(crate) fn run(args: &Args) {
     let output_file = match output_path.is_dir() {
         true => output_path.join("sasa.csv"),
         false => output_path,
-    };
+    }
+    .with_extension(args.output_format.to_string());
 
     let output_file_str = output_file.to_str().unwrap();
     debug!("Results will be saved to {output_file_str}");
@@ -80,7 +85,7 @@ pub(crate) fn run(args: &Args) {
     );
 
     // Save res to CSV files
-    write_df_to_csv(&mut df_sasa, output_file);
+    write_df_to_file(&mut df_sasa, output_file, args.output_format);
 }
 
 pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {
