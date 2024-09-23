@@ -123,15 +123,15 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame
     let atom_annot_df = df!(
         "chain" => atom_annotations.iter().map(|x| x.chain.to_owned()).collect::<Vec<String>>(),
         "resn" => atom_annotations.iter().map(|x| x.resn.to_owned()).collect::<Vec<String>>(),
-        "resi" => atom_annotations.iter().map(|x| x.resi as i64).collect::<Vec<i64>>(),
+        "resi" => atom_annotations.iter().map(|x| x.resi as i32).collect::<Vec<i32>>(),
         "altloc" => atom_annotations.iter().map(|x| x.altloc.to_owned()).collect::<Vec<String>>(),
         "atomn" => atom_annotations.iter().map(|x| x.atomn.to_owned()).collect::<Vec<String>>(),
-        "atomi" => atom_annotations.iter().map(|x| x.atomi as i64).collect::<Vec<i64>>(),
+        "atomi" => atom_annotations.iter().map(|x| x.atomi as i32).collect::<Vec<i32>>(),
     )
     .unwrap();
 
     df!(
-        "atomi" => atoms.iter().map(|x| x.id as i64).collect::<Vec<i64>>(),
+        "atomi" => atoms.iter().map(|x| x.id as i32).collect::<Vec<i32>>(),
         "sasa" => atom_sasa
     )
     .unwrap()
