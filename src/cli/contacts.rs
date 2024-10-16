@@ -23,6 +23,10 @@ pub(crate) struct Args {
     #[arg(short, long)]
     groups: String,
 
+    /// Name of the output file
+    #[arg(short, long, default_value_t = String::from("contacts"))]
+    name: String,
+
     /// Output file type
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
     output_format: DataFrameFileType,
@@ -88,7 +92,7 @@ pub(crate) fn run(args: &Args) {
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = output_path
-        .join("contacts.csv")
+        .join(args.name.clone())
         .with_extension(args.output_format.to_string());
 
     let output_file_str = output_file.to_str().unwrap();

@@ -16,9 +16,13 @@ pub(crate) struct Args {
     #[arg(short, long)]
     input: PathBuf,
 
-    /// Output CSV file path
+    /// Output directory
     #[arg(short, long)]
     output: PathBuf,
+
+    /// Name of the output file
+    #[arg(short, long, default_value_t = String::from("sasa"))]
+    name: String,
 
     /// Output file type
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
@@ -67,7 +71,7 @@ pub(crate) fn run(args: &Args) {
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = match output_path.is_dir() {
-        true => output_path.join("sasa.csv"),
+        true => output_path.join(args.name.clone()),
         false => output_path,
     }
     .with_extension(args.output_format.to_string());
