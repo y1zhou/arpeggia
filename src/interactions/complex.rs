@@ -11,6 +11,8 @@ use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
+type RingPositionResult<'a> = Result<(HashMap<ResidueId<'a>, Ring>, Vec<String>), Vec<String>>;
+
 /// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex<'a> {
     /// All information present in the atomic model
@@ -36,7 +38,7 @@ impl<'a> InteractionComplex<'a> {
         groups: &'a str,
         vdw_comp_factor: f64,
         interacting_threshold: f64,
-    ) -> Self {
+    ) -> Result<(Self, Vec<String>), Vec<String>> {
         // Parse all chains and input chain groups
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
@@ -45,17 +47,20 @@ impl<'a> InteractionComplex<'a> {
         let res2idx = build_residue_index(model);
 
         // Build a mapping of ring residue names to ring centers and normals
-        let rings = build_ring_positions(model);
+        let (rings, ring_err) = build_ring_positions(model).expect("Error building ring positions");
 
-        Self {
-            model,
-            ligand,
-            receptor,
-            vdw_comp_factor,
-            interacting_threshold,
-            res2idx,
-            rings,
-        }
+        Ok((
+            Self {
+                model,
+                ligand,
+                receptor,
+                vdw_comp_factor,
+                interacting_threshold,
+                res2idx,
+                rings,
+            },
+            ring_err,
+        ))
     }
 
     fn is_neighboring_hierarchy(
@@ -315,22 +320,29 @@ fn build_residue_index(model: &PDB) -> HashMap<ResidueId, usize> {
         .collect::<HashMap<ResidueId, usize>>()
 }
 
-fn build_ring_positions(model: &PDB) -> HashMap<ResidueId, Ring> {
+fn build_ring_positions(model: &PDB) -> RingPositionResult {
     let ring_res = HashSet::from(["HIS", "PHE", "TYR", "TRP"]);
-    model
-        .chains()
-        .flat_map(|c| {
-            c.residues()
-                .filter(|r| ring_res.contains(r.name().unwrap()))
-                .map(|r| {
-                    (
-                        ResidueId::from_residue(r, c.id()),
-                        match r.ring_center_and_normal() {
-                            Some(ring) => ring,
-                            None => panic!("Failed to calculate ring position for residue {:?}", r),
-                        },
-                    )
-                })
-        })
-        .collect()
+    let mut ring_positions = HashMap::new();
+    let mut errors = Vec::new();
+
+    for c in model.chains() {
+        for r in c
+            .residues()
+            .filter(|r| ring_res.contains(r.name().unwrap()))
+        {
+            let res_id = ResidueId::from_residue(r, c.id());
+            match r.ring_center_and_normal() {
+                Some(ring) => {
+                    ring_positions.insert(res_id, ring);
+                }
+                None => {
+                    errors.push(format!("Failed to calculate ring position for {:?}", r));
+                }
+            }
+        }
+    }
+    if ring_positions.is_empty() {
+        return Err(errors);
+    }
+    Ok((ring_positions, errors))
 }

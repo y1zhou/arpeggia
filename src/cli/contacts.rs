@@ -130,7 +130,12 @@ pub fn get_contacts<'a>(
     vdw_comp: f64,
     dist_cutoff: f64,
 ) -> (DataFrame, DataFrame, InteractionComplex<'a>) {
-    let i_complex = InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff);
+    let (i_complex, build_ring_err) =
+        InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff).unwrap();
+
+    if !build_ring_err.is_empty() {
+        build_ring_err.iter().for_each(|e| warn!("{e}"));
+    }
 
     // Find interactions
     let atomic_contacts = i_complex.get_atomic_contacts();
