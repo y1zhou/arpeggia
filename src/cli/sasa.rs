@@ -76,20 +76,19 @@ pub(crate) fn run(args: &Args) {
     }
     .with_extension(args.output_format.to_string());
 
-    let output_file_str = output_file.to_str().unwrap();
-    debug!("Results will be saved to {output_file_str}");
-
     // Save results and log the identified SASA
     let non_zero_sasa_mask = df_sasa.column("sasa").unwrap().not_equal(0.0).unwrap();
     let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
-    info!(
+    debug!(
         "Found {} atoms with non-zero SASA\n{}",
         df_sasa_nonzero.shape().0,
         df_sasa_nonzero
     );
 
     // Save res to CSV files
-    write_df_to_file(&mut df_sasa, output_file, args.output_format);
+    write_df_to_file(&mut df_sasa, &output_file, args.output_format);
+    let output_file_str = output_file.to_str().unwrap();
+    info!("Results saved to {output_file_str}");
 }
 
 pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {

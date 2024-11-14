@@ -95,11 +95,8 @@ pub(crate) fn run(args: &Args) {
         .join(args.name.clone())
         .with_extension(args.output_format.to_string());
 
-    let output_file_str = output_file.to_str().unwrap();
-    debug!("Results will be saved to {output_file_str}");
-
     // Save results and log the identified interactions
-    info!(
+    debug!(
         "Found {} atom-atom contacts\n{}",
         df_atomic.shape().0,
         df_atomic
@@ -113,7 +110,7 @@ pub(crate) fn run(args: &Args) {
     if df_clash.height() > 0 {
         warn!("Found {} steric clashes\n{}", df_clash.shape().0, df_clash);
     }
-    info!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
+    debug!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
 
     // Concate dataframes for saving to CSV
     let mut df_contacts = concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
@@ -122,7 +119,9 @@ pub(crate) fn run(args: &Args) {
         .unwrap();
 
     // Save res to CSV files
-    write_df_to_file(&mut df_contacts, output_file, args.output_format);
+    write_df_to_file(&mut df_contacts, &output_file, args.output_format);
+    let output_file_str = output_file.to_str().unwrap();
+    info!("Results saved to {output_file_str}");
 }
 
 pub fn get_contacts<'a>(
