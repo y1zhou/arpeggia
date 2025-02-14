@@ -248,7 +248,15 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 let dist = point_ring_dist(ring, &y.atom().pos());
                 let cation_pi_contacts = find_cation_pi(ring, y).map(|intxn| ResultEntry {
                     interaction: intxn,
-                    ligand: InteractingEntity::new(k.chain, k.resi, k.altloc, k.resn, "Ring", 0),
+                    ligand: InteractingEntity::new(
+                        k.chain,
+                        k.resi,
+                        k.insertion,
+                        k.altloc,
+                        k.resn,
+                        "Ring",
+                        0,
+                    ),
                     receptor: InteractingEntity::from_hier(y),
                     distance: dist,
                 });
@@ -289,10 +297,22 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 let pi_pi_contacts = find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
                     interaction: intxn,
                     ligand: InteractingEntity::new(
-                        k1.chain, k1.resi, k1.altloc, k1.resn, "Ring", 0,
+                        k1.chain,
+                        k1.resi,
+                        k1.insertion,
+                        k1.altloc,
+                        k1.resn,
+                        "Ring",
+                        0,
                     ),
                     receptor: InteractingEntity::new(
-                        k2.chain, k2.resi, k2.altloc, k2.resn, "Ring", 0,
+                        k2.chain,
+                        k2.resi,
+                        k2.insertion,
+                        k2.altloc,
+                        k2.resn,
+                        "Ring",
+                        0,
                     ),
                     distance: dist,
                 });
@@ -311,10 +331,21 @@ fn build_residue_index(model: &PDB) -> HashMap<ResidueId, usize> {
     model
         .chains()
         .flat_map(|c| {
-            c.residues().enumerate().map(move |(i, residue)| {
-                let res_id = ResidueId::from_residue(residue, c.id());
+            c.residues().enumerate().flat_map(move |(i, residue)| {
+                // All conformers in the same residue should share the same index
+                let (resi, insertion) = residue.id();
+                let insertion = insertion.unwrap_or("");
+                let resn = residue.name().unwrap_or("");
 
-                (res_id, i)
+                residue
+                    .conformers()
+                    .map(move |conformer| {
+                        let res_id =
+                            ResidueId::from_conformer(conformer, c.id(), resi, insertion, resn);
+
+                        (res_id, i)
+                    })
+                    .collect::<Vec<_>>()
             })
         })
         .collect::<HashMap<ResidueId, usize>>()
@@ -330,13 +361,19 @@ fn build_ring_positions(model: &PDB) -> RingPositionResult {
             .residues()
             .filter(|r| ring_res.contains(r.name().unwrap()))
         {
-            let res_id = ResidueId::from_residue(r, c.id());
-            match r.ring_center_and_normal() {
-                Some(ring) => {
-                    ring_positions.insert(res_id, ring);
-                }
-                None => {
-                    errors.push(format!("Failed to calculate ring position for {:?}", r));
+            let (resi, insertion_code) = r.id();
+            let insertion_code = insertion_code.unwrap_or("");
+            let resn = r.name().unwrap_or("");
+            for conformer in r.conformers() {
+                let res_id =
+                    ResidueId::from_conformer(conformer, c.id(), resi, insertion_code, resn);
+                match r.ring_center_and_normal(None) {
+                    Some(ring) => {
+                        ring_positions.insert(res_id, ring);
+                    }
+                    None => {
+                        errors.push(format!("Failed to calculate ring position for {:?}", r));
+                    }
                 }
             }
         }
