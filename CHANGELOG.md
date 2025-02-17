@@ -5,19 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.2]
+## [0.4.0] - 2025-02-17
 
 ### Added
 
 - Detection of repulsion between like charges
+- Support of parquet, json, and ndjson output formats
+- Added a `-name` flag in the CLI to rename the output file of `contacts` and `sasa` commands
 
 ### Fixed
 
+- Checks for polar contacts were skipped when hydrogen bond criteria are not satisfied
 - Better error messages when rings have missing atoms for finding the center and normal vector
+- Nomenclature mix of residue insertion codes and alternative locations; the two are now stored under separate columns (`*_insertion` and `*_altloc`) in the output files
 
 ### Changed
 
 - Distance cutoff for T-shaped Pi-stacking lowered from 6Å to 5Å
+- Added hydrogen bond distance check to better differentiate Hbonds and polar contacts
+- Performance/memory footprint improvement by switching from 64-bit numbers to 32-bit
+- Logging is now less verbose
 
 
 ## [0.3.1]
@@ -71,8 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.3.2...HEAD
-[0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.2
+[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.0
 [0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.1
 [0.3.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.0
 [0.2.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.2.0
