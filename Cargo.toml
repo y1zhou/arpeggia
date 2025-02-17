@@ -1,6 +1,6 @@
 [package]
 name = "arpeggia"
-version = "0.3.2"
+version = "0.4.0"
 description = "A port of the Arpeggio library for Rust"
 edition = "2021"
 authors = ["Yi Zhou <me@y1zhou.com>"]
@@ -8,15 +8,16 @@ authors = ["Yi Zhou <me@y1zhou.com>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.5.4", features = ["derive"] }
-nalgebra = "0.32.5"
-pdbtbx = { version = "0.11.0", features = [
-    "rayon",
-    "rstar",
-], git = "https://github.com/douweschulte/pdbtbx", rev = "1298c60e8573efbc3f7c77a9a2d6f0656fa8c638" }
-polars = { version = "0.43.1", features = ["lazy", "parquet", "json"] }
+clap = { version = "4.5.29", features = ["derive"] }
+nalgebra = "0.33.2"
+# pdbtbx = { version = "0.11.0", features = [
+#     "rayon",
+#     "rstar",
+# ], git = "https://github.com/douweschulte/pdbtbx", rev = "1298c60e8573efbc3f7c77a9a2d6f0656fa8c638" }
+pdbtbx = { version = "0.12.0", features = ["rayon", "rstar"] }
+polars = { version = "0.46.0", features = ["lazy", "parquet", "json"] }
 rayon = "1.10.0"
-rstar = "0.12.0"
-rust-sasa = "0.2.2"
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
+rstar = "0.12.2"
+rust-sasa = "0.2.4"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"

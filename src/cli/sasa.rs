@@ -77,7 +77,12 @@ pub(crate) fn run(args: &Args) {
     .with_extension(args.output_format.to_string());
 
     // Save results and log the identified SASA
-    let non_zero_sasa_mask = df_sasa.column("sasa").unwrap().not_equal(0.0).unwrap();
+    let non_zero_sasa_mask = df_sasa
+        .column("sasa")
+        .unwrap()
+        .as_materialized_series()
+        .not_equal(0.0)
+        .unwrap();
     let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
     debug!(
         "Found {} atoms with non-zero SASA\n{}",
@@ -143,6 +148,7 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame
         ["atomi"],
         ["atomi"],
         JoinArgs::new(JoinType::Inner),
+        None,
     )
     .unwrap()
     .sort(["chain", "resi", "altloc", "atomi"], Default::default())
