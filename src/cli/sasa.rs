@@ -1,6 +1,6 @@
 use crate::interactions::InteractingEntity;
 use crate::residues::ResidueExt;
-use crate::utils::{load_model, write_df_to_csv};
+use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -16,9 +16,17 @@ pub(crate) struct Args {
     #[arg(short, long)]
     input: PathBuf,
 
-    /// Output CSV file path
+    /// Output directory
     #[arg(short, long)]
     output: PathBuf,
+
+    /// Name of the output file
+    #[arg(short, long, default_value_t = String::from("sasa"))]
+    name: String,
+
+    /// Output file type
+    #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
+    output_format: DataFrameFileType,
 
     /// Probe radius r (smaller r detects more surface details and reports a larger surface)
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
@@ -63,24 +71,29 @@ pub(crate) fn run(args: &Args) {
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = match output_path.is_dir() {
-        true => output_path.join("sasa.csv"),
+        true => output_path.join(args.name.clone()),
         false => output_path,
-    };
-
-    let output_file_str = output_file.to_str().unwrap();
-    debug!("Results will be saved to {output_file_str}");
+    }
+    .with_extension(args.output_format.to_string());
 
     // Save results and log the identified SASA
-    let non_zero_sasa_mask = df_sasa.column("sasa").unwrap().not_equal(0.0).unwrap();
+    let non_zero_sasa_mask = df_sasa
+        .column("sasa")
+        .unwrap()
+        .as_materialized_series()
+        .not_equal(0.0)
+        .unwrap();
     let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
-    info!(
+    debug!(
         "Found {} atoms with non-zero SASA\n{}",
         df_sasa_nonzero.shape().0,
         df_sasa_nonzero
     );
 
     // Save res to CSV files
-    write_df_to_csv(&mut df_sasa, output_file);
+    write_df_to_file(&mut df_sasa, &output_file, args.output_format);
+    let output_file_str = output_file.to_str().unwrap();
+    info!("Results saved to {output_file_str}");
 }
 
 pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {
@@ -118,15 +131,15 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame
     let atom_annot_df = df!(
         "chain" => atom_annotations.iter().map(|x| x.chain.to_owned()).collect::<Vec<String>>(),
         "resn" => atom_annotations.iter().map(|x| x.resn.to_owned()).collect::<Vec<String>>(),
-        "resi" => atom_annotations.iter().map(|x| x.resi as i64).collect::<Vec<i64>>(),
+        "resi" => atom_annotations.iter().map(|x| x.resi as i32).collect::<Vec<i32>>(),
         "altloc" => atom_annotations.iter().map(|x| x.altloc.to_owned()).collect::<Vec<String>>(),
         "atomn" => atom_annotations.iter().map(|x| x.atomn.to_owned()).collect::<Vec<String>>(),
-        "atomi" => atom_annotations.iter().map(|x| x.atomi as i64).collect::<Vec<i64>>(),
+        "atomi" => atom_annotations.iter().map(|x| x.atomi as i32).collect::<Vec<i32>>(),
     )
     .unwrap();
 
     df!(
-        "atomi" => atoms.iter().map(|x| x.id as i64).collect::<Vec<i64>>(),
+        "atomi" => atoms.iter().map(|x| x.id as i32).collect::<Vec<i32>>(),
         "sasa" => atom_sasa
     )
     .unwrap()
@@ -135,6 +148,7 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame
         ["atomi"],
         ["atomi"],
         JoinArgs::new(JoinType::Inner),
+        None,
     )
     .unwrap()
     .sort(["chain", "resi", "altloc", "atomi"], Default::default())

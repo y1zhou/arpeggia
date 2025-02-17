@@ -26,6 +26,8 @@ pub enum Interaction {
     PolarContact,
     /// C-H...O bonding without angle terms
     WeakPolarContact,
+    /// Like charges repelling each other
+    IonicRepulsion,
 
     // Aromatic
     /// Pi-pi staggered stacking, parallel displaced (`of`)
@@ -56,6 +58,8 @@ pub struct InteractingEntity {
     pub resn: String,
     /// Residue index
     pub resi: isize,
+    /// residue insertion code
+    pub insertion: String,
     /// Alternate location identifier
     pub altloc: String,
     /// Atom name
@@ -81,6 +85,7 @@ impl InteractingEntity {
     pub fn new(
         chain: &str,
         resi: isize,
+        insertion: &str,
         altloc: &str,
         resn: &str,
         atomn: &str,
@@ -89,6 +94,7 @@ impl InteractingEntity {
         Self {
             chain: chain.to_string(),
             resi,
+            insertion: insertion.to_string(),
             altloc: altloc.to_string(),
             resn: resn.to_string(),
             atomn: atomn.to_string(),
@@ -100,6 +106,7 @@ impl InteractingEntity {
         Self::new(
             hierarchy.chain().id(),
             hierarchy.residue().serial_number(),
+            hierarchy.residue().insertion_code().unwrap_or(""),
             hierarchy.conformer().alternative_location().unwrap_or(""),
             hierarchy.residue().name().unwrap(),
             hierarchy.atom().name(),
@@ -112,10 +119,11 @@ impl fmt::Display for InteractingEntity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Chain {chain}, Residue {resn} {resi}{altloc}, Atom {atom_name} {atom_idx}",
+            "Chain {chain}, Residue {resn} {resi}{insertion} {altloc}, Atom {atom_name} {atom_idx}",
             chain = self.chain,
             resn = self.resn,
             resi = self.resi,
+            insertion = self.insertion,
             altloc = self.altloc,
             atom_name = self.atomn,
             atom_idx = self.atomi

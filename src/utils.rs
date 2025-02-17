@@ -1,8 +1,7 @@
-use std::{collections::HashSet, path::PathBuf};
-
 use crate::residues::ResidueExt;
 use pdbtbx::*;
 use polars::prelude::*;
+use std::{collections::HashSet, path::Path};
 
 /// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
 pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
@@ -67,9 +66,48 @@ pub fn parse_groups(
 }
 
 /// Write a DataFrame to a CSV file
-pub(crate) fn write_df_to_csv(df: &mut DataFrame, file_path: PathBuf) {
-    let mut file = std::fs::File::create(file_path).unwrap();
-    CsvWriter::new(&mut file).finish(df).unwrap();
+pub(crate) fn write_df_to_file(df: &mut DataFrame, file_path: &Path, file_type: DataFrameFileType) {
+    let file_suffix = file_type.to_string();
+    let mut file = std::fs::File::create(file_path.with_extension(file_suffix)).unwrap();
+    match file_type {
+        DataFrameFileType::Csv => {
+            CsvWriter::new(&mut file).finish(df).unwrap();
+        }
+        DataFrameFileType::Parquet => {
+            ParquetWriter::new(&mut file).finish(df).unwrap();
+        }
+        DataFrameFileType::Json => {
+            JsonWriter::new(&mut file)
+                .with_json_format(JsonFormat::Json)
+                .finish(df)
+                .unwrap();
+        }
+        DataFrameFileType::NDJson => {
+            JsonWriter::new(&mut file)
+                .with_json_format(JsonFormat::JsonLines)
+                .finish(df)
+                .unwrap();
+        }
+    }
+}
+
+#[derive(clap::ValueEnum, Clone, Debug, Copy)]
+pub enum DataFrameFileType {
+    Csv,
+    Parquet,
+    Json,
+    NDJson,
+}
+
+impl std::fmt::Display for DataFrameFileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            DataFrameFileType::Csv => write!(f, "csv"),
+            DataFrameFileType::Parquet => write!(f, "parquet"),
+            DataFrameFileType::Json => write!(f, "json"),
+            DataFrameFileType::NDJson => write!(f, "ndjson"),
+        }
+    }
 }
 
 #[cfg(test)]

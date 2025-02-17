@@ -19,13 +19,10 @@ pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> O
         let theta = point_ring_angle(ring, &atom_point);
 
         if (theta <= CATION_PI_ANGLE_THRESHOLD) & (dist <= CATION_PI_DIST_THRESHOLD) {
-            Some(Interaction::CationPi)
-        } else {
-            None
+            return Some(Interaction::CationPi);
         }
-    } else {
-        None
     }
+    None
 }
 
 /// Identify pi-pi interactions using the classification by [Chakrabarti and Bhattacharyya (2007)](https://doi.org/10.1016/j.pbiomolbio.2007.03.016), Fig. 11.

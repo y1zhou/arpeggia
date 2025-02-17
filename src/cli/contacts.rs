@@ -1,5 +1,5 @@
 use crate::interactions::{InteractionComplex, Interactions, ResultEntry};
-use crate::utils::{load_model, write_df_to_csv};
+use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -22,6 +22,14 @@ pub(crate) struct Args {
     /// where chains A and B are the "ligand" and C and D are the "receptor"
     #[arg(short, long)]
     groups: String,
+
+    /// Name of the output file
+    #[arg(short, long, default_value_t = String::from("contacts"))]
+    name: String,
+
+    /// Output file type
+    #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
+    output_format: DataFrameFileType,
 
     /// Compensation factor for VdW radii dependent interaction types
     #[arg(short = 'c', long = "vdw-comp", default_value_t = 0.1)]
@@ -83,13 +91,12 @@ pub(crate) fn run(args: &Args) {
     // Prepare output directory
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
-    let output_file = output_path.join("contacts.csv");
-
-    let output_file_str = output_file.to_str().unwrap();
-    debug!("Results will be saved to {output_file_str}");
+    let output_file = output_path
+        .join(args.name.clone())
+        .with_extension(args.output_format.to_string());
 
     // Save results and log the identified interactions
-    info!(
+    debug!(
         "Found {} atom-atom contacts\n{}",
         df_atomic.shape().0,
         df_atomic
@@ -103,7 +110,7 @@ pub(crate) fn run(args: &Args) {
     if df_clash.height() > 0 {
         warn!("Found {} steric clashes\n{}", df_clash.shape().0, df_clash);
     }
-    info!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
+    debug!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
 
     // Concate dataframes for saving to CSV
     let mut df_contacts = concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
@@ -112,7 +119,9 @@ pub(crate) fn run(args: &Args) {
         .unwrap();
 
     // Save res to CSV files
-    write_df_to_csv(&mut df_contacts, output_file);
+    write_df_to_file(&mut df_contacts, &output_file, args.output_format);
+    let output_file_str = output_file.to_str().unwrap();
+    info!("Results saved to {output_file_str}");
 }
 
 pub fn get_contacts<'a>(
@@ -121,7 +130,12 @@ pub fn get_contacts<'a>(
     vdw_comp: f64,
     dist_cutoff: f64,
 ) -> (DataFrame, DataFrame, InteractionComplex<'a>) {
-    let i_complex = InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff);
+    let (i_complex, build_ring_err) =
+        InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff).unwrap();
+
+    if !build_ring_err.is_empty() {
+        build_ring_err.iter().for_each(|e| warn!("{e}"));
+    }
 
     // Find interactions
     let atomic_contacts = i_complex.get_atomic_contacts();
@@ -136,9 +150,11 @@ pub fn get_contacts<'a>(
             [
                 "from_chain",
                 "from_resi",
+                "from_insertion",
                 "from_altloc",
                 "to_chain",
                 "to_resi",
+                "to_insertion",
                 "to_altloc",
             ],
             Default::default(),
@@ -151,19 +167,21 @@ pub fn get_contacts<'a>(
 fn results_to_df(res: &[ResultEntry]) -> DataFrame {
     df!(
         "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
-        "distance" => res.iter().map(|x| x.distance).collect::<Vec<f64>>(),
+        "distance" => res.iter().map(|x| x.distance as f32).collect::<Vec<f32>>(),
         "from_chain" => res.iter().map(|x| x.ligand.chain.to_owned()).collect::<Vec<String>>(),
         "from_resn" => res.iter().map(|x| x.ligand.resn.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.iter().map(|x| x.ligand.resi as i64).collect::<Vec<i64>>(),
+        "from_resi" => res.iter().map(|x| x.ligand.resi as i32).collect::<Vec<i32>>(),
+        "from_insertion" => res.iter().map(|x| x.ligand.insertion.to_owned()).collect::<Vec<String>>(),
         "from_altloc" => res.iter().map(|x| x.ligand.altloc.to_owned()).collect::<Vec<String>>(),
         "from_atomn" => res.iter().map(|x| x.ligand.atomn.to_owned()).collect::<Vec<String>>(),
-        "from_atomi" => res.iter().map(|x| x.ligand.atomi as i64).collect::<Vec<i64>>(),
+        "from_atomi" => res.iter().map(|x| x.ligand.atomi as i32).collect::<Vec<i32>>(),
         "to_chain" => res.iter().map(|x| x.receptor.chain.to_owned()).collect::<Vec<String>>(),
         "to_resn" => res.iter().map(|x| x.receptor.resn.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.iter().map(|x| x.receptor.resi as i64).collect::<Vec<i64>>(),
+        "to_resi" => res.iter().map(|x| x.receptor.resi as i32).collect::<Vec<i32>>(),
+        "to_insertion" => res.iter().map(|x| x.receptor.insertion.to_owned()).collect::<Vec<String>>(),
         "to_altloc" => res.iter().map(|x| x.receptor.altloc.to_owned()).collect::<Vec<String>>(),
         "to_atomn" => res.iter().map(|x| x.receptor.atomn.to_owned()).collect::<Vec<String>>(),
-        "to_atomi" => res.iter().map(|x| x.receptor.atomi as i64).collect::<Vec<i64>>(),
+        "to_atomi" => res.iter().map(|x| x.receptor.atomi as i32).collect::<Vec<i32>>(),
     )
     .unwrap()
 }

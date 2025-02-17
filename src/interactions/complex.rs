@@ -1,7 +1,7 @@
 use super::{
-    find_cation_pi, find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond, find_pi_pi,
-    find_vdw_contact, find_weak_hydrogen_bond, point_ring_dist, InteractingEntity, Interaction,
-    ResultEntry,
+    find_cation_pi, find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond,
+    find_ionic_repulsion, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond, point_ring_dist,
+    InteractingEntity, Interaction, ResultEntry,
 };
 use crate::{
     residues::{ResidueExt, ResidueId, Ring},
@@ -10,6 +10,8 @@ use crate::{
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
+
+type RingPositionResult<'a> = Result<(HashMap<ResidueId<'a>, Ring>, Vec<String>), Vec<String>>;
 
 /// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex<'a> {
@@ -36,7 +38,7 @@ impl<'a> InteractionComplex<'a> {
         groups: &'a str,
         vdw_comp_factor: f64,
         interacting_threshold: f64,
-    ) -> Self {
+    ) -> Result<(Self, Vec<String>), Vec<String>> {
         // Parse all chains and input chain groups
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
@@ -45,17 +47,20 @@ impl<'a> InteractionComplex<'a> {
         let res2idx = build_residue_index(model);
 
         // Build a mapping of ring residue names to ring centers and normals
-        let rings = build_ring_positions(model);
+        let (rings, ring_err) = build_ring_positions(model).expect("Error building ring positions");
 
-        Self {
-            model,
-            ligand,
-            receptor,
-            vdw_comp_factor,
-            interacting_threshold,
-            res2idx,
-            rings,
-        }
+        Ok((
+            Self {
+                model,
+                ligand,
+                receptor,
+                vdw_comp_factor,
+                interacting_threshold,
+                res2idx,
+                rings,
+            },
+            ring_err,
+        ))
     }
 
     fn is_neighboring_hierarchy(
@@ -176,6 +181,15 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 });
                 atomic_contacts.extend(ionic_bonds);
 
+                // Charge-charge repulsions
+                let charge_repulsions = find_ionic_repulsion(e1, e2).map(|intxn| ResultEntry {
+                    interaction: intxn,
+                    ligand: InteractingEntity::from_hier(e1),
+                    receptor: InteractingEntity::from_hier(e2),
+                    distance: e1.atom().distance(e2.atom()),
+                });
+                atomic_contacts.extend(charge_repulsions);
+
                 // Hydrophobic contacts
                 let hydrophobic_contacts =
                     find_hydrophobic_contact(e1, e2).map(|intxn| ResultEntry {
@@ -234,7 +248,15 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 let dist = point_ring_dist(ring, &y.atom().pos());
                 let cation_pi_contacts = find_cation_pi(ring, y).map(|intxn| ResultEntry {
                     interaction: intxn,
-                    ligand: InteractingEntity::new(k.chain, k.resi, k.altloc, k.resn, "Ring", 0),
+                    ligand: InteractingEntity::new(
+                        k.chain,
+                        k.resi,
+                        k.insertion,
+                        k.altloc,
+                        k.resn,
+                        "Ring",
+                        0,
+                    ),
                     receptor: InteractingEntity::from_hier(y),
                     distance: dist,
                 });
@@ -275,10 +297,22 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 let pi_pi_contacts = find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
                     interaction: intxn,
                     ligand: InteractingEntity::new(
-                        k1.chain, k1.resi, k1.altloc, k1.resn, "Ring", 0,
+                        k1.chain,
+                        k1.resi,
+                        k1.insertion,
+                        k1.altloc,
+                        k1.resn,
+                        "Ring",
+                        0,
                     ),
                     receptor: InteractingEntity::new(
-                        k2.chain, k2.resi, k2.altloc, k2.resn, "Ring", 0,
+                        k2.chain,
+                        k2.resi,
+                        k2.insertion,
+                        k2.altloc,
+                        k2.resn,
+                        "Ring",
+                        0,
                     ),
                     distance: dist,
                 });
@@ -297,31 +331,55 @@ fn build_residue_index(model: &PDB) -> HashMap<ResidueId, usize> {
     model
         .chains()
         .flat_map(|c| {
-            c.residues().enumerate().map(move |(i, residue)| {
-                let res_id = ResidueId::from_residue(residue, c.id());
+            c.residues().enumerate().flat_map(move |(i, residue)| {
+                // All conformers in the same residue should share the same index
+                let (resi, insertion) = residue.id();
+                let insertion = insertion.unwrap_or("");
+                let resn = residue.name().unwrap_or("");
 
-                (res_id, i)
+                residue
+                    .conformers()
+                    .map(move |conformer| {
+                        let res_id =
+                            ResidueId::from_conformer(conformer, c.id(), resi, insertion, resn);
+
+                        (res_id, i)
+                    })
+                    .collect::<Vec<_>>()
             })
         })
         .collect::<HashMap<ResidueId, usize>>()
 }
 
-fn build_ring_positions(model: &PDB) -> HashMap<ResidueId, Ring> {
+fn build_ring_positions(model: &PDB) -> RingPositionResult {
     let ring_res = HashSet::from(["HIS", "PHE", "TYR", "TRP"]);
-    model
-        .chains()
-        .flat_map(|c| {
-            c.residues()
-                .filter(|r| ring_res.contains(r.name().unwrap()))
-                .map(|r| {
-                    (
-                        ResidueId::from_residue(r, c.id()),
-                        match r.ring_center_and_normal() {
-                            Some(ring) => ring,
-                            None => panic!("Failed to calculate ring position for residue {:?}", r),
-                        },
-                    )
-                })
-        })
-        .collect()
+    let mut ring_positions = HashMap::new();
+    let mut errors = Vec::new();
+
+    for c in model.chains() {
+        for r in c
+            .residues()
+            .filter(|r| ring_res.contains(r.name().unwrap()))
+        {
+            let (resi, insertion_code) = r.id();
+            let insertion_code = insertion_code.unwrap_or("");
+            let resn = r.name().unwrap_or("");
+            for conformer in r.conformers() {
+                let res_id =
+                    ResidueId::from_conformer(conformer, c.id(), resi, insertion_code, resn);
+                match r.ring_center_and_normal(None) {
+                    Some(ring) => {
+                        ring_positions.insert(res_id, ring);
+                    }
+                    None => {
+                        errors.push(format!("Failed to calculate ring position for {:?}", r));
+                    }
+                }
+            }
+        }
+    }
+    if ring_positions.is_empty() {
+        return Err(errors);
+    }
+    Ok((ring_positions, errors))
 }

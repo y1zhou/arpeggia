@@ -11,6 +11,8 @@ pub struct ResidueId<'a> {
     pub resi: isize,
     /// Alternate location identifier
     pub altloc: &'a str,
+    /// Residue insertion code
+    pub insertion: &'a str,
     /// Residue name
     pub resn: &'a str,
 }
@@ -22,11 +24,18 @@ pub struct Ring {
 }
 
 impl<'a> ResidueId<'a> {
-    pub fn new(chain: &'a str, resi: isize, altloc: &'a str, resn: &'a str) -> Self {
+    pub fn new(
+        chain: &'a str,
+        resi: isize,
+        altloc: &'a str,
+        insertion: &'a str,
+        resn: &'a str,
+    ) -> Self {
         Self {
             chain,
             resi,
             altloc,
+            insertion,
             resn,
         }
     }
@@ -34,20 +43,26 @@ impl<'a> ResidueId<'a> {
     /// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a residue identifier
     pub fn from_hier(hier: &'a AtomConformerResidueChainModel) -> Self {
         let (resi, insertion) = hier.residue().id();
-        let altloc = insertion.unwrap_or("");
+        let altloc = hier.conformer().alternative_location();
         Self::new(
             hier.chain().id(),
             resi,
-            altloc,
+            altloc.unwrap_or(""),
+            insertion.unwrap_or(""),
             hier.residue().name().unwrap_or(""),
         )
     }
 
-    /// Helper function to convert an [`pdbtbx::Residue`] to a residue identifier
-    pub fn from_residue(residue: &'a Residue, chain_id: &'a str) -> Self {
-        let (resi, insertion) = residue.id();
-        let altloc = insertion.unwrap_or("");
-        Self::new(chain_id, resi, altloc, residue.name().unwrap_or(""))
+    /// Helper function to convert an [`pdbtbx::Conformer`] to a residue identifier
+    pub fn from_conformer(
+        conformer: &'a Conformer,
+        chain_id: &'a str,
+        resi: isize,
+        insertion: &'a str,
+        resn: &'a str,
+    ) -> Self {
+        let altloc = conformer.alternative_location();
+        Self::new(chain_id, resi, altloc.unwrap_or(""), insertion, resn)
     }
 }
 
@@ -56,8 +71,13 @@ pub trait ResidueExt {
     fn resn(&self) -> Option<&str>;
     /// Return the atoms in the aromatic ring of the residue.
     fn ring_atoms(&self) -> Vec<&Atom>;
-    /// Return the center and normal of the aromatic ring of the residue.
-    fn ring_center_and_normal(&self) -> Option<Ring>;
+
+    // TODO: Implement this
+    /// Return the atoms that form a plane in the side chain.
+    // fn sc_plane_atoms(&self) -> Vec<&Atom>;
+
+    /// Return the center and normal of the given atoms.
+    fn ring_center_and_normal(&self, ring_atoms: Option<Vec<&Atom>>) -> Option<Ring>;
 }
 
 impl ResidueExt for Residue {
@@ -118,8 +138,9 @@ impl ResidueExt for Residue {
         }
     }
 
-    fn ring_center_and_normal(&self) -> Option<Ring> {
-        let ring_atoms = self.ring_atoms();
+    fn ring_center_and_normal(&self, ring_atoms: Option<Vec<&Atom>>) -> Option<Ring> {
+        let ring_atoms = ring_atoms.unwrap_or(self.ring_atoms());
+
         if ring_atoms.is_empty() {
             return None;
         }
