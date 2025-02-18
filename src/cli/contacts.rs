@@ -19,8 +19,11 @@ pub(crate) struct Args {
 
     /// Group chains for interactions:
     /// e.g. A,B/C,D
-    /// where chains A and B are the "ligand" and C and D are the "receptor"
-    #[arg(short, long)]
+    /// where chains A and B are the "ligand" and C and D are the "receptor".
+    /// Chains can exist on both sides, in which case intra-chain interactions will be calculated.
+    /// If only one group is provided, all remaining chains will be considered as the other group.
+    /// If no groups are provided ('/'), all inter- and intra-chain interactions will be calculated.
+    #[arg(short, long, default_value_t = String::from("contacts"))]
     groups: String,
 
     /// Name of the output file
@@ -36,11 +39,11 @@ pub(crate) struct Args {
     vdw_comp: f64,
 
     /// Distance cutoff when searching for neighboring atoms
-    #[arg(short, long, default_value_t = 4.5)]
+    #[arg(short, long, default_value_t = 6.5)]
     dist_cutoff: f64,
 
-    /// Number of threads to use for parallel processing
-    #[arg(short = 'j', long = "num-threads", default_value_t = 0)]
+    /// Number of threads to use for parallel processing. One thread should be sufficient unless the system is very large
+    #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
 }
 
