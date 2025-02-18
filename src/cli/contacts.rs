@@ -178,6 +178,7 @@ pub fn get_contacts<'a>(
 
 fn results_to_df(res: &[ResultEntry]) -> DataFrame {
     df!(
+        "model" => res.iter().map(|x| x.model as u32).collect::<Vec<u32>>(),
         "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
         "distance" => res.iter().map(|x| x.distance as f32).collect::<Vec<f32>>(),
         "from_chain" => res.iter().map(|x| x.ligand.chain.to_owned()).collect::<Vec<String>>(),
