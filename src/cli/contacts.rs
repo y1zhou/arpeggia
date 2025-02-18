@@ -55,7 +55,20 @@ pub(crate) fn run(args: &Args) {
     debug!("Using {} thread(s)", rayon::current_num_threads());
 
     // Make sure `input` exists
-    let input_path = Path::new(&args.input).canonicalize().unwrap();
+    let input_path = match Path::new(&args.input).canonicalize() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Failed to retrieve input file: {}", e);
+            return;
+        }
+    };
+    let output_path = match std::path::absolute(&args.output) {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Failed to resolve the output directory: {}", e);
+            return;
+        }
+    };
     let input_file: String = input_path.to_str().unwrap().parse().unwrap();
 
     // Load file as complex structure
@@ -89,7 +102,6 @@ pub(crate) fn run(args: &Args) {
     );
 
     // Prepare output directory
-    let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = output_path
         .join(args.name.clone())
