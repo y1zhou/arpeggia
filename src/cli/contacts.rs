@@ -23,7 +23,7 @@ pub(crate) struct Args {
     /// Chains can exist on both sides, in which case intra-chain interactions will be calculated.
     /// If only one group is provided, all remaining chains will be considered as the other group.
     /// If no groups are provided ('/'), all inter- and intra-chain interactions will be calculated.
-    #[arg(short, long, default_value_t = String::from("contacts"))]
+    #[arg(short, long, default_value_t = String::from("/"))]
     groups: String,
 
     /// Name of the output file
