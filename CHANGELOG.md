@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-02-19
+
+### Added
+
+- Better error messages and flag documentations
+
+### Fixed
+
+- Create parent directories if the output directory does not exist
+- Only interactions within the same model of the input file is considered
+- Rows in the output of `contacts` are now sorted more naturally
+
 ## [0.4.0] - 2025-02-17
 
 ### Added
@@ -78,7 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.1
 [0.4.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.0
 [0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.1
 [0.3.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.0
