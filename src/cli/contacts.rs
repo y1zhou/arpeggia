@@ -130,6 +130,18 @@ pub(crate) fn run(args: &Args) {
     // Concate dataframes for saving to CSV
     let mut df_contacts = concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
         .unwrap()
+        .sort(
+            [
+                "model",
+                "from_resi",
+                "from_altloc",
+                "from_atomi",
+                "to_resi",
+                "to_altloc",
+                "to_atomi",
+            ],
+            Default::default(),
+        )
         .collect()
         .unwrap();
 
@@ -159,22 +171,7 @@ pub fn get_contacts<'a>(
     let mut ring_contacts: Vec<ResultEntry> = Vec::new();
     ring_contacts.extend(i_complex.get_ring_atom_contacts());
     ring_contacts.extend(i_complex.get_ring_ring_contacts());
-    let df_ring = results_to_df(&ring_contacts)
-        // .drop_many(&["from_atomn", "from_atomi", "to_atomn", "to_atomi"])
-        .sort(
-            [
-                "from_chain",
-                "from_resi",
-                "from_insertion",
-                "from_altloc",
-                "to_chain",
-                "to_resi",
-                "to_insertion",
-                "to_altloc",
-            ],
-            Default::default(),
-        )
-        .unwrap();
+    let df_ring = results_to_df(&ring_contacts);
 
     (df_atomic, df_ring, i_complex)
 }
