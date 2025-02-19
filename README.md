@@ -19,6 +19,6 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   - [x] Weak hydrogen bonds
   - [x] Disulfide bonds
   - [ ] Covalent bonds
-- [ ] Output results in various formats (e.g., JSON, CSV)
+- [x] Output results in various formats (e.g., JSON, CSV)
 - [ ] Bundle into a `PyO3` extension module
-- [ ] Add hydrogens to the structure model
+- [ ] ~~Add hydrogens to the structure model~~

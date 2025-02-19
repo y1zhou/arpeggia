@@ -37,7 +37,7 @@ pub(crate) struct Args {
     n_points: usize,
 
     /// Number of threads to use for parallel processing
-    #[arg(short = 'j', long = "num-threads", default_value_t = 0)]
+    #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
 }
 

@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [0.4.1] - 2025-02-19
 
 ### Added
@@ -16,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Create parent directories if the output directory does not exist
 - Only interactions within the same model of the input file is considered
 - Rows in the output of `contacts` are now sorted more naturally
+- Use one thread by default, as using more rarely gives any gains in performance
+- Use a distance cutoff of 6.5Å for searching neighbor atoms by default, as the previous 4.5Å could miss certain Pi interactions
 
 ## [0.4.0] - 2025-02-17
 
@@ -90,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.1...HEAD
 [0.4.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.1
 [0.4.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.0
 [0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.1
