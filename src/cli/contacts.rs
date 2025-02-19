@@ -19,8 +19,11 @@ pub(crate) struct Args {
 
     /// Group chains for interactions:
     /// e.g. A,B/C,D
-    /// where chains A and B are the "ligand" and C and D are the "receptor"
-    #[arg(short, long)]
+    /// where chains A and B are the "ligand" and C and D are the "receptor".
+    /// Chains can exist on both sides, in which case intra-chain interactions will be calculated.
+    /// If only one group is provided, all remaining chains will be considered as the other group.
+    /// If no groups are provided ('/'), all inter- and intra-chain interactions will be calculated.
+    #[arg(short, long, default_value_t = String::from("contacts"))]
     groups: String,
 
     /// Name of the output file
@@ -36,11 +39,11 @@ pub(crate) struct Args {
     vdw_comp: f64,
 
     /// Distance cutoff when searching for neighboring atoms
-    #[arg(short, long, default_value_t = 4.5)]
+    #[arg(short, long, default_value_t = 6.5)]
     dist_cutoff: f64,
 
-    /// Number of threads to use for parallel processing
-    #[arg(short = 'j', long = "num-threads", default_value_t = 0)]
+    /// Number of threads to use for parallel processing. One thread should be sufficient unless the system is very large
+    #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
 }
 
@@ -55,7 +58,20 @@ pub(crate) fn run(args: &Args) {
     debug!("Using {} thread(s)", rayon::current_num_threads());
 
     // Make sure `input` exists
-    let input_path = Path::new(&args.input).canonicalize().unwrap();
+    let input_path = match Path::new(&args.input).canonicalize() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Failed to retrieve input file: {}", e);
+            return;
+        }
+    };
+    let output_path = match std::path::absolute(&args.output) {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Failed to resolve the output directory: {}", e);
+            return;
+        }
+    };
     let input_file: String = input_path.to_str().unwrap().parse().unwrap();
 
     // Load file as complex structure
@@ -89,7 +105,6 @@ pub(crate) fn run(args: &Args) {
     );
 
     // Prepare output directory
-    let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = output_path
         .join(args.name.clone())
@@ -115,6 +130,18 @@ pub(crate) fn run(args: &Args) {
     // Concate dataframes for saving to CSV
     let mut df_contacts = concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
         .unwrap()
+        .sort(
+            [
+                "model",
+                "from_resi",
+                "from_altloc",
+                "from_atomi",
+                "to_resi",
+                "to_altloc",
+                "to_atomi",
+            ],
+            Default::default(),
+        )
         .collect()
         .unwrap();
 
@@ -144,28 +171,14 @@ pub fn get_contacts<'a>(
     let mut ring_contacts: Vec<ResultEntry> = Vec::new();
     ring_contacts.extend(i_complex.get_ring_atom_contacts());
     ring_contacts.extend(i_complex.get_ring_ring_contacts());
-    let df_ring = results_to_df(&ring_contacts)
-        // .drop_many(&["from_atomn", "from_atomi", "to_atomn", "to_atomi"])
-        .sort(
-            [
-                "from_chain",
-                "from_resi",
-                "from_insertion",
-                "from_altloc",
-                "to_chain",
-                "to_resi",
-                "to_insertion",
-                "to_altloc",
-            ],
-            Default::default(),
-        )
-        .unwrap();
+    let df_ring = results_to_df(&ring_contacts);
 
     (df_atomic, df_ring, i_complex)
 }
 
 fn results_to_df(res: &[ResultEntry]) -> DataFrame {
     df!(
+        "model" => res.iter().map(|x| x.model as u32).collect::<Vec<u32>>(),
         "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
         "distance" => res.iter().map(|x| x.distance as f32).collect::<Vec<f32>>(),
         "from_chain" => res.iter().map(|x| x.ligand.chain.to_owned()).collect::<Vec<String>>(),

@@ -74,7 +74,7 @@ impl<'a> InteractionComplex<'a> {
     }
 
     fn is_neighboring_res_pair(&self, x: &ResidueId, y: &ResidueId) -> bool {
-        if x.chain != y.chain {
+        if (x.model != y.model) | (x.chain != y.chain) {
             return false;
         }
         let x_idx = self.res2idx[x];
@@ -97,7 +97,7 @@ pub trait Interactions {
     fn get_ring_ring_contacts(&self) -> Vec<ResultEntry>;
 }
 
-impl<'a> Interactions for InteractionComplex<'a> {
+impl Interactions for InteractionComplex<'_> {
     fn get_atomic_contacts(&self) -> Vec<ResultEntry> {
         let tree = self.model.create_hierarchy_rtree();
         let max_radius_squared = self.interacting_threshold * self.interacting_threshold;
@@ -114,6 +114,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
             })
             .flat_map(|x| {
                 tree.locate_within_distance(x.atom().pos(), max_radius_squared)
+                    .filter(|y| x.model().serial_number() == y.model().serial_number())
                     .filter(|y| {
                         self.receptor.contains(y.chain().id())
                             & (y.atom().element().unwrap() != &Element::H)
@@ -135,9 +136,11 @@ impl<'a> Interactions for InteractionComplex<'a> {
             .par_iter()
             .filter_map(|(e1, e2)| {
                 let mut atomic_contacts: Vec<ResultEntry> = vec![];
+                let model_id = e1.model().serial_number();
 
                 // Clashes and VdW contacts
                 let vdw = find_vdw_contact(e1, e2, self.vdw_comp_factor).map(|intxn| ResultEntry {
+                    model: model_id,
                     interaction: intxn,
                     ligand: InteractingEntity::from_hier(e1),
                     receptor: InteractingEntity::from_hier(e2),
@@ -153,6 +156,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 // Hydrogen bonds and polar contacts
                 let hbonds =
                     find_hydrogen_bond(e1, e2, self.vdw_comp_factor).map(|intxn| ResultEntry {
+                        model: model_id,
                         interaction: intxn,
                         ligand: InteractingEntity::from_hier(e1),
                         receptor: InteractingEntity::from_hier(e2),
@@ -164,6 +168,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 let weak_hbonds =
                     find_weak_hydrogen_bond(e1, e2, self.vdw_comp_factor).map(|intxn| {
                         ResultEntry {
+                            model: model_id,
                             interaction: intxn,
                             ligand: InteractingEntity::from_hier(e1),
                             receptor: InteractingEntity::from_hier(e2),
@@ -174,6 +179,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
 
                 // Ionic bonds
                 let ionic_bonds = find_ionic_bond(e1, e2).map(|intxn| ResultEntry {
+                    model: model_id,
                     interaction: intxn,
                     ligand: InteractingEntity::from_hier(e1),
                     receptor: InteractingEntity::from_hier(e2),
@@ -183,6 +189,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
 
                 // Charge-charge repulsions
                 let charge_repulsions = find_ionic_repulsion(e1, e2).map(|intxn| ResultEntry {
+                    model: model_id,
                     interaction: intxn,
                     ligand: InteractingEntity::from_hier(e1),
                     receptor: InteractingEntity::from_hier(e2),
@@ -193,6 +200,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 // Hydrophobic contacts
                 let hydrophobic_contacts =
                     find_hydrophobic_contact(e1, e2).map(|intxn| ResultEntry {
+                        model: model_id,
                         interaction: intxn,
                         ligand: InteractingEntity::from_hier(e1),
                         receptor: InteractingEntity::from_hier(e2),
@@ -219,6 +227,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
                     (v.center.x, v.center.y, v.center.z),
                     max_radius_squared,
                 )
+                .filter(|y| x.model == y.model().serial_number())
                 // Ring on ligand or receptor, and atom on the other side
                 .filter(|y| {
                     (self.ligand.contains(x.chain) & self.receptor.contains(y.chain().id()))
@@ -247,6 +256,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
                 // Cation-pi interactions
                 let dist = point_ring_dist(ring, &y.atom().pos());
                 let cation_pi_contacts = find_cation_pi(ring, y).map(|intxn| ResultEntry {
+                    model: k.model,
                     interaction: intxn,
                     ligand: InteractingEntity::new(
                         k.chain,
@@ -277,6 +287,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
             .flat_map(|(k1, ring1)| {
                 self.rings
                     .iter()
+                    .filter(|(k2, _)| k1.model == k2.model)
                     .filter(
                         |(k2, _)| {
                             self.receptor.contains(k2.chain)
@@ -295,6 +306,7 @@ impl<'a> Interactions for InteractionComplex<'a> {
             .filter_map(|(k1, ring1, k2, ring2)| {
                 let dist = (ring1.center - ring2.center).norm();
                 let pi_pi_contacts = find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
+                    model: k1.model,
                     interaction: intxn,
                     ligand: InteractingEntity::new(
                         k1.chain,
@@ -326,26 +338,33 @@ impl<'a> Interactions for InteractionComplex<'a> {
 
 /// Find the absolute index of a residue in each chain.
 ///
-/// Returns two mappings, one from residue to index, and one from index to residue.
+/// Returns a mapping from residue to index.
 fn build_residue_index(model: &PDB) -> HashMap<ResidueId, usize> {
     model
-        .chains()
-        .flat_map(|c| {
-            c.residues().enumerate().flat_map(move |(i, residue)| {
-                // All conformers in the same residue should share the same index
-                let (resi, insertion) = residue.id();
-                let insertion = insertion.unwrap_or("");
-                let resn = residue.name().unwrap_or("");
+        .models()
+        .flat_map(|m| {
+            let model_id = m.serial_number();
+            m.chains().flat_map(move |c| {
+                let chain_id = c.id();
+                c.residues().enumerate().flat_map(move |(i, residue)| {
+                    // All conformers in the same residue should share the same index
+                    let (resi, insertion) = residue.id();
+                    let insertion = insertion.unwrap_or("");
+                    let resn = residue.name().unwrap_or("");
 
-                residue
-                    .conformers()
-                    .map(move |conformer| {
-                        let res_id =
-                            ResidueId::from_conformer(conformer, c.id(), resi, insertion, resn);
+                    residue.conformers().map(move |conformer| {
+                        let res_id = ResidueId::new(
+                            model_id,
+                            chain_id,
+                            resi,
+                            insertion,
+                            conformer.alternative_location().unwrap_or(""),
+                            resn,
+                        );
 
                         (res_id, i)
                     })
-                    .collect::<Vec<_>>()
+                })
             })
         })
         .collect::<HashMap<ResidueId, usize>>()
@@ -356,23 +375,33 @@ fn build_ring_positions(model: &PDB) -> RingPositionResult {
     let mut ring_positions = HashMap::new();
     let mut errors = Vec::new();
 
-    for c in model.chains() {
-        for r in c
-            .residues()
-            .filter(|r| ring_res.contains(r.name().unwrap()))
-        {
-            let (resi, insertion_code) = r.id();
-            let insertion_code = insertion_code.unwrap_or("");
-            let resn = r.name().unwrap_or("");
-            for conformer in r.conformers() {
-                let res_id =
-                    ResidueId::from_conformer(conformer, c.id(), resi, insertion_code, resn);
-                match r.ring_center_and_normal(None) {
-                    Some(ring) => {
-                        ring_positions.insert(res_id, ring);
-                    }
-                    None => {
-                        errors.push(format!("Failed to calculate ring position for {:?}", r));
+    for m in model.models() {
+        let model_id = m.serial_number();
+        for c in model.chains() {
+            let chain_id = c.id();
+            for r in c
+                .residues()
+                .filter(|r| ring_res.contains(r.name().unwrap()))
+            {
+                let (resi, insertion_code) = r.id();
+                let insertion_code = insertion_code.unwrap_or("");
+                let resn = r.name().unwrap_or("");
+                for conformer in r.conformers() {
+                    let res_id = ResidueId::new(
+                        model_id,
+                        chain_id,
+                        resi,
+                        insertion_code,
+                        conformer.alternative_location().unwrap_or(""),
+                        resn,
+                    );
+                    match r.ring_center_and_normal(None) {
+                        Some(ring) => {
+                            ring_positions.insert(res_id, ring);
+                        }
+                        None => {
+                            errors.push(format!("Failed to calculate ring position for {:?}", r));
+                        }
                     }
                 }
             }

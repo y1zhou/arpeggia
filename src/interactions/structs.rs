@@ -71,6 +71,8 @@ pub struct InteractingEntity {
 /// Entry passed to the results.
 #[derive(Debug, Clone)]
 pub struct ResultEntry {
+    /// Model identifier
+    pub model: usize,
     /// Interaction type
     pub interaction: Interaction,
     /// Ligand residue and atom
