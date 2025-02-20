@@ -7,7 +7,7 @@ pub mod structs;
 pub mod vdw;
 
 // Re-exports
-pub use aromatic::{find_cation_pi, find_pi_pi, point_ring_dist};
+pub use aromatic::{find_cation_pi, find_pi_pi};
 pub use complex::*;
 pub use hbond::{find_hydrogen_bond, find_weak_hydrogen_bond};
 pub use hydrophobic::find_hydrophobic_contact;

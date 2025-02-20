@@ -18,8 +18,8 @@ pub fn find_cation_pi(
     if is_pos_ionizable(entity.residue().name().unwrap(), entity.atom().name()) {
         let atom_coord = entity.atom().pos();
         let atom_point = na::Vector3::new(atom_coord.0, atom_coord.1, atom_coord.2);
-        let dist = point_ring_dist(ring, &atom_coord);
-        let theta = point_ring_angle(ring, &atom_point);
+        let dist = ring.point_vec_dist(&atom_point);
+        let theta = ring.point_vec_angle(&atom_point);
 
         if (theta <= CATION_PI_ANGLE_THRESHOLD) & (dist <= CATION_PI_DIST_THRESHOLD) {
             return Some(Interaction::CationPi);
@@ -34,8 +34,8 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
     let angle_vec = ring1.center - ring2.center;
     let dist = (angle_vec).norm();
     if dist <= PI_PI_DIST_THRESHOLD {
-        let theta = point_ring_angle(ring1, &ring2.center);
-        let dihedral = ring_ring_angle(ring1, ring2);
+        let theta = ring1.point_vec_angle(&ring2.center);
+        let dihedral = ring1.dihedral(ring2);
 
         match dihedral {
             d if d <= 30.0 => match theta {
@@ -58,35 +58,4 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
     } else {
         None
     }
-}
-
-/// Calculate the distance from the point to the ring center.
-pub fn point_ring_dist(ring: &Plane, point: &(f64, f64, f64)) -> f64 {
-    let atom_point = na::Vector3::new(point.0, point.1, point.2);
-    (atom_point - ring.center).norm()
-}
-
-/// Calculate the angle between the ring normal and the vector pointing from
-/// the ring center to the point.
-fn point_ring_angle(ring: &Plane, point: &na::Vector3<f64>) -> f64 {
-    let v = point - ring.center;
-    let mut rad = (ring.normal.dot(&v) / (ring.normal.norm() * v.norm())).acos();
-
-    // Convert to degrees
-    if rad > std::f64::consts::FRAC_PI_2 {
-        rad = std::f64::consts::PI - rad;
-    }
-    rad.to_degrees()
-}
-
-/// Calculate the angle between two rings.
-fn ring_ring_angle(ring1: &Plane, ring2: &Plane) -> f64 {
-    let mut rad =
-        (ring1.normal.dot(&ring2.normal) / (ring1.normal.norm() * ring2.normal.norm())).acos();
-
-    // Convert to degrees
-    if rad > std::f64::consts::FRAC_PI_2 {
-        rad = std::f64::consts::PI - rad;
-    }
-    rad.to_degrees()
 }

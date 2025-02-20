@@ -1,7 +1,7 @@
 use super::{
     find_cation_pi, find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond,
-    find_ionic_repulsion, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond, point_ring_dist,
-    InteractingEntity, Interaction, ResultEntry,
+    find_ionic_repulsion, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond, InteractingEntity,
+    Interaction, ResultEntry,
 };
 use crate::{
     residues::{Plane, ResidueExt, ResidueId},
@@ -254,7 +254,7 @@ impl Interactions for InteractionComplex<'_> {
                 let mut ring_contacts = Vec::new();
 
                 // Cation-pi interactions
-                let dist = point_ring_dist(ring, &y.atom().pos());
+                let dist = ring.point_dist(&y.atom().pos());
                 let cation_pi_contacts = find_cation_pi(ring, y).map(|intxn| ResultEntry {
                     model: k.model,
                     interaction: intxn,

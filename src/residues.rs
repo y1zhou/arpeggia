@@ -19,10 +19,53 @@ pub struct ResidueId<'a> {
     pub resn: &'a str,
 }
 
+/// The struct for a plane in 3D space
 #[derive(Clone, Copy, Debug)]
 pub struct Plane {
     pub center: na::Vector3<f64>,
     pub normal: na::Vector3<f64>,
+}
+
+impl Plane {
+    /// Calculate the distance from a point to the plane center
+    pub fn point_vec_dist(&self, point: &na::Vector3<f64>) -> f64 {
+        (point - self.center).norm()
+    }
+
+    pub fn point_dist(&self, point: &(f64, f64, f64)) -> f64 {
+        let atom_point = na::Vector3::new(point.0, point.1, point.2);
+        self.point_vec_dist(&atom_point)
+    }
+
+    /// Calculate the angle between the plane normal and the vector pointing from
+    /// the plane center to the point.
+    pub fn point_vec_angle(&self, point: &na::Vector3<f64>) -> f64 {
+        let v = point - self.center;
+        let mut rad = (self.normal.dot(&v) / (self.normal.norm() * v.norm())).acos();
+
+        // Convert to degrees
+        if rad > std::f64::consts::FRAC_PI_2 {
+            rad = std::f64::consts::PI - rad;
+        }
+        rad.to_degrees()
+    }
+
+    pub fn point_angle(&self, point: &(f64, f64, f64)) -> f64 {
+        let atom_point = na::Vector3::new(point.0, point.1, point.2);
+        self.point_vec_angle(&atom_point)
+    }
+
+    /// Calculate the angle between two planes
+    pub fn dihedral(&self, plane: &Plane) -> f64 {
+        let mut rad =
+            (self.normal.dot(&plane.normal) / (self.normal.norm() * plane.normal.norm())).acos();
+
+        // Convert to degrees
+        if rad > std::f64::consts::FRAC_PI_2 {
+            rad = std::f64::consts::PI - rad;
+        }
+        rad.to_degrees()
+    }
 }
 
 impl<'a> ResidueId<'a> {
