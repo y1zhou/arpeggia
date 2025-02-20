@@ -4,14 +4,14 @@ use super::{
     InteractingEntity, Interaction, ResultEntry,
 };
 use crate::{
-    residues::{ResidueExt, ResidueId, Ring},
+    residues::{Plane, ResidueExt, ResidueId},
     utils::parse_groups,
 };
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
-type RingPositionResult<'a> = Result<(HashMap<ResidueId<'a>, Ring>, Vec<String>), Vec<String>>;
+type RingPositionResult<'a> = Result<(HashMap<ResidueId<'a>, Plane>, Vec<String>), Vec<String>>;
 
 /// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex<'a> {
@@ -29,7 +29,7 @@ pub struct InteractionComplex<'a> {
     /// Maps residue names to unique indices
     res2idx: HashMap<ResidueId<'a>, usize>,
     /// Maps ring residues to ring centers and normals
-    rings: HashMap<ResidueId<'a>, Ring>,
+    rings: HashMap<ResidueId<'a>, Plane>,
 }
 
 impl<'a> InteractionComplex<'a> {
@@ -243,9 +243,9 @@ impl Interactions for InteractionComplex<'_> {
                         & !self.is_neighboring_res_pair(x, &y)
                 })
                 .map(|y| (x, v, y))
-                .collect::<Vec<(&ResidueId, &Ring, &AtomConformerResidueChainModel)>>()
+                .collect::<Vec<(&ResidueId, &Plane, &AtomConformerResidueChainModel)>>()
             })
-            .collect::<Vec<(&ResidueId, &Ring, &AtomConformerResidueChainModel)>>();
+            .collect::<Vec<(&ResidueId, &Plane, &AtomConformerResidueChainModel)>>();
 
         // Find ring-atom interactions
         ring_atom_neighbors
@@ -296,9 +296,9 @@ impl Interactions for InteractionComplex<'_> {
                         }, // Skip neighboring residues
                     )
                     .map(|(k2, ring2)| (k1, ring1, k2, ring2))
-                    .collect::<Vec<(&ResidueId, &Ring, &ResidueId, &Ring)>>()
+                    .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>()
             })
-            .collect::<Vec<(&ResidueId, &Ring, &ResidueId, &Ring)>>();
+            .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>();
 
         // Find ring-ring interactions
         ring_ring_neighbors
@@ -395,7 +395,7 @@ fn build_ring_positions(model: &PDB) -> RingPositionResult {
                         conformer.alternative_location().unwrap_or(""),
                         resn,
                     );
-                    match r.ring_center_and_normal(None) {
+                    match r.center_and_normal(Some(r.ring_atoms())) {
                         Some(ring) => {
                             ring_positions.insert(res_id, ring);
                         }

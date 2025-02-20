@@ -1,6 +1,6 @@
 use super::ionic::is_pos_ionizable;
 use super::structs::Interaction;
-use crate::residues::Ring;
+use crate::residues::Plane;
 
 use nalgebra as na;
 use pdbtbx::*;
@@ -11,7 +11,10 @@ const PI_PI_DIST_THRESHOLD: f64 = 6.0;
 const PI_T_DIST_THREHOLD: f64 = 5.0;
 
 /// Identify cation-pi interactions.
-pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> Option<Interaction> {
+pub fn find_cation_pi(
+    ring: &Plane,
+    entity: &AtomConformerResidueChainModel,
+) -> Option<Interaction> {
     if is_pos_ionizable(entity.residue().name().unwrap(), entity.atom().name()) {
         let atom_coord = entity.atom().pos();
         let atom_point = na::Vector3::new(atom_coord.0, atom_coord.1, atom_coord.2);
@@ -27,7 +30,7 @@ pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> O
 
 /// Identify pi-pi interactions using the classification by [Chakrabarti and Bhattacharyya (2007)](https://doi.org/10.1016/j.pbiomolbio.2007.03.016), Fig. 11.
 /// For T-shaped Pi-stacking, the distance threshold is set to 5.0 Å according to [getcontacts](https://getcontacts.github.io/interactions.html).
-pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
+pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
     let angle_vec = ring1.center - ring2.center;
     let dist = (angle_vec).norm();
     if dist <= PI_PI_DIST_THRESHOLD {
@@ -58,14 +61,14 @@ pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
 }
 
 /// Calculate the distance from the point to the ring center.
-pub fn point_ring_dist(ring: &Ring, point: &(f64, f64, f64)) -> f64 {
+pub fn point_ring_dist(ring: &Plane, point: &(f64, f64, f64)) -> f64 {
     let atom_point = na::Vector3::new(point.0, point.1, point.2);
     (atom_point - ring.center).norm()
 }
 
 /// Calculate the angle between the ring normal and the vector pointing from
 /// the ring center to the point.
-fn point_ring_angle(ring: &Ring, point: &na::Vector3<f64>) -> f64 {
+fn point_ring_angle(ring: &Plane, point: &na::Vector3<f64>) -> f64 {
     let v = point - ring.center;
     let mut rad = (ring.normal.dot(&v) / (ring.normal.norm() * v.norm())).acos();
 
@@ -77,7 +80,7 @@ fn point_ring_angle(ring: &Ring, point: &na::Vector3<f64>) -> f64 {
 }
 
 /// Calculate the angle between two rings.
-fn ring_ring_angle(ring1: &Ring, ring2: &Ring) -> f64 {
+fn ring_ring_angle(ring1: &Plane, ring2: &Plane) -> f64 {
     let mut rad =
         (ring1.normal.dot(&ring2.normal) / (ring1.normal.norm() * ring2.normal.norm())).acos();
 

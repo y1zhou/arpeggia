@@ -20,7 +20,7 @@ pub struct ResidueId<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Ring {
+pub struct Plane {
     pub center: na::Vector3<f64>,
     pub normal: na::Vector3<f64>,
 }
@@ -62,15 +62,18 @@ impl<'a> ResidueId<'a> {
 pub trait ResidueExt {
     /// The residue one-letter code, or `None` if it's not an amino acid.
     fn resn(&self) -> Option<&str>;
+
     /// Return the atoms in the aromatic ring of the residue.
     fn ring_atoms(&self) -> Vec<&Atom>;
 
-    // TODO: Implement this
     /// Return the atoms that form a plane in the side chain.
-    // fn sc_plane_atoms(&self) -> Vec<&Atom>;
+    /// See page 27 of:
+    /// https://cdn.rcsb.org/wwpdb/docs/documentation/file-format/PDB_format_1992.pdf
+    fn sc_plane_atoms(&self) -> Vec<&Atom>;
 
-    /// Return the center and normal of the given atoms.
-    fn ring_center_and_normal(&self, ring_atoms: Option<Vec<&Atom>>) -> Option<Ring>;
+    /// Return the center and normal of the given atoms. If no atoms are given,
+    /// all side chain plane atoms are used.
+    fn center_and_normal(&self, atoms: Option<Vec<&Atom>>) -> Option<Plane>;
 }
 
 impl ResidueExt for Residue {
@@ -131,17 +134,99 @@ impl ResidueExt for Residue {
         }
     }
 
-    fn ring_center_and_normal(&self, ring_atoms: Option<Vec<&Atom>>) -> Option<Ring> {
-        let ring_atoms = ring_atoms.unwrap_or(self.ring_atoms());
+    fn sc_plane_atoms(&self) -> Vec<&Atom> {
+        let res_name = self.name().unwrap_or("");
 
-        if ring_atoms.is_empty() {
+        match res_name {
+            "ARG" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "NE" | "CZ" | "NH1" | "NH2"))
+                .collect(),
+            "ASN" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CB" | "CG" | "OD1" | "ND2"))
+                .collect(),
+            "ASP" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CB" | "CG" | "OD1" | "OD2"))
+                .collect(),
+            "CYS" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CA" | "CB" | "SG"))
+                .collect(),
+            "GLU" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CG" | "CD" | "OE1" | "OE2"))
+                .collect(),
+            "GLN" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CG" | "CD" | "OE1" | "NE2"))
+                .collect(),
+            "HIS" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CG" | "ND1" | "CE1" | "NE2" | "CD2"))
+                .collect(),
+            "ILE" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CB" | "CG1" | "CG2" | "CD1"))
+                .collect(),
+            "LEU" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CB" | "CG" | "CD1" | "CD2"))
+                .collect(),
+            "LYS" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CG" | "CD" | "CE" | "NZ"))
+                .collect(),
+            "MET" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CG" | "SD" | "CE"))
+                .collect(),
+            "PHE" | "TYR" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CG" | "CD1" | "CD2" | "CE1" | "CE2" | "CZ"))
+                .collect(),
+            "PRO" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "N" | "CA" | "CB" | "CG" | "CD"))
+                .collect(),
+            "SER" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CA" | "CB" | "OG"))
+                .collect(),
+            "THR" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CA" | "CB" | "OG1" | "CG2"))
+                .collect(),
+            "TRP" => self
+                .par_atoms()
+                .filter(|atom| {
+                    matches!(
+                        atom.name(),
+                        "CG" | "CD1" | "CD2" | "NE1" | "CE2" | "CE3" | "CZ2" | "CZ3" | "CH2"
+                    )
+                })
+                .collect(),
+            "VAL" => self
+                .par_atoms()
+                .filter(|atom| matches!(atom.name(), "CA" | "CB" | "CG1" | "CG2"))
+                .collect(),
+            // Nothing for alanine and glycine
+            _ => vec![],
+        }
+    }
+
+    fn center_and_normal(&self, atoms: Option<Vec<&Atom>>) -> Option<Plane> {
+        let sc_atoms = atoms.unwrap_or(self.sc_plane_atoms());
+
+        if sc_atoms.is_empty() {
             return None;
         }
 
         // Construct 3*N matrix of ring atom coordinates
         let mut atom_coords: na::Matrix3xX<f64> = na::Matrix3xX::<f64>::from_iterator(
-            ring_atoms.len(),
-            ring_atoms.iter().flat_map(|atom| {
+            sc_atoms.len(),
+            sc_atoms.iter().flat_map(|atom| {
                 let coord = atom.pos();
                 [coord.0, coord.1, coord.2].into_iter()
             }),
@@ -161,6 +246,6 @@ impl ResidueExt for Residue {
         // let dot_products = atom_coords.transpose() * normal;
         // debug!("Dot products:\n{:?}", dot_products);
 
-        Some(Ring { center, normal })
+        Some(Plane { center, normal })
     }
 }
