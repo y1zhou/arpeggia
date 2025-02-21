@@ -30,6 +30,8 @@ pub struct InteractionComplex<'a> {
     res2idx: HashMap<ResidueId<'a>, usize>,
     /// Maps ring residues to ring centers and normals
     rings: HashMap<ResidueId<'a>, Plane>,
+    /// Map residues to side chain planes
+    sc_planes: HashMap<ResidueId<'a>, Plane>,
 }
 
 impl<'a> InteractionComplex<'a> {
@@ -49,6 +51,9 @@ impl<'a> InteractionComplex<'a> {
         // Build a mapping of ring residue names to ring centers and normals
         let (rings, ring_err) = build_ring_positions(model).expect("Error building ring positions");
 
+        // Similarly, build a mapping of side chain planes
+        let sc_planes = build_sc_plane_positions(model);
+
         Ok((
             Self {
                 model,
@@ -58,6 +63,7 @@ impl<'a> InteractionComplex<'a> {
                 interacting_threshold,
                 res2idx,
                 rings,
+                sc_planes,
             },
             ring_err,
         ))
@@ -85,6 +91,11 @@ impl<'a> InteractionComplex<'a> {
             _ => (y_idx == x_idx - 1) | (y_idx == x_idx) | (y_idx == x_idx + 1),
         }
     }
+
+    pub(crate) fn get_sc_plane<'b>(&'b self, r: &ResidueId<'b>) -> Option<&'b Plane> {
+        self.sc_planes.get(r)
+    }
+
 }
 
 pub trait Interactions {
@@ -400,7 +411,10 @@ fn build_ring_positions(model: &PDB) -> RingPositionResult {
                             ring_positions.insert(res_id, ring);
                         }
                         None => {
-                            errors.push(format!("Failed to calculate ring position for {:?}", r));
+                            errors.push(format!(
+                                "Failed to calculate ring position for {:?}",
+                                res_id
+                            ));
                         }
                     }
                 }
@@ -411,4 +425,34 @@ fn build_ring_positions(model: &PDB) -> RingPositionResult {
         return Err(errors);
     }
     Ok((ring_positions, errors))
+}
+
+fn build_sc_plane_positions(model: &PDB) -> HashMap<ResidueId<'_>, Plane> {
+    let mut sc_plane_positions = HashMap::new();
+
+    for m in model.models() {
+        let model_id = m.serial_number();
+        for c in model.chains() {
+            let chain_id = c.id();
+            for r in c.residues() {
+                let (resi, insertion_code) = r.id();
+                let insertion_code = insertion_code.unwrap_or("");
+                let resn = r.name().unwrap_or("");
+                for conformer in r.conformers() {
+                    let res_id = ResidueId::new(
+                        model_id,
+                        chain_id,
+                        resi,
+                        insertion_code,
+                        conformer.alternative_location().unwrap_or(""),
+                        resn,
+                    );
+                    if let Some(plane) = r.center_and_normal(Some(r.sc_plane_atoms())) {
+                        sc_plane_positions.insert(res_id, plane);
+                    }
+                }
+            }
+        }
+    }
+    sc_plane_positions
 }
