@@ -86,15 +86,7 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
-    let (mut df_contacts, i_complex) =
-        get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
-
-    // Information on the sequence of the chains in the model
-    info!(
-        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
-        lig = i_complex.ligand,
-        receptor = i_complex.receptor
-    );
+    let mut df_contacts = get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
 
     // Prepare output directory
     let _ = std::fs::create_dir_all(output_path.clone());
@@ -110,7 +102,15 @@ pub(crate) fn run(args: &Args) {
         .collect()
         .unwrap();
     if df_clash.height() > 0 {
-        warn!("Found {} steric clashes\n{}", df_clash.shape().0, df_clash);
+        warn!(
+            "Found {} steric {}\n{}",
+            df_clash.height(),
+            match df_clash.height() {
+                1 => "clash",
+                _ => "clashes",
+            },
+            df_clash
+        );
     }
 
     // Save res to CSV files
@@ -124,7 +124,7 @@ pub fn get_contacts<'a>(
     groups: &'a str,
     vdw_comp: f64,
     dist_cutoff: f64,
-) -> (DataFrame, InteractionComplex<'a>) {
+) -> DataFrame {
     let (i_complex, build_ring_err) =
         InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff).unwrap();
 
@@ -132,12 +132,19 @@ pub fn get_contacts<'a>(
         build_ring_err.iter().for_each(|e| warn!("{e}"));
     }
 
+    // Information on the sequence of the chains in the model
+    debug!(
+        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
+        lig = i_complex.ligand,
+        receptor = i_complex.receptor
+    );
+
     // Find interactions
     let atomic_contacts = i_complex.get_atomic_contacts();
     let df_atomic = results_to_df(&atomic_contacts);
     debug!(
         "Found {} atom-atom contacts\n{}",
-        df_atomic.shape().0,
+        df_atomic.height(),
         df_atomic
     );
 
@@ -145,7 +152,7 @@ pub fn get_contacts<'a>(
     ring_contacts.extend(i_complex.get_ring_atom_contacts());
     ring_contacts.extend(i_complex.get_ring_ring_contacts());
     let df_ring = results_to_df(&ring_contacts);
-    debug!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
+    debug!("Found {} ring contacts\n{}", df_ring.height(), df_ring);
 
     // Annotate sidechain centroid distances and dihedrals
     let mut sc_dist_dihedrals = HashMap::new();
@@ -166,8 +173,9 @@ pub fn get_contacts<'a>(
         col("to_insertion"),
         col("to_altloc"),
     ];
-    let df_contacts = concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
+    concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
         .unwrap()
+        // Annotate sidechain stats
         .join(
             df_sc_stats.lazy(),
             &contacts_sc_join_cols,
@@ -190,9 +198,7 @@ pub fn get_contacts<'a>(
             Default::default(),
         )
         .collect()
-        .unwrap();
-
-    (df_contacts, i_complex)
+        .unwrap()
 }
 
 fn results_to_df(res: &[ResultEntry]) -> DataFrame {
