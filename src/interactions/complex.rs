@@ -96,6 +96,44 @@ impl<'a> InteractionComplex<'a> {
         self.sc_planes.get(r)
     }
 
+    pub(crate) fn collect_sc_stats(
+        &self,
+        contacts: &'a [ResultEntry],
+    ) -> HashMap<(ResidueId, ResidueId), (f64, f64, f64)> {
+        contacts
+            .par_iter()
+            .filter_map(|contact| {
+                let res1 = ResidueId::new(
+                    contact.model,
+                    contact.ligand.chain.as_str(),
+                    contact.ligand.resi,
+                    contact.ligand.insertion.as_str(),
+                    contact.ligand.altloc.as_str(),
+                    contact.ligand.resn.as_str(),
+                );
+                if let Some(res1_plane) = self.get_sc_plane(&res1) {
+                    let res2 = ResidueId::new(
+                        contact.model,
+                        contact.receptor.chain.as_str(),
+                        contact.receptor.resi,
+                        contact.receptor.insertion.as_str(),
+                        contact.receptor.altloc.as_str(),
+                        contact.receptor.resn.as_str(),
+                    );
+                    if let Some(res2_plane) = self.get_sc_plane(&res2) {
+                        let centroid_dist = res1_plane.point_vec_dist(&res2_plane.center);
+                        let dihedral = res1_plane.dihedral(res2_plane);
+                        let centroid_angle = res1_plane.point_vec_angle(&res2_plane.center);
+                        Some(((res1, res2), (centroid_dist, dihedral, centroid_angle)))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<HashMap<(ResidueId, ResidueId), (f64, f64, f64)>>()
+    }
 }
 
 pub trait Interactions {
