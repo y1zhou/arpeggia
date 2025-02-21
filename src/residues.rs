@@ -262,7 +262,7 @@ impl ResidueExt for Residue {
     fn center_and_normal(&self, atoms: Option<Vec<&Atom>>) -> Option<Plane> {
         let sc_atoms = atoms.unwrap_or(self.sc_plane_atoms());
 
-        if sc_atoms.is_empty() {
+        if sc_atoms.len() < 3 {
             return None;
         }
 
