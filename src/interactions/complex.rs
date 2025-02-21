@@ -202,16 +202,29 @@ impl Interactions for InteractionComplex<'_> {
                     return Some(atomic_contacts);
                 }
 
-                // Hydrogen bonds and polar contacts
-                let hbonds =
-                    find_hydrogen_bond(e1, e2, self.vdw_comp_factor).map(|intxn| ResultEntry {
-                        model: model_id,
-                        interaction: intxn,
-                        ligand: InteractingEntity::from_hier(e1),
-                        receptor: InteractingEntity::from_hier(e2),
-                        distance: e1.atom().distance(e2.atom()),
-                    });
-                atomic_contacts.extend(hbonds);
+                // Ionic bonds, Hydrogen bonds and polar contacts
+                let ionic_bonds = find_ionic_bond(e1, e2);
+                let hbonds = find_hydrogen_bond(e1, e2, self.vdw_comp_factor);
+                let electrostatic = match (ionic_bonds, hbonds) {
+                    (Some(ionic), Some(hbond)) => {
+                        match hbond {
+                            Interaction::HydrogenBond => Some(Interaction::SaltBridge),
+                            // If it's just a polar interaction, ignore and return the stronger ionic bond
+                            _ => Some(ionic),
+                        }
+                    }
+                    (Some(ionic), None) => Some(ionic),
+                    (None, Some(hbond)) => Some(hbond),
+                    _ => None,
+                }
+                .map(|intxn| ResultEntry {
+                    model: model_id,
+                    interaction: intxn,
+                    ligand: InteractingEntity::from_hier(e1),
+                    receptor: InteractingEntity::from_hier(e2),
+                    distance: e1.atom().distance(e2.atom()),
+                });
+                atomic_contacts.extend(electrostatic);
 
                 // C-H...O bonds
                 let weak_hbonds =
@@ -225,16 +238,6 @@ impl Interactions for InteractionComplex<'_> {
                         }
                     });
                 atomic_contacts.extend(weak_hbonds);
-
-                // Ionic bonds
-                let ionic_bonds = find_ionic_bond(e1, e2).map(|intxn| ResultEntry {
-                    model: model_id,
-                    interaction: intxn,
-                    ligand: InteractingEntity::from_hier(e1),
-                    receptor: InteractingEntity::from_hier(e2),
-                    distance: e1.atom().distance(e2.atom()),
-                });
-                atomic_contacts.extend(ionic_bonds);
 
                 // Charge-charge repulsions
                 let charge_repulsions = find_ionic_repulsion(e1, e2).map(|intxn| ResultEntry {

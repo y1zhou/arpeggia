@@ -28,6 +28,8 @@ pub enum Interaction {
     WeakPolarContact,
     /// Like charges repelling each other
     IonicRepulsion,
+    /// Presence of both ionic and hydrogen bonding
+    SaltBridge,
 
     // Aromatic
     /// Pi-pi staggered stacking, parallel displaced (`of`)
