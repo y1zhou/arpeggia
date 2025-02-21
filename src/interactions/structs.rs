@@ -2,7 +2,6 @@ use core::fmt;
 use pdbtbx::*;
 
 /// Interaction types.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Interaction {
     /// Within covalent radii

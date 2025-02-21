@@ -50,6 +50,7 @@ impl Plane {
         rad.to_degrees()
     }
 
+    #[allow(dead_code)]
     pub fn point_angle(&self, point: &(f64, f64, f64)) -> f64 {
         let atom_point = na::Vector3::new(point.0, point.1, point.2);
         self.point_vec_angle(&atom_point)
