@@ -20,7 +20,7 @@ pub struct ResidueId<'a> {
 }
 
 /// The struct for a plane in 3D space
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Plane {
     pub center: na::Vector3<f64>,
     pub normal: na::Vector3<f64>,
@@ -286,10 +286,104 @@ impl ResidueExt for Residue {
 
         let svd = atom_coords.svd(true, true);
         let normal = svd.u.unwrap().column(2).clone_owned();
-        // Sanity check the normal is orthogonal to the plane vectors
-        // let dot_products = atom_coords.transpose() * normal;
-        // debug!("Dot products:\n{:?}", dot_products);
 
         Some(Plane { center, normal })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::load_model;
+
+    #[test]
+    fn test_plane_dist_angles() {
+        let plane_x = Plane {
+            center: na::Vector3::new(0.0, 0.0, 0.0),
+            normal: na::Vector3::new(0.0, 0.0, 1.0),
+        };
+        let point = na::Vector3::new(0.0, 1.0, 1.0);
+
+        // Test a plane parallel to the x-y plane
+        let parallel_x = Plane {
+            center: point,
+            normal: na::Vector3::new(0.0, 0.0, -1.0),
+        };
+        assert!((plane_x.point_vec_dist(&point) - 2.0_f64.sqrt()).abs() < 1e-6);
+        assert!((plane_x.point_vec_angle(&point) - 45.0) < 1e-6);
+        assert!((parallel_x.point_vec_angle(&plane_x.center) - 45.0) < 1e-6);
+        assert!(plane_x.dihedral(&parallel_x) < 1e-6);
+
+        // Test a plane perpendicular to the x-y plane
+        let perpendicular_x = Plane {
+            center: point,
+            normal: na::Vector3::new(1.0, 0.0, 0.0),
+        };
+        assert!((plane_x.point_vec_angle(&point) - 90.0) < 1e-6);
+        assert!((perpendicular_x.point_vec_angle(&plane_x.center) - 90.0) < 1e-6);
+        assert!((plane_x.dihedral(&perpendicular_x) - 90.0) < 1e-6);
+    }
+
+    #[test]
+    fn test_residue_ext() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/1ubq.pdb");
+
+        let (pdb, _) = load_model(&path);
+
+        // First Met has no rings
+        let residue = pdb.residues().next().unwrap();
+        assert_eq!(residue.resn(), Some("M"));
+        assert_eq!(residue.ring_atoms().len(), 0);
+        assert_eq!(residue.sc_plane_atoms().len(), 3);
+
+        // Phe 4 has a ring
+        let res_f4 = pdb.residues().find(|res| res.resn() == Some("F")).unwrap();
+        assert_eq!(res_f4.serial_number(), 4);
+        let ring_atoms = res_f4.ring_atoms();
+        assert_eq!(ring_atoms.len(), 6);
+        let f4_ring = res_f4.center_and_normal(Some(ring_atoms.clone())).unwrap();
+        let f4_ring_default = res_f4.center_and_normal(None).unwrap();
+        assert!(f4_ring == f4_ring_default);
+        assert!(
+            f4_ring.center.relative_eq(
+                &na::Vector3::new(24.96883333, 34.687, 6.16233333),
+                f64::EPSILON,
+                1e-6
+            ),
+            "Ring center: {:?}",
+            f4_ring.center
+        );
+        assert!(
+            f4_ring.normal.relative_eq(
+                &na::Vector3::new(0.53253994, -0.82736044, -0.17853828),
+                f64::EPSILON,
+                1e-6
+            ),
+            "Normal vector: {:?}",
+            f4_ring.normal
+        );
+        // Sanity check the normal is orthogonal to the plane vectors
+        let atom_coords: na::Matrix3xX<f64> = na::Matrix3xX::<f64>::from_iterator(
+            ring_atoms.len(),
+            ring_atoms.iter().flat_map(|atom| {
+                let coord = atom.pos();
+                [
+                    coord.0 - f4_ring.center[0],
+                    coord.1 - f4_ring.center[1],
+                    coord.2 - f4_ring.center[2],
+                ]
+                .into_iter()
+            }),
+        );
+        let dot_products = atom_coords.transpose() * f4_ring.normal;
+        assert!(
+            dot_products.abs().mean().abs() < 0.02,
+            "Dot products: {:?}\nCenter: {:?}\nNormal: {:?}\nAtoms: {:?}",
+            dot_products,
+            f4_ring.center,
+            f4_ring.normal,
+            atom_coords
+        );
     }
 }
