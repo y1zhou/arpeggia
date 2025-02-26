@@ -112,7 +112,7 @@ pub trait ResidueExt {
 
     /// Return the atoms that form a plane in the side chain.
     /// See page 27 of:
-    /// https://cdn.rcsb.org/wwpdb/docs/documentation/file-format/PDB_format_1992.pdf
+    /// <https://cdn.rcsb.org/wwpdb/docs/documentation/file-format/PDB_format_1992.pdf>
     fn sc_plane_atoms(&self) -> Vec<&Atom>;
 
     /// Return the center and normal of the given atoms. If no atoms are given,
