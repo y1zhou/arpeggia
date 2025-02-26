@@ -59,3 +59,67 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{residues::ResidueExt, utils::load_model};
+
+    #[test]
+    fn test_good_cation_pi() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/6bft.pdb");
+        let (pdb, _) = load_model(&path);
+
+        let y102_a = pdb
+            .model(0)
+            .unwrap()
+            .chains()
+            .find(|c| c.id() == "A")
+            .unwrap()
+            .residues()
+            .find(|r| r.serial_number() == 102)
+            .unwrap();
+        let r82_g = pdb
+            .atoms_with_hierarchy()
+            .find(|x| {
+                x.model().serial_number() == 0
+                    && x.chain().id() == "G"
+                    && x.conformer().name() == "ARG"
+                    && x.residue().serial_number() == 82
+                    && x.atom().name() == "NE"
+            })
+            .unwrap();
+        let ring = y102_a.center_and_normal(Some(y102_a.ring_atoms())).unwrap();
+        assert_eq!(find_cation_pi(&ring, &r82_g), Some(Interaction::CationPi));
+    }
+
+    #[test]
+    fn test_bad_cation_pi_angle() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/6bft.pdb");
+        let (pdb, _) = load_model(&path);
+
+        let w108_a = pdb
+            .model(0)
+            .unwrap()
+            .chains()
+            .find(|c| c.id() == "A")
+            .unwrap()
+            .residues()
+            .find(|r| r.serial_number() == 108)
+            .unwrap();
+        let k84_g = pdb
+            .atoms_with_hierarchy()
+            .find(|x| {
+                x.model().serial_number() == 0
+                    && x.chain().id() == "G"
+                    && x.conformer().name() == "LYS"
+                    && x.residue().serial_number() == 84
+                    && x.atom().name() == "NZ"
+            })
+            .unwrap();
+        let ring = w108_a.center_and_normal(Some(w108_a.ring_atoms())).unwrap();
+        assert_eq!(find_cation_pi(&ring, &k84_g), None);
+    }
+}
