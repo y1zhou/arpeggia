@@ -4,6 +4,7 @@ use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
@@ -84,6 +85,14 @@ pub(crate) fn run(args: &Args) {
             pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
             _ => warn!("{e}"),
         });
+    }
+    if pdb
+        .par_atoms()
+        .filter(|a| a.element().unwrap() == &Element::H)
+        .count()
+        == 0
+    {
+        warn!("No hydrogen atoms found in the structure. This may affect the accuracy of the results.");
     }
 
     let mut df_contacts = get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
