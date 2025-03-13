@@ -69,26 +69,66 @@ impl<'a> InteractionComplex<'a> {
         ))
     }
 
-    fn is_neighboring_hierarchy(
+    /// Determine if two entities need to be checked for interactions or not.
+    /// For interactions within the same chain, skip if e1 appears later in the chain than e2,
+    /// or if e2 is in the same or neighboring residue as e1.
+    /// Across chains, first see if the two chains both appear as ligands and receptors.
+    /// In such cases, we avoid calculations where c1 > c2 if the interaction is symmetric.
+    /// Currently, only ring-atom interactions are asymmetric.
+    fn should_compare_entities(
         &self,
-        x: &AtomConformerResidueChainModel,
-        y: &AtomConformerResidueChainModel,
+        e1: &AtomConformerResidueChainModel,
+        e2: &AtomConformerResidueChainModel,
+        symmetric: bool,
     ) -> bool {
-        let x_id = ResidueId::from_hier(x);
-        let y_id = ResidueId::from_hier(y);
-        self.is_neighboring_res_pair(&x_id, &y_id)
-    }
-
-    fn is_neighboring_res_pair(&self, x: &ResidueId, y: &ResidueId) -> bool {
-        if (x.model != y.model) | (x.chain != y.chain) {
+        // Ignore if any of the atoms is a hydrogen atom
+        if (e1.atom().element().unwrap() == &Element::H)
+            | (e2.atom().element().unwrap() == &Element::H)
+        {
             return false;
         }
-        let x_idx = self.res2idx[x];
-        let y_idx = self.res2idx[y];
 
-        match x_idx {
-            0 => (y_idx == x_idx) | (y_idx == x_idx + 1),
-            _ => (y_idx == x_idx - 1) | (y_idx == x_idx) | (y_idx == x_idx + 1),
+        let e1_res = ResidueId::from_hier(e1);
+        let e2_res = ResidueId::from_hier(e2);
+        self.should_compare_residues(&e1_res, &e2_res, symmetric)
+    }
+
+    fn should_compare_residues(&self, r1: &ResidueId, r2: &ResidueId, symmetric: bool) -> bool {
+        // Ignore if the two atoms are from different models
+        if r1.model != r2.model {
+            return false;
+        }
+
+        // Ignore if they are not a valid ligand-receptor pair
+        if !((self.ligand.contains(r1.chain) & self.receptor.contains(r2.chain))
+            | (self.ligand.contains(r2.chain) & self.receptor.contains(r1.chain)))
+        {
+            return false;
+        }
+
+        // Ignore if they are neighboring residues in the same chain
+        if r1.chain == r2.chain {
+            let e1_idx = self.res2idx[r1];
+            let e2_idx = self.res2idx[r2];
+
+            if symmetric {
+                (e2_idx > 1) & (e1_idx < e2_idx - 1) // not immediate neighbors
+            } else {
+                let is_neighboring = match e1_idx {
+                    0 => (e2_idx == e1_idx) | (e2_idx == e1_idx + 1),
+                    _ => (e2_idx == e1_idx - 1) | (e2_idx == e1_idx) | (e2_idx == e1_idx + 1),
+                };
+                !is_neighboring
+            }
+        } else {
+            // Across two chains, avoid duplicate comparisons when the chains exist on both sides,
+            // e.g. H,A,B/H,A where H-A and A-H are the same interactions
+            !(symmetric
+                & self.receptor.contains(r1.chain)
+                & self.receptor.contains(r2.chain)
+                & self.ligand.contains(r1.chain)
+                & self.ligand.contains(r2.chain)
+                & (r1.chain > r2.chain))
         }
     }
 
@@ -163,16 +203,7 @@ impl Interactions for InteractionComplex<'_> {
             })
             .flat_map(|x| {
                 tree.locate_within_distance(x.atom().pos(), max_radius_squared)
-                    .filter(|y| x.model().serial_number() == y.model().serial_number())
-                    .filter(|y| {
-                        self.receptor.contains(y.chain().id())
-                            & (y.atom().element().unwrap() != &Element::H)
-                            // Skip lower resi if both entities are on the same chain
-                            & !((x.chain().id() == y.chain().id())
-                                & (x.residue().serial_number() > y.residue().serial_number()))
-                            // Skip neighboring residues
-                            & !self.is_neighboring_hierarchy(&x, y)
-                    })
+                    .filter(|y| self.should_compare_entities(&x, y, true))
                     .map(|y| (x.clone(), y))
                     .collect::<Vec<(
                         AtomConformerResidueChainModel,
@@ -186,6 +217,7 @@ impl Interactions for InteractionComplex<'_> {
             .filter_map(|(e1, e2)| {
                 let mut atomic_contacts: Vec<ResultEntry> = vec![];
                 let model_id = e1.model().serial_number();
+                let dist = e1.atom().distance(e2.atom());
 
                 // Clashes and VdW contacts
                 let vdw = find_vdw_contact(e1, e2, self.vdw_comp_factor).map(|intxn| ResultEntry {
@@ -193,7 +225,7 @@ impl Interactions for InteractionComplex<'_> {
                     interaction: intxn,
                     ligand: InteractingEntity::from_hier(e1),
                     receptor: InteractingEntity::from_hier(e2),
-                    distance: e1.atom().distance(e2.atom()),
+                    distance: dist,
                 });
                 atomic_contacts.extend(vdw.clone());
 
@@ -222,7 +254,7 @@ impl Interactions for InteractionComplex<'_> {
                     interaction: intxn,
                     ligand: InteractingEntity::from_hier(e1),
                     receptor: InteractingEntity::from_hier(e2),
-                    distance: e1.atom().distance(e2.atom()),
+                    distance: dist,
                 });
                 atomic_contacts.extend(electrostatic);
 
@@ -234,7 +266,7 @@ impl Interactions for InteractionComplex<'_> {
                             interaction: intxn,
                             ligand: InteractingEntity::from_hier(e1),
                             receptor: InteractingEntity::from_hier(e2),
-                            distance: e1.atom().distance(e2.atom()),
+                            distance: dist,
                         }
                     });
                 atomic_contacts.extend(weak_hbonds);
@@ -245,7 +277,7 @@ impl Interactions for InteractionComplex<'_> {
                     interaction: intxn,
                     ligand: InteractingEntity::from_hier(e1),
                     receptor: InteractingEntity::from_hier(e2),
-                    distance: e1.atom().distance(e2.atom()),
+                    distance: dist,
                 });
                 atomic_contacts.extend(charge_repulsions);
 
@@ -256,7 +288,7 @@ impl Interactions for InteractionComplex<'_> {
                         interaction: intxn,
                         ligand: InteractingEntity::from_hier(e1),
                         receptor: InteractingEntity::from_hier(e2),
-                        distance: e1.atom().distance(e2.atom()),
+                        distance: dist,
                     });
                 atomic_contacts.extend(hydrophobic_contacts);
 
@@ -279,20 +311,9 @@ impl Interactions for InteractionComplex<'_> {
                     (v.center.x, v.center.y, v.center.z),
                     max_radius_squared,
                 )
-                .filter(|y| x.model == y.model().serial_number())
-                // Ring on ligand or receptor, and atom on the other side
                 .filter(|y| {
-                    (self.ligand.contains(x.chain) & self.receptor.contains(y.chain().id()))
-                        | (self.ligand.contains(y.chain().id()) & self.receptor.contains(x.chain))
-                })
-                .filter(|y_hier| {
-                    let y = ResidueId::from_hier(y_hier);
-                    (y_hier.atom().element().unwrap() != &Element::H)
-                        // Skip lower resi if both entities are on the same chain
-                        & !((x.chain == y.chain)
-                            & (x.resi > y.resi))
-                        // Skip neighboring residues
-                        & !self.is_neighboring_res_pair(x, &y)
+                    let y_res = ResidueId::from_hier(y);
+                    self.should_compare_residues(x, &y_res, false)
                 })
                 .map(|y| (x, v, y))
                 .collect::<Vec<(&ResidueId, &Plane, &AtomConformerResidueChainModel)>>()
@@ -335,18 +356,10 @@ impl Interactions for InteractionComplex<'_> {
         let ring_ring_neighbors = self
             .rings
             .iter()
-            .filter(|(k, _)| self.ligand.contains(k.chain))
             .flat_map(|(k1, ring1)| {
                 self.rings
                     .iter()
-                    .filter(|(k2, _)| k1.model == k2.model)
-                    .filter(
-                        |(k2, _)| {
-                            self.receptor.contains(k2.chain)
-                        & !((k1.chain == k2.chain) & (k1.resi > k2.resi)) // Skip lower resi if both entities are on the same chain
-                        & !self.is_neighboring_res_pair(k1, k2)
-                        }, // Skip neighboring residues
-                    )
+                    .filter(|(k2, _)| self.should_compare_residues(k1, k2, true))
                     .map(|(k2, ring2)| (k1, ring1, k2, ring2))
                     .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>()
             })
