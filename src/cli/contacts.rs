@@ -1,8 +1,11 @@
 use crate::interactions::{InteractionComplex, Interactions, ResultEntry};
+use crate::residues::ResidueId;
 use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
+use rayon::prelude::*;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
 
@@ -83,26 +86,16 @@ pub(crate) fn run(args: &Args) {
             _ => warn!("{e}"),
         });
     }
+    if pdb
+        .par_atoms()
+        .filter(|a| a.element().unwrap() == &Element::H)
+        .count()
+        == 0
+    {
+        warn!("No hydrogen atoms found in the structure. This may affect the accuracy of the results.");
+    }
 
-    let (df_atomic, df_ring, i_complex) =
-        get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
-
-    // Information on the sequence of the chains in the model
-    let num_chains = i_complex.ligand.len() + i_complex.receptor.len();
-    info!(
-        "Loaded {} {}",
-        num_chains,
-        match num_chains {
-            1 => "chain",
-            _ => "chains",
-        }
-    );
-
-    debug!(
-        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
-        lig = i_complex.ligand,
-        receptor = i_complex.receptor
-    );
+    let mut df_contacts = get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
 
     // Prepare output directory
     let _ = std::fs::create_dir_all(output_path.clone());
@@ -111,39 +104,23 @@ pub(crate) fn run(args: &Args) {
         .with_extension(args.output_format.to_string());
 
     // Save results and log the identified interactions
-    debug!(
-        "Found {} atom-atom contacts\n{}",
-        df_atomic.shape().0,
-        df_atomic
-    );
-    let df_clash = df_atomic
+    let df_clash = df_contacts
         .clone()
         .lazy()
         .filter(col("interaction").eq(lit("StericClash")))
         .collect()
         .unwrap();
     if df_clash.height() > 0 {
-        warn!("Found {} steric clashes\n{}", df_clash.shape().0, df_clash);
+        warn!(
+            "Found {} steric {}\n{}",
+            df_clash.height(),
+            match df_clash.height() {
+                1 => "clash",
+                _ => "clashes",
+            },
+            df_clash
+        );
     }
-    debug!("Found {} ring contacts\n{}", df_ring.shape().0, df_ring);
-
-    // Concate dataframes for saving to CSV
-    let mut df_contacts = concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
-        .unwrap()
-        .sort(
-            [
-                "model",
-                "from_resi",
-                "from_altloc",
-                "from_atomi",
-                "to_resi",
-                "to_altloc",
-                "to_atomi",
-            ],
-            Default::default(),
-        )
-        .collect()
-        .unwrap();
 
     // Save res to CSV files
     write_df_to_file(&mut df_contacts, &output_file, args.output_format);
@@ -156,7 +133,7 @@ pub fn get_contacts<'a>(
     groups: &'a str,
     vdw_comp: f64,
     dist_cutoff: f64,
-) -> (DataFrame, DataFrame, InteractionComplex<'a>) {
+) -> DataFrame {
     let (i_complex, build_ring_err) =
         InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff).unwrap();
 
@@ -164,16 +141,73 @@ pub fn get_contacts<'a>(
         build_ring_err.iter().for_each(|e| warn!("{e}"));
     }
 
+    // Information on the sequence of the chains in the model
+    debug!(
+        "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
+        lig = i_complex.ligand,
+        receptor = i_complex.receptor
+    );
+
     // Find interactions
     let atomic_contacts = i_complex.get_atomic_contacts();
     let df_atomic = results_to_df(&atomic_contacts);
+    debug!(
+        "Found {} atom-atom contacts\n{}",
+        df_atomic.height(),
+        df_atomic
+    );
 
     let mut ring_contacts: Vec<ResultEntry> = Vec::new();
     ring_contacts.extend(i_complex.get_ring_atom_contacts());
     ring_contacts.extend(i_complex.get_ring_ring_contacts());
     let df_ring = results_to_df(&ring_contacts);
+    debug!("Found {} ring contacts\n{}", df_ring.height(), df_ring);
 
-    (df_atomic, df_ring, i_complex)
+    // Annotate sidechain centroid distances and dihedrals
+    let mut sc_dist_dihedrals = HashMap::new();
+    sc_dist_dihedrals.extend(i_complex.collect_sc_stats(&atomic_contacts));
+    sc_dist_dihedrals.extend(i_complex.collect_sc_stats(&ring_contacts));
+
+    let df_sc_stats = sc_results_to_df(&sc_dist_dihedrals);
+
+    // Concate dataframes
+    let contacts_sc_join_cols = [
+        col("model"),
+        col("from_chain"),
+        col("from_resi"),
+        col("from_insertion"),
+        col("from_altloc"),
+        col("to_chain"),
+        col("to_resi"),
+        col("to_insertion"),
+        col("to_altloc"),
+    ];
+    concat([df_atomic.lazy(), df_ring.lazy()], UnionArgs::default())
+        .unwrap()
+        // Annotate sidechain stats
+        .join(
+            df_sc_stats.lazy(),
+            &contacts_sc_join_cols,
+            &contacts_sc_join_cols,
+            JoinArgs::new(JoinType::Left),
+        )
+        .sort(
+            [
+                "model",
+                "from_chain",
+                "to_chain",
+                "from_resi",
+                "from_altloc",
+                "from_atomi",
+                "to_resi",
+                "to_altloc",
+                "to_atomi",
+                "interaction",
+            ],
+            Default::default(),
+        )
+        .collect()
+        .unwrap()
 }
 
 fn results_to_df(res: &[ResultEntry]) -> DataFrame {
@@ -195,6 +229,24 @@ fn results_to_df(res: &[ResultEntry]) -> DataFrame {
         "to_altloc" => res.iter().map(|x| x.receptor.altloc.to_owned()).collect::<Vec<String>>(),
         "to_atomn" => res.iter().map(|x| x.receptor.atomn.to_owned()).collect::<Vec<String>>(),
         "to_atomi" => res.iter().map(|x| x.receptor.atomi as i32).collect::<Vec<i32>>(),
+    )
+    .unwrap()
+}
+
+fn sc_results_to_df(res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>) -> DataFrame {
+    df!(
+        "model" => res.iter().map(|(k, _)| k.0.model as u32).collect::<Vec<u32>>(),
+        "from_chain" => res.iter().map(|(k, _)| k.0.chain.to_owned()).collect::<Vec<String>>(),
+        "from_resi" => res.iter().map(|(k, _)| k.0.resi as i32).collect::<Vec<i32>>(),
+        "from_insertion" => res.iter().map(|(k, _)| k.0.insertion.to_owned()).collect::<Vec<String>>(),
+        "from_altloc" => res.iter().map(|(k, _)| k.0.altloc.to_owned()).collect::<Vec<String>>(),
+        "to_chain" => res.iter().map(|(k, _)| k.1.chain.to_owned()).collect::<Vec<String>>(),
+        "to_resi" => res.iter().map(|(k, _)| k.1.resi as i32).collect::<Vec<i32>>(),
+        "to_insertion" => res.iter().map(|(k, _)| k.1.insertion.to_owned()).collect::<Vec<String>>(),
+        "to_altloc" => res.iter().map(|(k, _)| k.1.altloc.to_owned()).collect::<Vec<String>>(),
+        "sc_centroid_dist" => res.iter().map(|(_, v)| v.0 as f32).collect::<Vec<f32>>(),
+        "sc_dihedral" => res.iter().map(|(_, v)| v.1 as f32).collect::<Vec<f32>>(),
+        "sc_centroid_angle" => res.iter().map(|(_, v)| v.2 as f32).collect::<Vec<f32>>(),
     )
     .unwrap()
 }

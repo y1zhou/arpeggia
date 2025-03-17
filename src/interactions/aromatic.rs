@@ -1,6 +1,6 @@
 use super::ionic::is_pos_ionizable;
 use super::structs::Interaction;
-use crate::residues::Ring;
+use crate::residues::Plane;
 
 use nalgebra as na;
 use pdbtbx::*;
@@ -11,12 +11,15 @@ const PI_PI_DIST_THRESHOLD: f64 = 6.0;
 const PI_T_DIST_THREHOLD: f64 = 5.0;
 
 /// Identify cation-pi interactions.
-pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> Option<Interaction> {
+pub fn find_cation_pi(
+    ring: &Plane,
+    entity: &AtomConformerResidueChainModel,
+) -> Option<Interaction> {
     if is_pos_ionizable(entity.residue().name().unwrap(), entity.atom().name()) {
         let atom_coord = entity.atom().pos();
         let atom_point = na::Vector3::new(atom_coord.0, atom_coord.1, atom_coord.2);
-        let dist = point_ring_dist(ring, &atom_coord);
-        let theta = point_ring_angle(ring, &atom_point);
+        let dist = ring.point_vec_dist(&atom_point);
+        let theta = ring.point_vec_angle(&atom_point);
 
         if (theta <= CATION_PI_ANGLE_THRESHOLD) & (dist <= CATION_PI_DIST_THRESHOLD) {
             return Some(Interaction::CationPi);
@@ -27,12 +30,12 @@ pub fn find_cation_pi(ring: &Ring, entity: &AtomConformerResidueChainModel) -> O
 
 /// Identify pi-pi interactions using the classification by [Chakrabarti and Bhattacharyya (2007)](https://doi.org/10.1016/j.pbiomolbio.2007.03.016), Fig. 11.
 /// For T-shaped Pi-stacking, the distance threshold is set to 5.0 Å according to [getcontacts](https://getcontacts.github.io/interactions.html).
-pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
+pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
     let angle_vec = ring1.center - ring2.center;
     let dist = (angle_vec).norm();
     if dist <= PI_PI_DIST_THRESHOLD {
-        let theta = point_ring_angle(ring1, &ring2.center);
-        let dihedral = ring_ring_angle(ring1, ring2);
+        let theta = ring1.point_vec_angle(&ring2.center);
+        let dihedral = ring1.dihedral(ring2);
 
         match dihedral {
             d if d <= 30.0 => match theta {
@@ -57,33 +60,66 @@ pub fn find_pi_pi(ring1: &Ring, ring2: &Ring) -> Option<Interaction> {
     }
 }
 
-/// Calculate the distance from the point to the ring center.
-pub fn point_ring_dist(ring: &Ring, point: &(f64, f64, f64)) -> f64 {
-    let atom_point = na::Vector3::new(point.0, point.1, point.2);
-    (atom_point - ring.center).norm()
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{residues::ResidueExt, utils::load_model};
 
-/// Calculate the angle between the ring normal and the vector pointing from
-/// the ring center to the point.
-fn point_ring_angle(ring: &Ring, point: &na::Vector3<f64>) -> f64 {
-    let v = point - ring.center;
-    let mut rad = (ring.normal.dot(&v) / (ring.normal.norm() * v.norm())).acos();
+    #[test]
+    fn test_good_cation_pi() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/6bft.pdb");
+        let (pdb, _) = load_model(&path);
 
-    // Convert to degrees
-    if rad > std::f64::consts::FRAC_PI_2 {
-        rad = std::f64::consts::PI - rad;
+        let y102_a = pdb
+            .model(0)
+            .unwrap()
+            .chains()
+            .find(|c| c.id() == "A")
+            .unwrap()
+            .residues()
+            .find(|r| r.serial_number() == 102)
+            .unwrap();
+        let r82_g = pdb
+            .atoms_with_hierarchy()
+            .find(|x| {
+                x.model().serial_number() == 0
+                    && x.chain().id() == "G"
+                    && x.conformer().name() == "ARG"
+                    && x.residue().serial_number() == 82
+                    && x.atom().name() == "NE"
+            })
+            .unwrap();
+        let ring = y102_a.center_and_normal(Some(y102_a.ring_atoms())).unwrap();
+        assert_eq!(find_cation_pi(&ring, &r82_g), Some(Interaction::CationPi));
     }
-    rad.to_degrees()
-}
 
-/// Calculate the angle between two rings.
-fn ring_ring_angle(ring1: &Ring, ring2: &Ring) -> f64 {
-    let mut rad =
-        (ring1.normal.dot(&ring2.normal) / (ring1.normal.norm() * ring2.normal.norm())).acos();
+    #[test]
+    fn test_bad_cation_pi_angle() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/6bft.pdb");
+        let (pdb, _) = load_model(&path);
 
-    // Convert to degrees
-    if rad > std::f64::consts::FRAC_PI_2 {
-        rad = std::f64::consts::PI - rad;
+        let w108_a = pdb
+            .model(0)
+            .unwrap()
+            .chains()
+            .find(|c| c.id() == "A")
+            .unwrap()
+            .residues()
+            .find(|r| r.serial_number() == 108)
+            .unwrap();
+        let k84_g = pdb
+            .atoms_with_hierarchy()
+            .find(|x| {
+                x.model().serial_number() == 0
+                    && x.chain().id() == "G"
+                    && x.conformer().name() == "LYS"
+                    && x.residue().serial_number() == 84
+                    && x.atom().name() == "NZ"
+            })
+            .unwrap();
+        let ring = w108_a.center_and_normal(Some(w108_a.ring_atoms())).unwrap();
+        assert_eq!(find_cation_pi(&ring, &k84_g), None);
     }
-    rad.to_degrees()
 }

@@ -2,7 +2,6 @@ use core::fmt;
 use pdbtbx::*;
 
 /// Interaction types.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Interaction {
     /// Within covalent radii
@@ -28,6 +27,8 @@ pub enum Interaction {
     WeakPolarContact,
     /// Like charges repelling each other
     IonicRepulsion,
+    /// Presence of both ionic and hydrogen bonding
+    SaltBridge,
 
     // Aromatic
     /// Pi-pi staggered stacking, parallel displaced (`of`)

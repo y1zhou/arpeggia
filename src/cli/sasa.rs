@@ -86,7 +86,7 @@ pub(crate) fn run(args: &Args) {
     let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
     debug!(
         "Found {} atoms with non-zero SASA\n{}",
-        df_sasa_nonzero.shape().0,
+        df_sasa_nonzero.height(),
         df_sasa_nonzero
     );
 
