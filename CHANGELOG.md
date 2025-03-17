@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2025-03-17
+
+### Added
+
+- The new `Plane` struct for better abstraction of sidechain centroids and normals
+- `get_contacts` now returns a single DataFrame, with additional sidechain centroid distance and dihedral columns
+- Salt bridges (when a hydrogen bond and an ionic bond are both present) are now correctly identified
+- Tests for some IO and interaction detection functions
+
+### Fixed
+
+- Duplicated rows when chains appear on both sides of the `group` CLI argument
+- Ignore planes when there are fewer than three atoms in the sidechain
+
+### Changed
+
+- Better logging messages and documentation of methods
+
+
 ## [0.4.1] - 2025-02-19
 
 ### Added
@@ -94,7 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.2
 [0.4.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.1
 [0.4.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.0
 [0.3.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.3.1

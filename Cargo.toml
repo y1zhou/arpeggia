@@ -1,6 +1,6 @@
 [package]
 name = "arpeggia"
-version = "0.4.1"
+version = "0.4.2"
 description = "A port of the Arpeggio library for Rust"
 edition = "2021"
 authors = ["Yi Zhou <me@y1zhou.com>"]
