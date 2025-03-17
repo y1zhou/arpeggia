@@ -203,6 +203,7 @@ impl Interactions for InteractionComplex<'_> {
             })
             .flat_map(|x| {
                 tree.locate_within_distance(x.atom().pos(), max_radius_squared)
+                    .filter(|y| self.receptor.contains(y.chain().id()))
                     .filter(|y| self.should_compare_entities(&x, y, true))
                     .map(|y| (x.clone(), y))
                     .collect::<Vec<(
@@ -359,7 +360,11 @@ impl Interactions for InteractionComplex<'_> {
             .flat_map(|(k1, ring1)| {
                 self.rings
                     .iter()
-                    .filter(|(k2, _)| self.should_compare_residues(k1, k2, true))
+                    .filter(|(k2, _)| {
+                        self.ligand.contains(k1.chain)
+                            & self.receptor.contains(k2.chain)
+                            & self.should_compare_residues(k1, k2, true)
+                    })
                     .map(|(k2, ring2)| (k1, ring1, k2, ring2))
                     .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>()
             })
