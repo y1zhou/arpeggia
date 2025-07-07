@@ -28,6 +28,10 @@ pub(crate) struct Args {
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
     output_format: DataFrameFileType,
 
+    /// Model number to analyze (default: 0, the first model)
+    #[arg(short = 'm', long = "model", default_value_t = 0)]
+    model_num: usize,
+
     /// Probe radius r (smaller r detects more surface details and reports a larger surface)
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
     probe_radius: f32,
@@ -65,7 +69,7 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
-    let mut df_sasa = get_atom_sasa(&pdb, args.probe_radius, args.n_points);
+    let mut df_sasa = get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num);
 
     // Prepare output directory
     let output_path = Path::new(&args.output).canonicalize().unwrap();
@@ -96,13 +100,13 @@ pub(crate) fn run(args: &Args) {
     info!("Results saved to {output_file_str}");
 }
 
-pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {
+pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: usize) -> DataFrame {
     // Calculate the SASA for each atom
     let atoms = pdb
         .atoms_with_hierarchy()
         .filter(|x| {
             let resn = x.residue().resn().unwrap();
-            resn != "O" && resn != "X"
+            resn != "O" && resn != "X" && x.model().serial_number() == model_num
         })
         .map(|x| SASAAtom {
             position: nalgebra::Point3::new(
@@ -132,6 +136,7 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame
         "chain" => atom_annotations.iter().map(|x| x.chain.to_owned()).collect::<Vec<String>>(),
         "resn" => atom_annotations.iter().map(|x| x.resn.to_owned()).collect::<Vec<String>>(),
         "resi" => atom_annotations.iter().map(|x| x.resi as i32).collect::<Vec<i32>>(),
+        "insertion" => atom_annotations.iter().map(|x| x.insertion.to_owned()).collect::<Vec<String>>(),
         "altloc" => atom_annotations.iter().map(|x| x.altloc.to_owned()).collect::<Vec<String>>(),
         "atomn" => atom_annotations.iter().map(|x| x.atomn.to_owned()).collect::<Vec<String>>(),
         "atomi" => atom_annotations.iter().map(|x| x.atomi as i32).collect::<Vec<i32>>(),
