@@ -70,6 +70,10 @@ pub(crate) fn run(args: &Args) {
     }
 
     let mut df_sasa = get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num);
+    if df_sasa.is_empty() {
+        error!("No atoms found in the input file. Please check the provided arguments, especially the model number.");
+        return;
+    }
 
     // Prepare output directory
     let output_path = Path::new(&args.output).canonicalize().unwrap();
@@ -101,6 +105,16 @@ pub(crate) fn run(args: &Args) {
 }
 
 pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: usize) -> DataFrame {
+    // If model_num is 0, we use the first model; otherwise use the specified model
+    let model_num = if model_num == 0 {
+        pdb.models()
+            .collect::<Vec<_>>()
+            .first()
+            .map_or(0, |m| m.serial_number())
+    } else {
+        model_num
+    };
+
     // Calculate the SASA for each atom
     let atoms = pdb
         .atoms_with_hierarchy()
