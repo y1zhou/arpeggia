@@ -1,6 +1,6 @@
 use crate::interactions::{InteractionComplex, Interactions, ResultEntry};
 use crate::residues::ResidueId;
-use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
+use crate::utils::{DataFrameFileType, load_model, write_df_to_file};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -92,7 +92,9 @@ pub(crate) fn run(args: &Args) {
         .count()
         == 0
     {
-        warn!("No hydrogen atoms found in the structure. This may affect the accuracy of the results.");
+        warn!(
+            "No hydrogen atoms found in the structure. This may affect the accuracy of the results."
+        );
     }
 
     let mut df_contacts = get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
@@ -235,18 +237,18 @@ fn results_to_df(res: &[ResultEntry]) -> DataFrame {
 
 fn sc_results_to_df(res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>) -> DataFrame {
     df!(
-        "model" => res.iter().map(|(k, _)| k.0.model as u32).collect::<Vec<u32>>(),
-        "from_chain" => res.iter().map(|(k, _)| k.0.chain.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.iter().map(|(k, _)| k.0.resi as i32).collect::<Vec<i32>>(),
-        "from_insertion" => res.iter().map(|(k, _)| k.0.insertion.to_owned()).collect::<Vec<String>>(),
-        "from_altloc" => res.iter().map(|(k, _)| k.0.altloc.to_owned()).collect::<Vec<String>>(),
-        "to_chain" => res.iter().map(|(k, _)| k.1.chain.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.iter().map(|(k, _)| k.1.resi as i32).collect::<Vec<i32>>(),
-        "to_insertion" => res.iter().map(|(k, _)| k.1.insertion.to_owned()).collect::<Vec<String>>(),
-        "to_altloc" => res.iter().map(|(k, _)| k.1.altloc.to_owned()).collect::<Vec<String>>(),
-        "sc_centroid_dist" => res.iter().map(|(_, v)| v.0 as f32).collect::<Vec<f32>>(),
-        "sc_dihedral" => res.iter().map(|(_, v)| v.1 as f32).collect::<Vec<f32>>(),
-        "sc_centroid_angle" => res.iter().map(|(_, v)| v.2 as f32).collect::<Vec<f32>>(),
+        "model" => res.keys().map(|k| k.0.model as u32).collect::<Vec<u32>>(),
+        "from_chain" => res.keys().map(|k| k.0.chain.to_owned()).collect::<Vec<String>>(),
+        "from_resi" => res.keys().map(|k| k.0.resi as i32).collect::<Vec<i32>>(),
+        "from_insertion" => res.keys().map(|k| k.0.insertion.to_owned()).collect::<Vec<String>>(),
+        "from_altloc" => res.keys().map(|k| k.0.altloc.to_owned()).collect::<Vec<String>>(),
+        "to_chain" => res.keys().map(|k| k.1.chain.to_owned()).collect::<Vec<String>>(),
+        "to_resi" => res.keys().map(|k| k.1.resi as i32).collect::<Vec<i32>>(),
+        "to_insertion" => res.keys().map(|k| k.1.insertion.to_owned()).collect::<Vec<String>>(),
+        "to_altloc" => res.keys().map(|k| k.1.altloc.to_owned()).collect::<Vec<String>>(),
+        "sc_centroid_dist" => res.values().map(|v| v.0 as f32).collect::<Vec<f32>>(),
+        "sc_dihedral" => res.values().map(|v| v.1 as f32).collect::<Vec<f32>>(),
+        "sc_centroid_angle" => res.values().map(|v| v.2 as f32).collect::<Vec<f32>>(),
     )
     .unwrap()
 }

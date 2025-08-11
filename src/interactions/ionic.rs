@@ -12,11 +12,11 @@ pub fn find_ionic_bond(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
 ) -> Option<Interaction> {
-    if let Some((pos, neg)) = is_ionic_bond_pair(entity1, entity2) {
-        if pos.atom().distance(neg.atom()) <= IONIC_BOND_DIST {
-            // Polar interactions are more relaxed as only distance is checked
-            return Some(Interaction::IonicBond);
-        }
+    if let Some((pos, neg)) = is_ionic_bond_pair(entity1, entity2)
+        && pos.atom().distance(neg.atom()) <= IONIC_BOND_DIST
+    {
+        // Polar interactions are more relaxed as only distance is checked
+        return Some(Interaction::IonicBond);
     }
     None
 }
@@ -26,10 +26,10 @@ pub fn find_ionic_repulsion(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
 ) -> Option<Interaction> {
-    if let Some((hier1, hier2)) = is_same_charge_pair(entity1, entity2) {
-        if hier1.atom().distance(hier2.atom()) <= IONIC_BOND_DIST {
-            return Some(Interaction::IonicRepulsion);
-        }
+    if let Some((hier1, hier2)) = is_same_charge_pair(entity1, entity2)
+        && hier1.atom().distance(hier2.atom()) <= IONIC_BOND_DIST
+    {
+        return Some(Interaction::IonicRepulsion);
     }
     None
 }

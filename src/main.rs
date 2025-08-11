@@ -46,8 +46,10 @@ fn main() {
 }
 
 fn config_polars_output() {
-    std::env::set_var("POLARS_FMT_TABLE_HIDE_DATAFRAME_SHAPE_INFORMATION", "1");
-    std::env::set_var("POLARS_FMT_TABLE_HIDE_COLUMN_DATA_TYPES", "1");
-    std::env::set_var("POLARS_FMT_TABLE_ROUNDED_CORNERS", "1");
-    std::env::set_var("POLARS_FMT_MAX_COLS", "14");
+    unsafe {
+        std::env::set_var("POLARS_FMT_TABLE_HIDE_DATAFRAME_SHAPE_INFORMATION", "1");
+        std::env::set_var("POLARS_FMT_TABLE_HIDE_COLUMN_DATA_TYPES", "1");
+        std::env::set_var("POLARS_FMT_TABLE_ROUNDED_CORNERS", "1");
+        std::env::set_var("POLARS_FMT_MAX_COLS", "14");
+    }
 }

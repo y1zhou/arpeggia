@@ -1,11 +1,11 @@
 use crate::interactions::InteractingEntity;
 use crate::residues::ResidueExt;
-use crate::utils::{load_model, write_df_to_file, DataFrameFileType};
+use crate::utils::{DataFrameFileType, load_model, write_df_to_file};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
-use rust_sasa::calculate_sasa_internal;
 use rust_sasa::Atom as SASAAtom;
+use rust_sasa::calculate_sasa_internal;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
 
@@ -71,7 +71,9 @@ pub(crate) fn run(args: &Args) {
 
     let mut df_sasa = get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num);
     if df_sasa.is_empty() {
-        error!("No atoms found in the input file. Please check the provided arguments, especially the model number.");
+        error!(
+            "No atoms found in the input file. Please check the provided arguments, especially the model number."
+        );
         return;
     }
 
@@ -139,7 +141,7 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
             parent_id: None,
         })
         .collect::<Vec<_>>();
-    let atom_sasa = calculate_sasa_internal(&atoms, Some(probe_radius), Some(n_points));
+    let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, true);
 
     // Create a DataFrame with the results
     let atom_annotations = pdb

@@ -1,7 +1,7 @@
 use super::{
-    find_cation_pi, find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond,
-    find_ionic_repulsion, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond, InteractingEntity,
-    Interaction, ResultEntry,
+    InteractingEntity, Interaction, ResultEntry, find_cation_pi, find_hydrogen_bond,
+    find_hydrophobic_contact, find_ionic_bond, find_ionic_repulsion, find_pi_pi, find_vdw_contact,
+    find_weak_hydrogen_bond,
 };
 use crate::{
     residues::{Plane, ResidueExt, ResidueId},
@@ -137,9 +137,9 @@ impl<'a> InteractionComplex<'a> {
     }
 
     pub(crate) fn collect_sc_stats(
-        &self,
+        &'_ self,
         contacts: &'a [ResultEntry],
-    ) -> HashMap<(ResidueId, ResidueId), (f64, f64, f64)> {
+    ) -> HashMap<(ResidueId<'_>, ResidueId<'_>), (f64, f64, f64)> {
         contacts
             .par_iter()
             .filter_map(|contact| {
@@ -409,7 +409,7 @@ impl Interactions for InteractionComplex<'_> {
 /// Find the absolute index of a residue in each chain.
 ///
 /// Returns a mapping from residue to index.
-fn build_residue_index(model: &PDB) -> HashMap<ResidueId, usize> {
+fn build_residue_index(model: &'_ PDB) -> HashMap<ResidueId<'_>, usize> {
     model
         .models()
         .flat_map(|m| {
@@ -440,7 +440,7 @@ fn build_residue_index(model: &PDB) -> HashMap<ResidueId, usize> {
         .collect::<HashMap<ResidueId, usize>>()
 }
 
-fn build_ring_positions(model: &PDB) -> RingPositionResult {
+fn build_ring_positions(model: &'_ PDB) -> RingPositionResult<'_> {
     let ring_res = HashSet::from(["HIS", "PHE", "TYR", "TRP"]);
     let mut ring_positions = HashMap::new();
     let mut errors = Vec::new();
