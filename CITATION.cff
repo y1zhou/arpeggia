@@ -1,0 +1,20 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  Arpeggia: calculation of interatomic interactions in
+  molecular structures
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Yi
+    family-names: Zhou
+    orcid: 'https://orcid.org/0000-0003-0969-3993'
+repository-code: 'https://github.com/y1zhou/arpeggia'
+license: GPL-3.0
+commit: 4908b8ff4660b42f52eec255969ab51b0b08e0ae
+version: v0.4.2
+date-released: '2025-03-18'
