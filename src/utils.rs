@@ -66,7 +66,7 @@ pub fn parse_groups(
 }
 
 /// Write a DataFrame to a CSV file
-pub(crate) fn write_df_to_file(df: &mut DataFrame, file_path: &Path, file_type: DataFrameFileType) {
+pub fn write_df_to_file(df: &mut DataFrame, file_path: &Path, file_type: DataFrameFileType) {
     let file_suffix = file_type.to_string();
     let mut file = std::fs::File::create(file_path.with_extension(file_suffix)).unwrap();
     match file_type {
