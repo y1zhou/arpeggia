@@ -25,7 +25,7 @@ Example:
     ...     print(f"Chain {chain_id}: {seq}")
 """
 
-from .arpeggia import contacts, sasa, sequences
+from arpeggia.arpeggia import contacts, sasa, sequences
 
 __version__ = "0.4.3"
 __all__ = ["contacts", "sasa", "sequences"]

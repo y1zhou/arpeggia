@@ -1,6 +1,5 @@
 """Type stubs for arpeggia Rust module."""
 
-from typing import Dict
 import polars as pl
 
 def contacts(
@@ -50,7 +49,7 @@ def sasa(
     """
     ...
 
-def sequences(input_file: str) -> Dict[str, str]:
+def sequences(input_file: str) -> dict[str, str]:
     """
     Load a PDB or mmCIF file and extract sequences for all chains.
 

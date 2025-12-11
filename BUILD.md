@@ -5,7 +5,7 @@ This document provides detailed instructions for building arpeggia as both a Rus
 ## Prerequisites
 
 - Rust toolchain (1.91+)
-- Python 3.8+ (for Python bindings)
+- Python 3.10+ (for Python bindings)
 - Python development headers (for Python bindings)
 
 ### Installing Python Development Headers
@@ -123,7 +123,7 @@ print(contacts.head())
 **Solution:** Make sure Python 3 is in your PATH:
 ```bash
 which python3  # Should show Python location
-python3 --version  # Should show Python 3.8+
+python3 --version  # Should show Python 3.10+
 ```
 
 ## Version Compatibility
@@ -131,10 +131,10 @@ python3 --version  # Should show Python 3.8+
 | Component | Version | Notes |
 |-----------|---------|-------|
 | Rust | 1.91+ | Minimum required version |
-| Python | 3.8+ | For Python bindings |
-| Polars | 0.48.0 | Pinned for pyo3-polars compatibility |
-| PyO3 | 0.24 | Pinned for pyo3-polars compatibility |
-| pyo3-polars | 0.21 | Matches polars 0.48 |
+| Python | 3.10+ | For Python bindings |
+| Polars | 0.52.0 | Latest stable version |
+| PyO3 | 0.26 | Latest stable version |
+| pyo3-polars | 0.25 | Matches polars 0.52 |
 
 ## Continuous Integration
 
