@@ -1,4 +1,4 @@
-use crate::utils::load_model;
+use arpeggia::load_model;
 use clap::Parser;
 use std::path::{Path, PathBuf};
 

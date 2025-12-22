@@ -20,7 +20,6 @@ pub use interactions::{InteractingEntity, Interaction, Interactions, ResultEntry
 pub use residues::{Plane, ResidueExt, ResidueId};
 pub use utils::{load_model, parse_groups, write_df_to_file, DataFrameFileType};
 
-use interactions::Interactions as _;
 use pdbtbx::*;
 use polars::prelude::*;
 use std::collections::HashMap;

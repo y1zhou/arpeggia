@@ -1,4 +1,4 @@
-use crate::utils::{DataFrameFileType, load_model, write_df_to_file};
+use arpeggia::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
