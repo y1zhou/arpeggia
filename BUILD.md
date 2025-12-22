@@ -132,9 +132,11 @@ python3 --version  # Should show Python 3.10+
 |-----------|---------|-------|
 | Rust | 1.91+ | Minimum required version |
 | Python | 3.10+ | For Python bindings |
-| Polars | 0.52.0 | Latest stable version |
-| PyO3 | 0.26 | Latest stable version |
-| pyo3-polars | 0.25 | Matches polars 0.52 |
+| Polars | 0.48.0 | Stable version (0.52+ has build issues with pyo3) |
+| PyO3 | 0.24 | Compatible with pyo3-polars 0.21 |
+| pyo3-polars | 0.21 | Matches polars 0.48 |
+
+**Note:** Polars 0.52.0 has known compilation issues when building with Python features due to the `python` feature flag in polars conflicting with pyo3. We use polars 0.48.0 with `default-features = false` to avoid these conflicts.
 
 ## Continuous Integration
 
