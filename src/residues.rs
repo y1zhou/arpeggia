@@ -22,7 +22,9 @@ pub struct ResidueId<'a> {
 /// The struct for a plane in 3D space
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Plane {
+    /// The center of the plane
     pub center: na::Vector3<f64>,
+    /// The normal vector of the plane
     pub normal: na::Vector3<f64>,
 }
 
@@ -32,6 +34,7 @@ impl Plane {
         (point - self.center).norm()
     }
 
+    /// Calculate the distance from a point (tuple) to the plane center
     pub fn point_dist(&self, point: &(f64, f64, f64)) -> f64 {
         let atom_point = na::Vector3::new(point.0, point.1, point.2);
         self.point_vec_dist(&atom_point)
@@ -50,6 +53,8 @@ impl Plane {
         rad.to_degrees()
     }
 
+    /// Calculate the angle between the plane normal and the vector pointing from
+    /// the plane center to the point (tuple).
     #[allow(dead_code)]
     pub fn point_angle(&self, point: &(f64, f64, f64)) -> f64 {
         let atom_point = na::Vector3::new(point.0, point.1, point.2);
@@ -70,6 +75,7 @@ impl Plane {
 }
 
 impl<'a> ResidueId<'a> {
+    /// Create ID that uniquely identifies a residue
     pub fn new(
         model: usize,
         chain: &'a str,
@@ -103,6 +109,7 @@ impl<'a> ResidueId<'a> {
     }
 }
 
+/// Trait for residue extensions
 pub trait ResidueExt {
     /// The residue one-letter code, or `None` if it's not an amino acid.
     fn resn(&self) -> Option<&str>;

@@ -176,6 +176,7 @@ impl<'a> InteractionComplex<'a> {
     }
 }
 
+/// Trait for calculating PPIs.
 pub trait Interactions {
     /// Get all atomic interactions between the ligand and receptor.
     fn get_atomic_contacts(&self) -> Vec<ResultEntry>;

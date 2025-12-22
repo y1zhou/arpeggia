@@ -91,11 +91,16 @@ pub fn write_df_to_file(df: &mut DataFrame, file_path: &Path, file_type: DataFra
     }
 }
 
+/// File format for writing DataFrames.
 #[derive(clap::ValueEnum, Clone, Debug, Copy)]
 pub enum DataFrameFileType {
+    /// Comma-separated values
     Csv,
+    /// Parquet columnar storage
     Parquet,
+    /// Standard JSON
     Json,
+    /// Newline-delimited JSON
     NDJson,
 }
 
