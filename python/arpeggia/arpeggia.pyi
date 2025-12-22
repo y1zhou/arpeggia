@@ -8,8 +8,7 @@ def contacts(
     vdw_comp: float = 0.1,
     dist_cutoff: float = 6.5,
 ) -> pl.DataFrame:
-    """
-    Load a PDB or mmCIF file and calculate atomic and ring contacts.
+    """Load a PDB or mmCIF file and calculate atomic and ring contacts.
 
     Args:
         input_file: Path to the PDB or mmCIF file
@@ -33,8 +32,7 @@ def sasa(
     n_points: int = 100,
     model_num: int = 0,
 ) -> pl.DataFrame:
-    """
-    Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) for each atom.
+    """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) for each atom.
 
     Args:
         input_file: Path to the PDB or mmCIF file
