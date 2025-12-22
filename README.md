@@ -39,7 +39,7 @@ Or install from source using maturin:
 git clone https://github.com/y1zhou/arpeggia.git
 cd arpeggia
 pip install maturin
-maturin develop --release --features python
+maturin develop -v --release --features python
 ```
 
 ### Rust Binary
@@ -81,7 +81,7 @@ sasa_df = arpeggia.sasa(
 print(f"Calculated SASA for {len(sasa_df)} atoms")
 
 # Extract protein sequences
-sequences = arpeggia.sequences("structure.pdb")
+sequences = arpeggia.pdb2seq("structure.pdb")
 for chain_id, seq in sequences.items():
     print(f"Chain {chain_id}: {seq}")
 ```
@@ -136,7 +136,7 @@ To build the Python package in development mode:
 
 ```bash
 pip install maturin polars
-maturin develop --release --features python
+maturin develop -v --release --features python
 python python/test_arpeggia.py
 ```
 

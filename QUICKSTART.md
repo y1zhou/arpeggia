@@ -11,7 +11,7 @@ cd arpeggia
 
 # Install the Python package
 pip install maturin polars
-maturin develop --release --features python
+maturin develop -v --release --features python
 ```
 
 ### Basic Usage
@@ -41,7 +41,7 @@ sasa_df = arpeggia.sasa(
 print(f"Calculated SASA for {len(sasa_df)} atoms")
 
 # Extract sequences
-sequences = arpeggia.sequences("test-data/1ubq.pdb")
+sequences = arpeggia.pdb2seq("test-data/1ubq.pdb")
 for chain_id, seq in sequences.items():
     print(f"Chain {chain_id}: {seq[:50]}...")  # First 50 residues
 ```

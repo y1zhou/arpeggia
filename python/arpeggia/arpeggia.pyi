@@ -49,9 +49,8 @@ def sasa(
     """
     ...
 
-def sequences(input_file: str) -> dict[str, str]:
-    """
-    Load a PDB or mmCIF file and extract sequences for all chains.
+def pdb2seq(input_file: str) -> dict[str, str]:
+    """Load a PDB or mmCIF file and extract sequences for all chains.
 
     Args:
         input_file: Path to the PDB or mmCIF file

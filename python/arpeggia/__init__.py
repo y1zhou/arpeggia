@@ -20,12 +20,12 @@ Example:
     >>> print(f"Calculated SASA for {len(sasa_df)} atoms")
     >>>
     >>> # Extract sequences
-    >>> sequences = arpeggia.sequences("structure.pdb")
+    >>> sequences = arpeggia.pdb2seq("structure.pdb")
     >>> for chain_id, seq in sequences.items():
     ...     print(f"Chain {chain_id}: {seq}")
 """
 
-from arpeggia.arpeggia import contacts, sasa, sequences
+from arpeggia.arpeggia import contacts, pdb2seq, sasa
 
-__version__ = "0.4.3"
-__all__ = ["contacts", "sasa", "sequences"]
+__version__ = "0.5.0"
+__all__ = ["contacts", "sasa", "pdb2seq"]

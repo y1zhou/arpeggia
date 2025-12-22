@@ -93,7 +93,7 @@ fn sasa(
 ///     >>> for chain_id, seq in sequences.items():
 ///     ...     print(f"Chain {chain_id}: {seq}")
 #[pyfunction]
-fn sequences(input_file: String) -> PyResult<std::collections::HashMap<String, String>> {
+fn pdb2seq(input_file: String) -> PyResult<std::collections::HashMap<String, String>> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
@@ -111,6 +111,6 @@ fn sequences(input_file: String) -> PyResult<std::collections::HashMap<String, S
 fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(contacts, m)?)?;
     m.add_function(wrap_pyfunction!(sasa, m)?)?;
-    m.add_function(wrap_pyfunction!(sequences, m)?)?;
+    m.add_function(wrap_pyfunction!(pdb2seq, m)?)?;
     Ok(())
 }
