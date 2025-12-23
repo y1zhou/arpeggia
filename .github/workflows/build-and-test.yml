@@ -8,7 +8,7 @@ on:
       - Cargo.toml
       - python/**
       - pyproject.toml
-      - .github/workflows/rust.yml
+      - .github/workflows/build-and-test.yml
   pull_request:
     branches: ["master"]
     paths:
@@ -16,7 +16,7 @@ on:
       - Cargo.toml
       - python/**
       - pyproject.toml
-      - .github/workflows/rust.yml
+      - .github/workflows/build-and-test.yml
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,38 +27,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: Build Rust library
-        run: cargo build --verbose
+        run: cargo build
       - name: Run Rust tests
         run: cargo test --verbose
 
   build-python:
     name: Build and test Python package
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python 3.14
-        uses: actions/setup-python@v5
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          python-version: "3.14"
+          toolchain: stable
+          override: true
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Build Python package
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --features python --interpreter ${{ matrix.python-version }}
-          rust-toolchain: stable
-
-      - name: Install built wheel
-        run: pip install target/wheels/*.whl
-
-      - name: Install test dependencies
-        run: pip install pytest polars
+        run: |
+          uv sync --all-extras
+          uv pip install maturin pip
+          uv run maturin develop -v --release --feature python
 
       - name: Run Python tests
-        run: pytest python/tests/ -v
+        run: uv run --no-sync pytest python/tests/ -v
