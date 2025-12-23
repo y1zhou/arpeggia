@@ -18,7 +18,7 @@ mod utils;
 // Re-export key public types
 pub use interactions::{InteractingEntity, Interaction, Interactions, ResultEntry};
 pub use residues::{Plane, ResidueExt, ResidueId};
-pub use utils::{load_model, parse_groups, write_df_to_file, DataFrameFileType};
+pub use utils::{DataFrameFileType, load_model, parse_groups, write_df_to_file};
 
 use pdbtbx::*;
 use polars::prelude::*;
@@ -156,7 +156,7 @@ pub fn get_contacts(pdb: &PDB, groups: &str, vdw_comp: f64, dist_cutoff: f64) ->
 /// ```
 pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: usize) -> DataFrame {
     use crate::residues::ResidueExt;
-    use rust_sasa::{calculate_sasa_internal, Atom as SASAAtom};
+    use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
 
     // If model_num is 0, we use the first model; otherwise use the specified model
     let model_num = if model_num == 0 {
@@ -304,5 +304,5 @@ fn sc_results_to_df(res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>) -> D
 #[cfg(feature = "python")]
 mod python;
 
-#[cfg(feature = "python")]
-pub use python::*;
+// #[cfg(feature = "python")]
+// pub use python::*;

@@ -36,23 +36,29 @@ jobs:
     name: Build and test Python package
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v6
-      - name: Set up Python ${{ matrix.python-version }}
+
+      - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install maturin
-        run: pip install maturin
+          python-version: "3.14"
+
       - name: Build Python package
-        run: maturin build --release --features python
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --features python --interpreter ${{ matrix.python-version }}
+          rust-toolchain: stable
+
       - name: Install built wheel
         run: pip install target/wheels/*.whl
+
       - name: Install test dependencies
         run: pip install pytest polars
+
       - name: Run Python tests
         run: pytest python/tests/ -v
