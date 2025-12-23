@@ -56,7 +56,7 @@ jobs:
         run: |
           uv sync --all-extras
           uv pip install maturin pip
-          uv run maturin develop -v --release --feature python
+          uv run maturin develop -v --release --features python
 
       - name: Run Python tests
         run: uv run --no-sync pytest python/tests/ -v
