@@ -23,6 +23,7 @@ jobs:
             target: x86_64
           - os: linux_aarch64
             runs-on: ubuntu-24.04-arm
+            python-architecture: arm64
             manylinux: auto
             target: aarch64
 
