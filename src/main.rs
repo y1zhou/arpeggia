@@ -1,11 +1,7 @@
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
-mod chains;
 mod cli;
-mod interactions;
-mod residues;
-mod utils;
 
 use clap::{Parser, Subcommand};
 

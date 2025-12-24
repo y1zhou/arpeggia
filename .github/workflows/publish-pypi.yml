@@ -1,0 +1,123 @@
+name: "pypi"
+
+on:
+  release:
+    types: [released]
+
+jobs:
+  # Adapted from pydantic/pydantic-core
+  build:
+    name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.manylinux) || '' }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, macos, windows]
+        target: [undefined]
+        manylinux: [auto]
+        include:
+          # manylinux for various platforms
+          - os: linux
+            manylinux: auto
+            target: i686
+          - os: linux
+            manylinux: auto
+            target: armv7
+            interpreter: 3.10 3.11 3.12 3.13 3.14 3.14t
+          - os: linux
+            manylinux: auto
+            target: ppc64le
+            interpreter: 3.10 3.11 3.12 3.13 3.14 3.14t
+          - os: linux
+            manylinux: auto
+            target: s390x
+            interpreter: 3.10 3.11 3.12 3.13 3.14 3.14t
+
+          # musllinux
+          - os: linux
+            manylinux: musllinux_1_1
+            target: x86_64
+          - os: linux
+            manylinux: musllinux_1_1
+            target: aarch64
+          - os: linux
+            manylinux: musllinux_1_1
+            target: armv7
+
+          # macos;
+          # all versions x86_64
+          - os: macos
+            target: x86_64
+            interpreter: 3.10 3.11 3.12 3.13 3.14 3.14t
+          - os: macos
+            target: aarch64
+            interpreter: 3.10 3.11 3.12 3.13 3.14 3.14t
+
+          # windows;
+          # x86_64 pypy builds are not PGO optimized
+          # i686 not supported by pypy
+          # windows 11 arm supports 3.11 and up, not PGO optimized for now
+          - os: windows
+            target: x86_64
+            interpreter: pypy3.10 pypy3.11
+          - os: windows
+            target: i686
+            python-architecture: x86
+            interpreter: 3.10 3.11 3.12 3.13 3.14 3.14t
+          - os: windows
+            target: aarch64
+            runs-on: windows-11-arm
+            interpreter: "3.11 3.12 3.13 3.14 3.14t"
+
+        exclude:
+          # was just a dummy variable to set a default value for target
+          - target: undefined
+
+    runs-on: ${{ matrix.runs-on || format('{0}-latest', (matrix.os == 'linux' && 'ubuntu') || matrix.os) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: set up python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          architecture: ${{ matrix.python-architecture || 'x64' }}
+
+      - name: build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --features python --interpreter ${{ matrix.interpreter || '3.10 3.11 3.12 3.13 3.14 3.14t' }}
+          rust-toolchain: stable
+          docker-options: -e CI
+
+      - run: ${{ (matrix.os == 'windows' && 'dir') || 'ls -lh' }} target/wheels/
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: pypi_files_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter || 'all' }}_${{ matrix.manylinux }}
+          path: target/wheels
+
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: get dist artifacts
+        uses: actions/download-artifact@v6
+        with:
+          pattern: pypi_files_*
+          merge-multiple: true
+          path: target/wheels
+
+      - name: Publish
+        run: uv publish --trusted-publishing always

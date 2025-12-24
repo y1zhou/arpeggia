@@ -1,11 +1,6 @@
-use crate::interactions::InteractingEntity;
-use crate::residues::ResidueExt;
-use crate::utils::{DataFrameFileType, load_model, write_df_to_file};
+use arpeggia::{load_model, write_df_to_file, DataFrameFileType};
 use clap::Parser;
-use pdbtbx::*;
 use polars::prelude::*;
-use rust_sasa::Atom as SASAAtom;
-use rust_sasa::calculate_sasa_internal;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
 
@@ -69,7 +64,7 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
-    let mut df_sasa = get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num);
+    let mut df_sasa = arpeggia::get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num);
     if df_sasa.is_empty() {
         error!(
             "No atoms found in the input file. Please check the provided arguments, especially the model number."
@@ -106,72 +101,4 @@ pub(crate) fn run(args: &Args) {
     info!("Results saved to {output_file_str}");
 }
 
-pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: usize) -> DataFrame {
-    // If model_num is 0, we use the first model; otherwise use the specified model
-    let model_num = if model_num == 0 {
-        pdb.models()
-            .collect::<Vec<_>>()
-            .first()
-            .map_or(0, |m| m.serial_number())
-    } else {
-        model_num
-    };
 
-    // Calculate the SASA for each atom
-    let atoms = pdb
-        .atoms_with_hierarchy()
-        .filter(|x| {
-            let resn = x.residue().resn().unwrap();
-            resn != "O" && resn != "X" && x.model().serial_number() == model_num
-        })
-        .map(|x| SASAAtom {
-            position: nalgebra::Point3::new(
-                x.atom().pos().0 as f32,
-                x.atom().pos().1 as f32,
-                x.atom().pos().2 as f32,
-            ),
-            radius: x
-                .atom()
-                .element()
-                .unwrap()
-                .atomic_radius()
-                .van_der_waals
-                .unwrap() as f32,
-            id: x.atom().serial_number(),
-            parent_id: None,
-        })
-        .collect::<Vec<_>>();
-    let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, true);
-
-    // Create a DataFrame with the results
-    let atom_annotations = pdb
-        .atoms_with_hierarchy()
-        .map(|x| InteractingEntity::from_hier(&x))
-        .collect::<Vec<InteractingEntity>>();
-    let atom_annot_df = df!(
-        "chain" => atom_annotations.iter().map(|x| x.chain.to_owned()).collect::<Vec<String>>(),
-        "resn" => atom_annotations.iter().map(|x| x.resn.to_owned()).collect::<Vec<String>>(),
-        "resi" => atom_annotations.iter().map(|x| x.resi as i32).collect::<Vec<i32>>(),
-        "insertion" => atom_annotations.iter().map(|x| x.insertion.to_owned()).collect::<Vec<String>>(),
-        "altloc" => atom_annotations.iter().map(|x| x.altloc.to_owned()).collect::<Vec<String>>(),
-        "atomn" => atom_annotations.iter().map(|x| x.atomn.to_owned()).collect::<Vec<String>>(),
-        "atomi" => atom_annotations.iter().map(|x| x.atomi as i32).collect::<Vec<i32>>(),
-    )
-    .unwrap();
-
-    df!(
-        "atomi" => atoms.iter().map(|x| x.id as i32).collect::<Vec<i32>>(),
-        "sasa" => atom_sasa
-    )
-    .unwrap()
-    .join(
-        &atom_annot_df,
-        ["atomi"],
-        ["atomi"],
-        JoinArgs::new(JoinType::Inner),
-        None,
-    )
-    .unwrap()
-    .sort(["chain", "resi", "altloc", "atomi"], Default::default())
-    .unwrap()
-}

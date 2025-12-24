@@ -8,7 +8,7 @@ pub enum Interaction {
     StericClash,
     /// Covalent bonded
     CovalentBond,
-    // CB-S-S-CB bond
+    /// CB-S-S-CB bond
     Disulfide,
     /// Within van der Waals radii
     VanDerWaalsContact,
@@ -85,6 +85,7 @@ pub struct ResultEntry {
 }
 
 impl InteractingEntity {
+    /// Create a new interacting entity
     pub fn new(
         chain: &str,
         resi: isize,

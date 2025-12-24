@@ -1,9 +1,6 @@
-use crate::chains::ChainExt;
+use arpeggia::load_model;
 use clap::Parser;
-use std::path::PathBuf;
-
-use crate::utils::load_model;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
@@ -20,9 +17,11 @@ pub(crate) fn run(args: &Args) {
 
         // Load file and print sequences
         let (pdb, _) = load_model(&input_file);
+        let sequences = arpeggia::get_sequences(&pdb);
+        
         println!("File: {}", input_file);
-        for chain in pdb.chains() {
-            println!("{}: {}", chain.id(), chain.pdb_seq().join(""));
+        for (chain_id, seq) in sequences {
+            println!("{}: {}", chain_id, seq);
         }
         println!();
     }

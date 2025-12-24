@@ -1,0 +1,60 @@
+name: Build and test
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - src/**
+      - Cargo.toml
+      - python/**
+      - pyproject.toml
+      - .github/workflows/build-and-test.yml
+  pull_request:
+    branches: ["master"]
+    paths:
+      - src/**
+      - Cargo.toml
+      - python/**
+      - pyproject.toml
+      - .github/workflows/build-and-test.yml
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Build Rust library
+        run: cargo build
+      - name: Run Rust tests
+        run: cargo test --verbose
+
+  build-python:
+    name: Python package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # - name: Set up Rust
+      #   uses: actions-rust-lang/setup-rust-toolchain@v1
+      #   with:
+      #     toolchain: stable
+      #     override: true
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Build Python package
+        run: |
+          uv sync -v --all-extras
+
+      - name: Run Python tests
+        run: uv run --no-sync pytest python/tests/ -v
