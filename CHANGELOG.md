@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-24
+
+### Added
+
+- PyO3 bindings for interaction detection, SASA calculation, and sequence extraction
+- New `arpeggia` Python package for easy installation and usage
+- GitHub Actions workflow for building and testing the Python package
+
+
 ## [0.4.2] - 2025-03-17
 
 ### Added
@@ -113,7 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.0
 [0.4.2]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.2
 [0.4.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.1
 [0.4.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.0
