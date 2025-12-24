@@ -3,6 +3,7 @@ name: "pypi"
 on:
   release:
     types: [released]
+  workflow_dispatch: # manual trigger
 
 jobs:
   # Adapted from pydantic/pydantic-core
@@ -75,6 +76,7 @@ jobs:
           path: target/wheels
 
   publish:
+    name: publish to PyPI
     needs: [build]
     runs-on: ubuntu-latest
     environment:
