@@ -1,4 +1,4 @@
-name: Rust
+name: Build and test
 
 on:
   push:
@@ -23,7 +23,7 @@ env:
 
 jobs:
   build-rust:
-    name: Build and test Rust
+    name: Rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -38,25 +38,23 @@ jobs:
         run: cargo test --verbose
 
   build-python:
-    name: Build and test Python package
+    name: Python package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      # - name: Set up Rust
+      #   uses: actions-rust-lang/setup-rust-toolchain@v1
+      #   with:
+      #     toolchain: stable
+      #     override: true
 
       - name: install uv
         uses: astral-sh/setup-uv@v7
 
       - name: Build Python package
         run: |
-          uv sync --all-extras
-          uv pip install maturin pip
-          uv run maturin develop -v --release --features python
+          uv sync -v --all-extras
 
       - name: Run Python tests
         run: uv run --no-sync pytest python/tests/ -v
