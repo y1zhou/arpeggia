@@ -8,72 +8,67 @@ on:
 jobs:
   # Adapted from pydantic/pydantic-core
   build:
-    name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.manylinux) || '' }})
+    name: build on ${{ matrix.platform.os }} / ${{ matrix.interpreter }}
     strategy:
       fail-fast: false
       matrix:
-        os: [linux, macos, windows]
-        target: [undefined]
-        manylinux: [auto]
-        interpreter: [3.10 3.11 3.12 3.13 3.14 3.14t]
-        include:
-          # manylinux for various platforms
-          - os: linux
-            manylinux: auto
-            target: x86_64
-          - os: linux_aarch64
-            runs-on: ubuntu-24.04-arm
-            python-architecture: arm64
-            manylinux: auto
-            target: aarch64
-
-          # musllinux
-          - os: linux
-            manylinux: musllinux_1_1
-            target: x86_64
-          - os: linux
-            manylinux: musllinux_1_1
-            target: aarch64
-
-          # macos x86_64 is excluded because it's too slow
-          - os: macos
-            target: aarch64
-
-          # windows aarch64 requires an interpreter with PyO3's `generate-import-lib` feature
-          - os: windows
-            target: x86_64
+        platform:
+          [
+            { os: linux, runs-on: ubuntu-latest },
+            { os: linux_aarch64, runs-on: ubuntu-24.04-arm },
+            { os: windows, runs-on: windows-latest },
+            { os: macos, runs-on: macos-latest },
+          ]
+        interpreter: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        target: [x86_64, aarch64]
 
         exclude:
-          # was just a dummy variable to set a default value for target
-          - target: undefined
+          - platform:
+              os: linux_aarch64
+            target: x86_64
+          - platform:
+              os: linux
+            target: aarch64
+          - platform:
+              os: windows
+            target: aarch64
+          - platform:
+              os: macos
+            target: x86_64 # too slow on GitHub runners
 
-    runs-on: ${{ matrix.runs-on || format('{0}-latest', (matrix.os == 'linux' && 'ubuntu') || matrix.os) }}
+    runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - uses: actions/checkout@v5
 
-      - name: set up python
-        uses: actions/setup-python@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.14"
-          architecture: ${{ matrix.python-architecture || 'x64' }}
+          python-version: ${{ matrix.interpreter }}
 
-      - name: build wheels
+      - name: Install Rust stable
+        id: rust-toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          components: llvm-tools
+          toolchain: stable
+
+      - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
+          manylinux: auto
           target: ${{ matrix.target }}
-          manylinux: ${{ matrix.manylinux }}
           args: >
             --release
             --features python
-            --interpreter ${{ matrix.interpreter || '3.10 3.11 3.12 3.13 3.14 3.14t' }}
-          rust-toolchain: stable
+            --interpreter ${{ matrix.interpreter }}
+          rust-toolchain: ${{ steps.rust-toolchain.outputs.name }}
           docker-options: -e CI
 
       - run: ${{ (matrix.os == 'windows' && 'dir') || 'ls -lh' }} target/wheels/
 
       - uses: actions/upload-artifact@v5
         with:
-          name: pypi_files_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter || 'all' }}_${{ matrix.manylinux }}
+          name: pypi_files_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter }}
           path: target/wheels
 
   publish:
