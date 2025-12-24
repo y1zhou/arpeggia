@@ -33,6 +33,9 @@ jobs:
               os: windows
             target: aarch64
           - platform:
+              os: windows
+            interpreter: "3.14t" # not supported
+          - platform:
               os: macos
             target: x86_64 # too slow on GitHub runners
 
@@ -44,6 +47,8 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.interpreter }}
+          ignore-nothing-to-cache: true
+          ignore-empty-workdir: true
 
       - name: Install Rust stable
         id: rust-toolchain
@@ -64,11 +69,11 @@ jobs:
           rust-toolchain: ${{ steps.rust-toolchain.outputs.name }}
           docker-options: -e CI
 
-      - run: ${{ (matrix.os == 'windows' && 'dir') || 'ls -lh' }} target/wheels/
+      - run: ${{ (matrix.platform.os == 'windows' && 'dir') || 'ls -lh' }} target/wheels/
 
       - uses: actions/upload-artifact@v5
         with:
-          name: pypi_files_${{ matrix.os }}_${{ matrix.target }}_${{ matrix.interpreter }}
+          name: pypi_files_${{ matrix.platform.os }}_${{ matrix.target }}_${{ matrix.interpreter }}
           path: target/wheels
 
   publish:
