@@ -64,17 +64,18 @@ jobs:
           target: ${{ matrix.target }}
           args: >
             --release
+            --out dist
             --features python
             --interpreter ${{ matrix.interpreter }}
           rust-toolchain: ${{ steps.rust-toolchain.outputs.name }}
           docker-options: -e CI
 
-      - run: ${{ (matrix.platform.os == 'windows' && 'dir') || 'ls -lh' }} target/wheels/
+      - run: ${{ (matrix.platform.os == 'windows' && 'dir') || 'ls -lh' }} dist
 
       - uses: actions/upload-artifact@v5
         with:
           name: pypi_files_${{ matrix.platform.os }}_${{ matrix.target }}_${{ matrix.interpreter }}
-          path: target/wheels
+          path: dist
 
   publish:
     name: publish to PyPI
@@ -96,7 +97,7 @@ jobs:
         with:
           pattern: pypi_files_*
           merge-multiple: true
-          path: target/wheels
+          path: dist
 
       - name: Publish
         run: uv publish --trusted-publishing always
