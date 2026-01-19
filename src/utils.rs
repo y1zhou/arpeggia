@@ -174,4 +174,23 @@ mod tests {
         let chains: HashSet<String> = HashSet::from(["A", "B", "C"].map(|c| c.to_string()));
         parse_groups(&chains, "A,B,C/");
     }
+
+    #[test]
+    fn test_remove_atoms_zero_occupancy() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/1ubq.pdb");
+
+        let (mut pdb, _) = load_model(&path);
+        let initial_atom_count = pdb.atom_count();
+
+        // Remove atoms with zero occupancy (1ubq.pdb has all atoms with occupancy 1.0)
+        pdb.remove_atoms_by(|atom| atom.occupancy() == 0.0);
+        let final_atom_count = pdb.atom_count();
+
+        // No atoms should be removed since all have occupancy 1.0
+        assert_eq!(
+            initial_atom_count, final_atom_count,
+            "Atom count should remain the same since all atoms have occupancy 1.0"
+        );
+    }
 }
