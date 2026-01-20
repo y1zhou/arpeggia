@@ -137,6 +137,7 @@ pub fn get_contacts(pdb: &PDB, groups: &str, vdw_comp: f64, dist_cutoff: f64) ->
 /// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
+/// * `num_threads` - Number of threads for parallel processing (1 for single-threaded, -1 for all cores)
 ///
 /// # Returns
 ///
@@ -151,10 +152,16 @@ pub fn get_contacts(pdb: &PDB, groups: &str, vdw_comp: f64, dist_cutoff: f64) ->
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0);
+/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
 /// println!("Calculated SASA for {} atoms", sasa_df.height());
 /// ```
-pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: usize) -> DataFrame {
+pub fn get_atom_sasa(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: isize,
+) -> DataFrame {
     use crate::residues::ResidueExt;
     use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
 
@@ -192,7 +199,7 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
             parent_id: None,
         })
         .collect::<Vec<_>>();
-    let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, -1);
+    let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, num_threads);
 
     // Create a DataFrame with the results
     let atom_annotations = pdb
@@ -231,14 +238,13 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
 ///
 /// Uses the rust-sasa SASAOptions API to compute SASA at the residue level.
 ///
-/// Note: This function processes the entire PDB structure and does not support
-/// selecting a specific model number. For multi-model files, the first model is used.
-///
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
 /// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
 /// * `n_points` - Number of points for surface calculation (typically 100)
+/// * `model_num` - Model number to analyze (0 for first model)
+/// * `num_threads` - Number of threads for parallel processing (1 for single-threaded, -1 for all cores)
 ///
 /// # Returns
 ///
@@ -252,20 +258,41 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sasa_df = get_residue_sasa(&pdb, 1.4, 100);
+/// let sasa_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
 /// println!("Calculated SASA for {} residues", sasa_df.height());
 /// ```
-pub fn get_residue_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {
+pub fn get_residue_sasa(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: isize,
+) -> DataFrame {
     use rust_sasa::{ResidueLevel, SASAOptions};
+
+    // Clone PDB and filter to specified model
+    let mut pdb_filtered = pdb.clone();
+    if pdb_filtered.model_count() > 1 {
+        // Find the model index (0-based) for the given model_num
+        let model_idx = if model_num == 0 {
+            0 // Use first model
+        } else {
+            pdb_filtered
+                .models()
+                .position(|m| m.serial_number() == model_num)
+                .unwrap_or(0)
+        };
+        pdb_filtered.remove_models_except(&[model_idx]);
+    }
 
     let options = SASAOptions::<ResidueLevel>::new()
         .with_probe_radius(probe_radius)
         .with_n_points(n_points)
-        .with_threads(-1)
+        .with_threads(num_threads)
         .with_allow_vdw_fallback(true);
 
     let result = options
-        .process(pdb)
+        .process(&pdb_filtered)
         .expect("Failed to calculate residue-level SASA");
 
     df!(
@@ -284,14 +311,13 @@ pub fn get_residue_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFr
 ///
 /// Uses the rust-sasa SASAOptions API to compute SASA at the chain level.
 ///
-/// Note: This function processes the entire PDB structure and does not support
-/// selecting a specific model number. For multi-model files, the first model is used.
-///
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
 /// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
 /// * `n_points` - Number of points for surface calculation (typically 100)
+/// * `model_num` - Model number to analyze (0 for first model)
+/// * `num_threads` - Number of threads for parallel processing (1 for single-threaded, -1 for all cores)
 ///
 /// # Returns
 ///
@@ -305,20 +331,41 @@ pub fn get_residue_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFr
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sasa_df = get_chain_sasa(&pdb, 1.4, 100);
+/// let sasa_df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
 /// println!("Calculated SASA for {} chains", sasa_df.height());
 /// ```
-pub fn get_chain_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {
+pub fn get_chain_sasa(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: isize,
+) -> DataFrame {
     use rust_sasa::{ChainLevel, SASAOptions};
+
+    // Clone PDB and filter to specified model
+    let mut pdb_filtered = pdb.clone();
+    if pdb_filtered.model_count() > 1 {
+        // Find the model index (0-based) for the given model_num
+        let model_idx = if model_num == 0 {
+            0 // Use first model
+        } else {
+            pdb_filtered
+                .models()
+                .position(|m| m.serial_number() == model_num)
+                .unwrap_or(0)
+        };
+        pdb_filtered.remove_models_except(&[model_idx]);
+    }
 
     let options = SASAOptions::<ChainLevel>::new()
         .with_probe_radius(probe_radius)
         .with_n_points(n_points)
-        .with_threads(-1)
+        .with_threads(num_threads)
         .with_allow_vdw_fallback(true);
 
     let result = options
-        .process(pdb)
+        .process(&pdb_filtered)
         .expect("Failed to calculate chain-level SASA");
 
     df!(
@@ -425,7 +472,7 @@ mod sasa_tests {
     #[test]
     fn test_get_atom_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
 
         // Check that we get results
         assert!(!df.is_empty(), "SASA DataFrame should not be empty");
@@ -443,7 +490,7 @@ mod sasa_tests {
     #[test]
     fn test_get_atom_sasa_values_reasonable() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
 
         // Get the SASA column and check values are non-negative
         let sasa_col = df.column("sasa").unwrap();
@@ -470,7 +517,7 @@ mod sasa_tests {
     #[test]
     fn test_get_residue_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_residue_sasa(&pdb, 1.4, 100);
+        let df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
 
         // Check that we get results
         assert!(!df.is_empty(), "Residue SASA DataFrame should not be empty");
@@ -487,8 +534,8 @@ mod sasa_tests {
     #[test]
     fn test_get_residue_sasa_aggregation() {
         let pdb = load_ubiquitin();
-        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0);
-        let residue_df = get_residue_sasa(&pdb, 1.4, 100);
+        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+        let residue_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
 
         // There should be fewer rows in residue-level than atom-level
         assert!(
@@ -531,7 +578,7 @@ mod sasa_tests {
     #[test]
     fn test_get_chain_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_chain_sasa(&pdb, 1.4, 100);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
 
         // Check that we get results
         assert!(!df.is_empty(), "Chain SASA DataFrame should not be empty");
@@ -545,7 +592,7 @@ mod sasa_tests {
     #[test]
     fn test_get_chain_sasa_single_chain() {
         let pdb = load_ubiquitin();
-        let df = get_chain_sasa(&pdb, 1.4, 100);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
 
         // Ubiquitin (1ubq) has a single chain A
         assert_eq!(df.height(), 1, "1ubq should have 1 chain");
@@ -559,7 +606,7 @@ mod sasa_tests {
     #[test]
     fn test_get_chain_sasa_multi_chain() {
         let pdb = load_multi_chain();
-        let df = get_chain_sasa(&pdb, 1.4, 100);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
 
         // 6bft should have multiple chains
         assert!(df.height() > 1, "6bft should have multiple chains");
@@ -584,8 +631,8 @@ mod sasa_tests {
         let pdb = load_ubiquitin();
 
         // Smaller probe radius should result in larger SASA
-        let small_probe = get_chain_sasa(&pdb, 1.0, 100);
-        let large_probe = get_chain_sasa(&pdb, 2.0, 100);
+        let small_probe = get_chain_sasa(&pdb, 1.0, 100, 0, 1);
+        let large_probe = get_chain_sasa(&pdb, 2.0, 100, 0, 1);
 
         let small_sasa: f32 = small_probe
             .column("sasa")
@@ -614,7 +661,7 @@ mod sasa_tests {
     fn test_sasa_regression_ubiquitin() {
         // Regression test to ensure SASA values remain consistent
         let pdb = load_ubiquitin();
-        let df = get_chain_sasa(&pdb, 1.4, 100);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
 
         let total_sasa: f32 = df
             .column("sasa")

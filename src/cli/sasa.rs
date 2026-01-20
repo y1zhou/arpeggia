@@ -38,7 +38,7 @@ pub(crate) struct Args {
     output: PathBuf,
 
     /// Name of the output file
-    #[arg(short, long, default_value_t = String::from("sasa"))]
+    #[arg(long, default_value_t = String::from("sasa"))]
     name: String,
 
     /// Output file type
@@ -54,7 +54,7 @@ pub(crate) struct Args {
     probe_radius: f32,
 
     /// Number of points on the sphere for sampling
-    #[arg(short = 'p', long = "num-points", default_value_t = 100)]
+    #[arg(short = 'n', long = "num-points", default_value_t = 100)]
     n_points: usize,
 
     /// Number of threads to use for parallel processing
@@ -90,27 +90,36 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
+    // Calculate thread count: convert usize to isize, where 0 means use all cores (-1)
+    let num_threads: isize = if args.num_threads == 0 {
+        -1
+    } else {
+        args.num_threads as isize
+    };
+
     // Calculate SASA based on the specified level
     let mut df_sasa = match args.level {
-        SasaLevel::Atom => {
-            arpeggia::get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num)
-        }
-        SasaLevel::Residue => {
-            if args.model_num > 0 {
-                warn!(
-                    "Model number is ignored for residue-level SASA calculation (using first model)"
-                );
-            }
-            arpeggia::get_residue_sasa(&pdb, args.probe_radius, args.n_points)
-        }
-        SasaLevel::Chain => {
-            if args.model_num > 0 {
-                warn!(
-                    "Model number is ignored for chain-level SASA calculation (using first model)"
-                );
-            }
-            arpeggia::get_chain_sasa(&pdb, args.probe_radius, args.n_points)
-        }
+        SasaLevel::Atom => arpeggia::get_atom_sasa(
+            &pdb,
+            args.probe_radius,
+            args.n_points,
+            args.model_num,
+            num_threads,
+        ),
+        SasaLevel::Residue => arpeggia::get_residue_sasa(
+            &pdb,
+            args.probe_radius,
+            args.n_points,
+            args.model_num,
+            num_threads,
+        ),
+        SasaLevel::Chain => arpeggia::get_chain_sasa(
+            &pdb,
+            args.probe_radius,
+            args.n_points,
+            args.model_num,
+            num_threads,
+        ),
     };
 
     if df_sasa.is_empty() {
