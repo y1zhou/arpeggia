@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-01-20
+
 ### Added
 
 - New `--ignore-zero-occupancy` flag for the `contacts` CLI command to filter out atoms with zero occupancy
@@ -127,7 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.1
 [0.5.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.0
 [0.4.2]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.2
 [0.4.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.1

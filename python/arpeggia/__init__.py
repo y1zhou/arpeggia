@@ -25,7 +25,9 @@ Example:
     ...     print(f"Chain {chain_id}: {seq}")
 """
 
+from importlib.metadata import version
+
 from arpeggia.arpeggia import contacts, pdb2seq, sasa
 
-__version__ = "0.5.0"
+__version__ = version("arpeggia")
 __all__ = ["contacts", "sasa", "pdb2seq"]
