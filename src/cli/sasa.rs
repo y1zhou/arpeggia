@@ -1,8 +1,30 @@
 use arpeggia::{load_model, write_df_to_file, DataFrameFileType};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
+
+/// Granularity level for SASA calculation.
+#[derive(ValueEnum, Clone, Debug, Copy, Default)]
+pub enum SasaLevel {
+    /// Calculate SASA for each individual atom
+    #[default]
+    Atom,
+    /// Aggregate SASA by residue
+    Residue,
+    /// Aggregate SASA by chain
+    Chain,
+}
+
+impl std::fmt::Display for SasaLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            SasaLevel::Atom => write!(f, "atom"),
+            SasaLevel::Residue => write!(f, "residue"),
+            SasaLevel::Chain => write!(f, "chain"),
+        }
+    }
+}
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
@@ -31,13 +53,17 @@ pub(crate) struct Args {
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
     probe_radius: f32,
 
-    /// Distance cutoff when searching for neighboring atoms
-    #[arg(short = 'n', long = "num-points", default_value_t = 100)]
+    /// Number of points on the sphere for sampling
+    #[arg(short = 'p', long = "num-points", default_value_t = 100)]
     n_points: usize,
 
     /// Number of threads to use for parallel processing
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
+
+    /// Granularity level for SASA calculation
+    #[arg(short = 'l', long = "level", default_value_t = SasaLevel::Atom)]
+    level: SasaLevel,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -64,10 +90,18 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
-    let mut df_sasa = arpeggia::get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num);
+    // Calculate SASA based on the specified level
+    let mut df_sasa = match args.level {
+        SasaLevel::Atom => {
+            arpeggia::get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num)
+        }
+        SasaLevel::Residue => arpeggia::get_residue_sasa(&pdb, args.probe_radius, args.n_points),
+        SasaLevel::Chain => arpeggia::get_chain_sasa(&pdb, args.probe_radius, args.n_points),
+    };
+
     if df_sasa.is_empty() {
         error!(
-            "No atoms found in the input file. Please check the provided arguments, especially the model number."
+            "No data found in the input file. Please check the provided arguments, especially the model number."
         );
         return;
     }
@@ -89,9 +123,15 @@ pub(crate) fn run(args: &Args) {
         .not_equal(0.0)
         .unwrap();
     let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
+    let entity_name = match args.level {
+        SasaLevel::Atom => "atoms",
+        SasaLevel::Residue => "residues",
+        SasaLevel::Chain => "chains",
+    };
     debug!(
-        "Found {} atoms with non-zero SASA\n{}",
+        "Found {} {} with non-zero SASA\n{}",
         df_sasa_nonzero.height(),
+        entity_name,
         df_sasa_nonzero
     );
 

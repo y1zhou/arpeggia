@@ -176,11 +176,11 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
             resn != "O" && resn != "X" && x.model().serial_number() == model_num
         })
         .map(|x| SASAAtom {
-            position: nalgebra::Point3::new(
+            position: [
                 x.atom().pos().0 as f32,
                 x.atom().pos().1 as f32,
                 x.atom().pos().2 as f32,
-            ),
+            ],
             radius: x
                 .atom()
                 .element()
@@ -192,7 +192,7 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
             parent_id: None,
         })
         .collect::<Vec<_>>();
-    let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, true);
+    let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, -1);
 
     // Create a DataFrame with the results
     let atom_annotations = pdb
@@ -224,6 +224,99 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
     )
     .unwrap()
     .sort(["chain", "resi", "altloc", "atomi"], Default::default())
+    .unwrap()
+}
+
+/// Calculate solvent accessible surface area (SASA) aggregated by residue.
+///
+/// Uses the rust-sasa SASAOptions API to compute SASA at the residue level.
+///
+/// # Arguments
+///
+/// * `pdb` - Reference to a PDB structure
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `n_points` - Number of points for surface calculation (typically 100)
+///
+/// # Returns
+///
+/// A Polars DataFrame with columns:
+/// - chain, resn, resi, sasa, is_polar
+///
+/// # Example
+///
+/// ```no_run
+/// use arpeggia::{load_model, get_residue_sasa};
+///
+/// let input_file = "path/to/structure.pdb".to_string();
+/// let (pdb, _errors) = load_model(&input_file);
+/// let sasa_df = get_residue_sasa(&pdb, 1.4, 100);
+/// println!("Calculated SASA for {} residues", sasa_df.height());
+/// ```
+pub fn get_residue_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {
+    use rust_sasa::{ResidueLevel, SASAOptions};
+
+    let options = SASAOptions::<ResidueLevel>::new()
+        .with_probe_radius(probe_radius)
+        .with_n_points(n_points)
+        .with_threads(-1)
+        .with_allow_vdw_fallback(true);
+
+    let result = options.process(pdb).unwrap();
+
+    df!(
+        "chain" => result.iter().map(|r| r.chain_id.clone()).collect::<Vec<String>>(),
+        "resn" => result.iter().map(|r| r.name.clone()).collect::<Vec<String>>(),
+        "resi" => result.iter().map(|r| r.serial_number as i32).collect::<Vec<i32>>(),
+        "sasa" => result.iter().map(|r| r.value).collect::<Vec<f32>>(),
+        "is_polar" => result.iter().map(|r| r.is_polar).collect::<Vec<bool>>(),
+    )
+    .unwrap()
+    .sort(["chain", "resi"], Default::default())
+    .unwrap()
+}
+
+/// Calculate solvent accessible surface area (SASA) aggregated by chain.
+///
+/// Uses the rust-sasa SASAOptions API to compute SASA at the chain level.
+///
+/// # Arguments
+///
+/// * `pdb` - Reference to a PDB structure
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `n_points` - Number of points for surface calculation (typically 100)
+///
+/// # Returns
+///
+/// A Polars DataFrame with columns:
+/// - chain, sasa
+///
+/// # Example
+///
+/// ```no_run
+/// use arpeggia::{load_model, get_chain_sasa};
+///
+/// let input_file = "path/to/structure.pdb".to_string();
+/// let (pdb, _errors) = load_model(&input_file);
+/// let sasa_df = get_chain_sasa(&pdb, 1.4, 100);
+/// println!("Calculated SASA for {} chains", sasa_df.height());
+/// ```
+pub fn get_chain_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFrame {
+    use rust_sasa::{ChainLevel, SASAOptions};
+
+    let options = SASAOptions::<ChainLevel>::new()
+        .with_probe_radius(probe_radius)
+        .with_n_points(n_points)
+        .with_threads(-1)
+        .with_allow_vdw_fallback(true);
+
+    let result = options.process(pdb).unwrap();
+
+    df!(
+        "chain" => result.iter().map(|r| r.name.clone()).collect::<Vec<String>>(),
+        "sasa" => result.iter().map(|r| r.value).collect::<Vec<f32>>(),
+    )
+    .unwrap()
+    .sort(["chain"], Default::default())
     .unwrap()
 }
 
@@ -298,6 +391,241 @@ fn sc_results_to_df(res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>) -> D
         "sc_centroid_angle" => res.values().map(|v| v.2 as f32).collect::<Vec<f32>>(),
     )
     .unwrap()
+}
+
+#[cfg(test)]
+mod sasa_tests {
+    use super::*;
+    use crate::utils::load_model;
+
+    fn load_ubiquitin() -> PDB {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/1ubq.pdb");
+        let (pdb, _) = load_model(&path);
+        pdb
+    }
+
+    fn load_multi_chain() -> PDB {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/6bft.pdb");
+        let (pdb, _) = load_model(&path);
+        pdb
+    }
+
+    #[test]
+    fn test_get_atom_sasa_returns_data() {
+        let pdb = load_ubiquitin();
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0);
+
+        // Check that we get results
+        assert!(!df.is_empty(), "SASA DataFrame should not be empty");
+
+        // Check that the expected columns exist
+        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
+        assert!(columns.contains(&"atomi".to_string()), "Should have 'atomi' column");
+        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
+        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
+        assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
+        assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
+        assert!(columns.contains(&"atomn".to_string()), "Should have 'atomn' column");
+    }
+
+    #[test]
+    fn test_get_atom_sasa_values_reasonable() {
+        let pdb = load_ubiquitin();
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0);
+
+        // Get the SASA column and check values are non-negative
+        let sasa_col = df.column("sasa").unwrap();
+        let sasa_values: Vec<f32> = sasa_col
+            .f32()
+            .unwrap()
+            .into_iter()
+            .filter_map(|v| v)
+            .collect();
+
+        assert!(
+            sasa_values.iter().all(|&v| v >= 0.0),
+            "All SASA values should be non-negative"
+        );
+
+        // Check that some atoms have non-zero SASA (surface exposed)
+        let non_zero_count = sasa_values.iter().filter(|&&v| v > 0.0).count();
+        assert!(
+            non_zero_count > 0,
+            "Some atoms should have non-zero SASA"
+        );
+    }
+
+    #[test]
+    fn test_get_residue_sasa_returns_data() {
+        let pdb = load_ubiquitin();
+        let df = get_residue_sasa(&pdb, 1.4, 100);
+
+        // Check that we get results
+        assert!(!df.is_empty(), "Residue SASA DataFrame should not be empty");
+
+        // Check that the expected columns exist
+        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
+        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
+        assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
+        assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
+        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
+        assert!(columns.contains(&"is_polar".to_string()), "Should have 'is_polar' column");
+    }
+
+    #[test]
+    fn test_get_residue_sasa_aggregation() {
+        let pdb = load_ubiquitin();
+        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0);
+        let residue_df = get_residue_sasa(&pdb, 1.4, 100);
+
+        // There should be fewer rows in residue-level than atom-level
+        assert!(
+            residue_df.height() < atom_df.height(),
+            "Residue-level should have fewer rows than atom-level: {} vs {}",
+            residue_df.height(),
+            atom_df.height()
+        );
+
+        // Total SASA at residue level should approximately match atom level
+        // (may differ slightly due to different processing paths)
+        let atom_total: f32 = atom_df
+            .column("sasa")
+            .unwrap()
+            .f32()
+            .unwrap()
+            .into_iter()
+            .filter_map(|v| v)
+            .sum();
+        let residue_total: f32 = residue_df
+            .column("sasa")
+            .unwrap()
+            .f32()
+            .unwrap()
+            .into_iter()
+            .filter_map(|v| v)
+            .sum();
+
+        // Allow for small differences due to potentially different filtering
+        let ratio = residue_total / atom_total;
+        assert!(
+            ratio > 0.9 && ratio < 1.1,
+            "Total SASA should be similar: atom={}, residue={}, ratio={}",
+            atom_total,
+            residue_total,
+            ratio
+        );
+    }
+
+    #[test]
+    fn test_get_chain_sasa_returns_data() {
+        let pdb = load_ubiquitin();
+        let df = get_chain_sasa(&pdb, 1.4, 100);
+
+        // Check that we get results
+        assert!(!df.is_empty(), "Chain SASA DataFrame should not be empty");
+
+        // Check that the expected columns exist
+        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
+        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
+        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
+    }
+
+    #[test]
+    fn test_get_chain_sasa_single_chain() {
+        let pdb = load_ubiquitin();
+        let df = get_chain_sasa(&pdb, 1.4, 100);
+
+        // Ubiquitin (1ubq) has a single chain A
+        assert_eq!(df.height(), 1, "1ubq should have 1 chain");
+
+        // Check that the chain is A
+        let chain_col = df.column("chain").unwrap();
+        let chain_id = chain_col.str().unwrap().get(0).unwrap();
+        assert_eq!(chain_id, "A", "Chain should be A");
+    }
+
+    #[test]
+    fn test_get_chain_sasa_multi_chain() {
+        let pdb = load_multi_chain();
+        let df = get_chain_sasa(&pdb, 1.4, 100);
+
+        // 6bft should have multiple chains
+        assert!(df.height() > 1, "6bft should have multiple chains");
+
+        // Check that all SASA values are non-negative
+        let sasa_col = df.column("sasa").unwrap();
+        let sasa_values: Vec<f32> = sasa_col
+            .f32()
+            .unwrap()
+            .into_iter()
+            .filter_map(|v| v)
+            .collect();
+
+        assert!(
+            sasa_values.iter().all(|&v| v >= 0.0),
+            "All chain SASA values should be non-negative"
+        );
+    }
+
+    #[test]
+    fn test_sasa_probe_radius_effect() {
+        let pdb = load_ubiquitin();
+
+        // Smaller probe radius should result in larger SASA
+        let small_probe = get_chain_sasa(&pdb, 1.0, 100);
+        let large_probe = get_chain_sasa(&pdb, 2.0, 100);
+
+        let small_sasa: f32 = small_probe
+            .column("sasa")
+            .unwrap()
+            .f32()
+            .unwrap()
+            .get(0)
+            .unwrap();
+        let large_sasa: f32 = large_probe
+            .column("sasa")
+            .unwrap()
+            .f32()
+            .unwrap()
+            .get(0)
+            .unwrap();
+
+        assert!(
+            small_sasa > large_sasa,
+            "Smaller probe radius should give larger SASA: {} vs {}",
+            small_sasa,
+            large_sasa
+        );
+    }
+
+    #[test]
+    fn test_sasa_regression_ubiquitin() {
+        // Regression test to ensure SASA values remain consistent
+        let pdb = load_ubiquitin();
+        let df = get_chain_sasa(&pdb, 1.4, 100);
+
+        let total_sasa: f32 = df
+            .column("sasa")
+            .unwrap()
+            .f32()
+            .unwrap()
+            .get(0)
+            .unwrap();
+
+        // Expected value from rust-sasa 0.9.0 with default parameters
+        // This should be around 4813 Å² for ubiquitin
+        let expected_sasa = 4813.0;
+        let tolerance = 100.0; // Allow some tolerance for minor differences
+
+        assert!(
+            (total_sasa - expected_sasa).abs() < tolerance,
+            "Ubiquitin total SASA should be around {} Å², got {} Å²",
+            expected_sasa,
+            total_sasa
+        );
+    }
 }
 
 // Python bindings module (only compiled when python feature is enabled)
