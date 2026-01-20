@@ -7,6 +7,7 @@ def contacts(
     groups: str = "/",
     vdw_comp: float = 0.1,
     dist_cutoff: float = 6.5,
+    ignore_zero_occupancy: bool = False,
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate atomic and ring contacts.
 
@@ -16,6 +17,7 @@ def contacts(
             Examples: "A,B/C,D" for chains A,B vs C,D; "A/" for chain A vs all others.
         vdw_comp: VdW radii compensation factor. Defaults to 0.1.
         dist_cutoff: Distance cutoff for neighbor searches in Ångströms. Defaults to 6.5.
+        ignore_zero_occupancy: If True, ignore atoms with zero occupancy. Defaults to False.
 
     Returns:
         A Polars DataFrame containing all identified contacts with columns:

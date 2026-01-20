@@ -12,7 +12,7 @@ efficient data manipulation.
 Example:
     >>> import arpeggia
     >>> # Analyze contacts in a protein structure
-    >>> contacts_df = arpeggia.contacts("structure.pdb", groups="/", vdw_comp=0.1)
+    >>> contacts_df = arpeggia.contacts("structure.pdb", groups="/", vdw_comp=0.1, ignore_zero_occupancy=False)
     >>> print(f"Found {len(contacts_df)} contacts")
     >>>
     >>> # Calculate SASA for all atoms

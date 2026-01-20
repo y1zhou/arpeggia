@@ -14,6 +14,7 @@ use pyo3_polars::PyDataFrame;
 ///         Examples: "A,B/C,D" for chains A,B vs C,D; "A/" for chain A vs all others.
 ///     vdw_comp (float, optional): VdW radii compensation factor. Defaults to 0.1.
 ///     dist_cutoff (float, optional): Distance cutoff for neighbor searches in Ångströms. Defaults to 6.5.
+///     ignore_zero_occupancy (bool, optional): If True, ignore atoms with zero occupancy. Defaults to False.
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame containing all identified contacts with columns:
@@ -27,15 +28,21 @@ use pyo3_polars::PyDataFrame;
 ///     >>> contacts = arpeggia.contacts("structure.pdb", groups="/", vdw_comp=0.1)
 ///     >>> print(f"Found {len(contacts)} contacts")
 #[pyfunction]
-#[pyo3(signature = (input_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5))]
+#[pyo3(signature = (input_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5, ignore_zero_occupancy=false))]
 fn contacts(
     input_file: String,
     groups: &str,
     vdw_comp: f64,
     dist_cutoff: f64,
+    ignore_zero_occupancy: bool,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
-    let (pdb, _warnings) = crate::load_model(&input_file);
+    let (mut pdb, _warnings) = crate::load_model(&input_file);
+
+    // Filter out atoms with zero occupancy if requested
+    if ignore_zero_occupancy {
+        pdb.remove_atoms_by(|atom| atom.occupancy() == 0.0);
+    }
 
     // Get contacts
     let df = crate::get_contacts(&pdb, groups, vdw_comp, dist_cutoff);

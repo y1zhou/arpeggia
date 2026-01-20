@@ -45,6 +45,10 @@ pub(crate) struct Args {
     /// Number of threads to use for parallel processing. One thread should be sufficient unless the system is very large
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
+
+    /// Ignore atoms with zero occupancy
+    #[arg(long = "ignore-zero-occupancy", default_value_t = false)]
+    ignore_zero_occupancy: bool,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -75,7 +79,7 @@ pub(crate) fn run(args: &Args) {
     let input_file: String = input_path.to_str().unwrap().parse().unwrap();
 
     // Load file as complex structure
-    let (pdb, pdb_warnings) = load_model(&input_file);
+    let (mut pdb, pdb_warnings) = load_model(&input_file);
     if !pdb_warnings.is_empty() {
         pdb_warnings.iter().for_each(|e| match e.level() {
             pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
@@ -83,6 +87,13 @@ pub(crate) fn run(args: &Args) {
             _ => warn!("{e}"),
         });
     }
+
+    // Filter out atoms with zero occupancy if requested
+    if args.ignore_zero_occupancy {
+        pdb.remove_atoms_by(|atom| atom.occupancy() == 0.0);
+        debug!("Removed atoms with zero occupancy");
+    }
+
     if pdb
         .par_atoms()
         .filter(|a| a.element().unwrap() == &Element::H)
