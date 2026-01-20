@@ -26,7 +26,7 @@ contacts_df = arpeggia.contacts(
     groups="/",                    # All-to-all interactions
     vdw_comp=0.1,                 # VdW compensation
     dist_cutoff=6.5,              # Distance cutoff (Å)
-    ignore_zero_occupancy=False   # Filter out zero occupancy atoms
+    ignore_zero_occupancy=False   # Set True to ignore zero occupancy atoms
 )
 
 print(f"Found {len(contacts_df)} contacts")
