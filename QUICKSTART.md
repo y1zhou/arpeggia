@@ -23,9 +23,10 @@ import polars as pl
 # Analyze protein contacts
 contacts_df = arpeggia.contacts(
     "test-data/1ubq.pdb",
-    groups="/",           # All-to-all interactions
-    vdw_comp=0.1,        # VdW compensation
-    dist_cutoff=6.5      # Distance cutoff (Å)
+    groups="/",                    # All-to-all interactions
+    vdw_comp=0.1,                 # VdW compensation
+    dist_cutoff=6.5,              # Distance cutoff (Å)
+    ignore_zero_occupancy=False   # Filter out zero occupancy atoms
 )
 
 print(f"Found {len(contacts_df)} contacts")
@@ -92,6 +93,12 @@ arpeggia contacts \
     -o output_dir \
     -g "A,B/C,D" \
     -t csv
+
+# Analyze contacts, ignoring atoms with zero occupancy
+arpeggia contacts \
+    -i structure.pdb \
+    -o output_dir \
+    --ignore-zero-occupancy
 
 # Calculate SASA
 arpeggia sasa \

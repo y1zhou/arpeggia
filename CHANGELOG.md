@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New `--ignore-zero-occupancy` flag for the `contacts` CLI command to filter out atoms with zero occupancy
+- New `ignore_zero_occupancy` parameter for the Python `contacts()` function
+
 ## [0.5.0] - 2025-12-24
 
 ### Added

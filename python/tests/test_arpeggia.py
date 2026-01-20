@@ -82,6 +82,30 @@ def test_contacts_chain_groups(test_pdb_file):
     assert len(df) > 0
 
 
+def test_contacts_ignore_zero_occupancy(test_pdb_file):
+    """Test contacts with ignore_zero_occupancy parameter."""
+    import arpeggia
+
+    # Test with ignore_zero_occupancy=False (default)
+    df1 = arpeggia.contacts(
+        test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5,
+        ignore_zero_occupancy=False
+    )
+
+    # Test with ignore_zero_occupancy=True
+    df2 = arpeggia.contacts(
+        test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5,
+        ignore_zero_occupancy=True
+    )
+
+    # Both should return valid DataFrames
+    assert len(df1) > 0
+    assert len(df2) > 0
+
+    # For 1ubq.pdb, all atoms have occupancy 1.0, so results should be identical
+    assert len(df1) == len(df2)
+
+
 def test_sasa(test_pdb_file):
     """Test the sasa function returns expected DataFrame structure."""
     import arpeggia

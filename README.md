@@ -68,9 +68,10 @@ import arpeggia
 # Analyze protein contacts
 contacts_df = arpeggia.contacts(
     "structure.pdb",
-    groups="/",           # All-to-all chain interactions
-    vdw_comp=0.1,        # VdW radii compensation
-    dist_cutoff=6.5      # Distance cutoff in Ångströms
+    groups="/",                    # All-to-all chain interactions
+    vdw_comp=0.1,                 # VdW radii compensation
+    dist_cutoff=6.5,              # Distance cutoff in Ångströms
+    ignore_zero_occupancy=False   # Filter out atoms with zero occupancy
 )
 print(f"Found {len(contacts_df)} contacts")
 print(contacts_df.head())
@@ -110,6 +111,9 @@ The CLI provides the same functionality:
 ```bash
 # Analyze contacts
 arpeggia contacts -i structure.pdb -o output_dir -g "A,B/C,D" -t csv
+
+# Analyze contacts, ignoring atoms with zero occupancy
+arpeggia contacts -i structure.pdb -o output_dir --ignore-zero-occupancy
 
 # Calculate SASA
 arpeggia sasa -i structure.pdb -o output_dir -r 1.4 -n 100
