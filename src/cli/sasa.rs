@@ -95,8 +95,22 @@ pub(crate) fn run(args: &Args) {
         SasaLevel::Atom => {
             arpeggia::get_atom_sasa(&pdb, args.probe_radius, args.n_points, args.model_num)
         }
-        SasaLevel::Residue => arpeggia::get_residue_sasa(&pdb, args.probe_radius, args.n_points),
-        SasaLevel::Chain => arpeggia::get_chain_sasa(&pdb, args.probe_radius, args.n_points),
+        SasaLevel::Residue => {
+            if args.model_num > 0 {
+                warn!(
+                    "Model number is ignored for residue-level SASA calculation (using first model)"
+                );
+            }
+            arpeggia::get_residue_sasa(&pdb, args.probe_radius, args.n_points)
+        }
+        SasaLevel::Chain => {
+            if args.model_num > 0 {
+                warn!(
+                    "Model number is ignored for chain-level SASA calculation (using first model)"
+                );
+            }
+            arpeggia::get_chain_sasa(&pdb, args.probe_radius, args.n_points)
+        }
     };
 
     if df_sasa.is_empty() {

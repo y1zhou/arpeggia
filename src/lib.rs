@@ -231,6 +231,9 @@ pub fn get_atom_sasa(pdb: &PDB, probe_radius: f32, n_points: usize, model_num: u
 ///
 /// Uses the rust-sasa SASAOptions API to compute SASA at the residue level.
 ///
+/// Note: This function processes the entire PDB structure and does not support
+/// selecting a specific model number. For multi-model files, the first model is used.
+///
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
@@ -261,7 +264,9 @@ pub fn get_residue_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFr
         .with_threads(-1)
         .with_allow_vdw_fallback(true);
 
-    let result = options.process(pdb).unwrap();
+    let result = options
+        .process(pdb)
+        .expect("Failed to calculate residue-level SASA");
 
     df!(
         "chain" => result.iter().map(|r| r.chain_id.clone()).collect::<Vec<String>>(),
@@ -278,6 +283,9 @@ pub fn get_residue_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFr
 /// Calculate solvent accessible surface area (SASA) aggregated by chain.
 ///
 /// Uses the rust-sasa SASAOptions API to compute SASA at the chain level.
+///
+/// Note: This function processes the entire PDB structure and does not support
+/// selecting a specific model number. For multi-model files, the first model is used.
 ///
 /// # Arguments
 ///
@@ -309,7 +317,9 @@ pub fn get_chain_sasa(pdb: &PDB, probe_radius: f32, n_points: usize) -> DataFram
         .with_threads(-1)
         .with_allow_vdw_fallback(true);
 
-    let result = options.process(pdb).unwrap();
+    let result = options
+        .process(pdb)
+        .expect("Failed to calculate chain-level SASA");
 
     df!(
         "chain" => result.iter().map(|r| r.name.clone()).collect::<Vec<String>>(),
