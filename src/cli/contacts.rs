@@ -27,8 +27,8 @@ pub(crate) struct Args {
     groups: String,
 
     /// Name of the output file
-    #[arg(short, long, default_value_t = String::from("contacts"))]
-    name: String,
+    #[arg(short = 'f', long = "filename", default_value_t = String::from("contacts"))]
+    filename: String,
 
     /// Output file type
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
@@ -111,7 +111,7 @@ pub(crate) fn run(args: &Args) {
     // Prepare output directory
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = output_path
-        .join(args.name.clone())
+        .join(args.filename.clone())
         .with_extension(args.output_format.to_string());
 
     // Save results and log the identified interactions

@@ -38,8 +38,8 @@ pub(crate) struct Args {
     output: PathBuf,
 
     /// Name of the output file
-    #[arg(long, default_value_t = String::from("sasa"))]
-    name: String,
+    #[arg(short = 'f', long = "filename", default_value_t = String::from("sasa"))]
+    filename: String,
 
     /// Output file type
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
@@ -133,7 +133,7 @@ pub(crate) fn run(args: &Args) {
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
     let output_file = match output_path.is_dir() {
-        true => output_path.join(args.name.clone()),
+        true => output_path.join(args.filename.clone()),
         false => output_path,
     }
     .with_extension(args.output_format.to_string());

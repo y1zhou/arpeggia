@@ -129,6 +129,37 @@ pub fn get_contacts(pdb: &PDB, groups: &str, vdw_comp: f64, dist_cutoff: f64) ->
         .unwrap()
 }
 
+/// Filter a PDB structure to keep only the specified model.
+///
+/// Creates a clone of the PDB and removes all models except the one at the specified index.
+/// If model_num is 0, the first model is used. Otherwise, the model with the matching
+/// serial number is kept.
+///
+/// # Arguments
+///
+/// * `pdb` - Reference to a PDB structure
+/// * `model_num` - Model number to keep (0 for first model)
+///
+/// # Returns
+///
+/// A filtered PDB structure containing only the specified model.
+fn filter_pdb_by_model(pdb: &PDB, model_num: usize) -> PDB {
+    let mut pdb_filtered = pdb.clone();
+    if pdb_filtered.model_count() > 1 {
+        // Find the model index (0-based) for the given model_num
+        let model_idx = if model_num == 0 {
+            0 // Use first model
+        } else {
+            pdb_filtered
+                .models()
+                .position(|m| m.serial_number() == model_num)
+                .unwrap_or(0)
+        };
+        pdb_filtered.remove_models_except(&[model_idx]);
+    }
+    pdb_filtered
+}
+
 /// Calculate solvent accessible surface area (SASA) for each atom in a PDB structure.
 ///
 /// # Arguments
@@ -249,7 +280,7 @@ pub fn get_atom_sasa(
 /// # Returns
 ///
 /// A Polars DataFrame with columns:
-/// - chain, resn, resi, sasa, is_polar
+/// - chain, resn, resi, insertion, altloc, sasa, is_polar
 ///
 /// # Example
 ///
@@ -270,20 +301,7 @@ pub fn get_residue_sasa(
 ) -> DataFrame {
     use rust_sasa::{ResidueLevel, SASAOptions};
 
-    // Clone PDB and filter to specified model
-    let mut pdb_filtered = pdb.clone();
-    if pdb_filtered.model_count() > 1 {
-        // Find the model index (0-based) for the given model_num
-        let model_idx = if model_num == 0 {
-            0 // Use first model
-        } else {
-            pdb_filtered
-                .models()
-                .position(|m| m.serial_number() == model_num)
-                .unwrap_or(0)
-        };
-        pdb_filtered.remove_models_except(&[model_idx]);
-    }
+    let pdb_filtered = filter_pdb_by_model(pdb, model_num);
 
     let options = SASAOptions::<ResidueLevel>::new()
         .with_probe_radius(probe_radius)
@@ -295,15 +313,59 @@ pub fn get_residue_sasa(
         .process(&pdb_filtered)
         .expect("Failed to calculate residue-level SASA");
 
+    // Build a map of (chain_id, resi) -> (insertion, altloc) from the PDB
+    let mut residue_info: HashMap<(String, isize), (String, String)> = HashMap::new();
+    for chain in pdb_filtered.chains() {
+        let chain_id = chain.id().to_string();
+        for residue in chain.residues() {
+            let resi = residue.serial_number();
+            let insertion = residue
+                .insertion_code()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            // Get altloc from first conformer if available
+            let altloc = residue
+                .conformers()
+                .next()
+                .and_then(|c| c.alternative_location())
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            residue_info.insert((chain_id.clone(), resi), (insertion, altloc));
+        }
+    }
+
+    // Extract insertion and altloc for each result
+    let insertions: Vec<String> = result
+        .iter()
+        .map(|r| {
+            residue_info
+                .get(&(r.chain_id.clone(), r.serial_number))
+                .map(|(ins, _)| ins.clone())
+                .unwrap_or_default()
+        })
+        .collect();
+
+    let altlocs: Vec<String> = result
+        .iter()
+        .map(|r| {
+            residue_info
+                .get(&(r.chain_id.clone(), r.serial_number))
+                .map(|(_, alt)| alt.clone())
+                .unwrap_or_default()
+        })
+        .collect();
+
     df!(
         "chain" => result.iter().map(|r| r.chain_id.clone()).collect::<Vec<String>>(),
         "resn" => result.iter().map(|r| r.name.clone()).collect::<Vec<String>>(),
         "resi" => result.iter().map(|r| r.serial_number as i32).collect::<Vec<i32>>(),
+        "insertion" => insertions,
+        "altloc" => altlocs,
         "sasa" => result.iter().map(|r| r.value).collect::<Vec<f32>>(),
         "is_polar" => result.iter().map(|r| r.is_polar).collect::<Vec<bool>>(),
     )
     .unwrap()
-    .sort(["chain", "resi"], Default::default())
+    .sort(["chain", "resi", "insertion", "altloc"], Default::default())
     .unwrap()
 }
 
@@ -343,20 +405,7 @@ pub fn get_chain_sasa(
 ) -> DataFrame {
     use rust_sasa::{ChainLevel, SASAOptions};
 
-    // Clone PDB and filter to specified model
-    let mut pdb_filtered = pdb.clone();
-    if pdb_filtered.model_count() > 1 {
-        // Find the model index (0-based) for the given model_num
-        let model_idx = if model_num == 0 {
-            0 // Use first model
-        } else {
-            pdb_filtered
-                .models()
-                .position(|m| m.serial_number() == model_num)
-                .unwrap_or(0)
-        };
-        pdb_filtered.remove_models_except(&[model_idx]);
-    }
+    let pdb_filtered = filter_pdb_by_model(pdb, model_num);
 
     let options = SASAOptions::<ChainLevel>::new()
         .with_probe_radius(probe_radius)
@@ -527,6 +576,8 @@ mod sasa_tests {
         assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
         assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
         assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
+        assert!(columns.contains(&"insertion".to_string()), "Should have 'insertion' column");
+        assert!(columns.contains(&"altloc".to_string()), "Should have 'altloc' column");
         assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
         assert!(columns.contains(&"is_polar".to_string()), "Should have 'is_polar' column");
     }
