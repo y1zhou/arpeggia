@@ -86,6 +86,31 @@ def dsasa(
     """
     ...
 
+def relative_sasa(
+    input_file: str,
+    probe_radius: float = 1.4,
+    n_points: int = 100,
+    model_num: int = 0,
+    num_threads: int = 1,
+) -> pl.DataFrame:
+    """Load a PDB or mmCIF file and calculate relative SASA (RSA) for each residue.
+
+    RSA is calculated as the ratio of observed SASA to the maximum possible SASA
+    for each amino acid type, based on Tien et al. (2013) theoretical values.
+
+    Args:
+        input_file: Path to the PDB or mmCIF file
+        probe_radius: Probe radius in Ångströms. Defaults to 1.4.
+        n_points: Number of points for surface calculation. Defaults to 100.
+        model_num: Model number to analyze (0 for first model). Defaults to 0.
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
+
+    Returns:
+        A Polars DataFrame with relative SASA values for each residue with columns:
+        - chain, resn, resi, insertion, altloc, sasa, is_polar, max_sasa, relative_sasa
+    """
+    ...
+
 def pdb2seq(input_file: str) -> dict[str, str]:
     """Load a PDB or mmCIF file and extract sequences for all chains.
 

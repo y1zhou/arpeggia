@@ -427,6 +427,205 @@ pub fn get_chain_sasa(
     .unwrap()
 }
 
+/// Calculate the buried surface area (dSASA) at the interface between two chain groups.
+///
+/// The buried surface area is calculated as:
+/// dSASA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
+///
+/// # Arguments
+///
+/// * `pdb` - Reference to a PDB structure
+/// * `groups` - Chain groups specification (e.g., "A,B/C,D")
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `n_points` - Number of points for surface calculation (typically 100)
+/// * `model_num` - Model number to analyze (0 for first model)
+/// * `num_threads` - Number of threads (-1 for all cores, 1 for single-threaded)
+///
+/// # Returns
+///
+/// The buried surface area at the interface in square Ångströms.
+pub fn get_dsasa(
+    pdb: &PDB,
+    groups: &str,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: isize,
+) -> f32 {
+    use std::collections::HashSet;
+
+    // Get all chains in the PDB
+    let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
+
+    // Parse groups
+    let (group1_chains, group2_chains) = parse_groups(&all_chains, groups);
+
+    // Get combined chains (union of both groups)
+    let combined_group_chains: HashSet<String> = group1_chains.union(&group2_chains).cloned().collect();
+
+    // Create PDB with only chains from both groups (remove unrelated chains)
+    let mut pdb_combined = pdb.clone();
+    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(&chain.id().to_string()));
+
+    // Calculate SASA for the combined complex (only chains in groups)
+    let combined_sasa = get_chain_sasa(
+        &pdb_combined,
+        probe_radius,
+        n_points,
+        model_num,
+        num_threads,
+    );
+
+    // Sum SASA using polars lazy aggregation
+    let sum_sasa = |df: &DataFrame| -> f32 {
+        df.clone()
+            .lazy()
+            .select([col("sasa").sum()])
+            .collect()
+            .unwrap()
+            .column("sasa")
+            .unwrap()
+            .f32()
+            .unwrap()
+            .get(0)
+            .unwrap_or(0.0)
+    };
+
+    let combined_total = sum_sasa(&combined_sasa);
+
+    // Create PDB with only group1 chains and calculate SASA
+    let mut pdb_group1 = pdb.clone();
+    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(&chain.id().to_string()));
+
+    let group1_sasa = get_chain_sasa(
+        &pdb_group1,
+        probe_radius,
+        n_points,
+        model_num,
+        num_threads,
+    );
+
+    let group1_total = sum_sasa(&group1_sasa);
+
+    // Create PDB with only group2 chains and calculate SASA
+    let mut pdb_group2 = pdb.clone();
+    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(&chain.id().to_string()));
+
+    let group2_sasa = get_chain_sasa(
+        &pdb_group2,
+        probe_radius,
+        n_points,
+        model_num,
+        num_threads,
+    );
+
+    let group2_total = sum_sasa(&group2_sasa);
+
+    // Calculate buried surface area (dSASA)
+    // BSA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
+    (group1_total + group2_total - combined_total) / 2.0
+}
+
+/// Maximum solvent accessible surface area (MaxASA) values for amino acids.
+///
+/// Values are from Tien et al. (2013) "Maximum Allowed Solvent Accessibilities of Residues in Proteins"
+/// PLOS ONE. These theoretical values represent the maximum possible SASA for each amino acid
+/// in a Gly-X-Gly tripeptide.
+///
+/// Returns the MaxASA value in Å² for a given 3-letter amino acid code, or None if unknown.
+pub fn get_max_asa(resn: &str) -> Option<f32> {
+    match resn.to_uppercase().as_str() {
+        "ALA" => Some(129.0),
+        "ARG" => Some(274.0),
+        "ASN" => Some(195.0),
+        "ASP" => Some(193.0),
+        "CYS" => Some(167.0),
+        "GLU" => Some(223.0),
+        "GLN" => Some(225.0),
+        "GLY" => Some(104.0),
+        "HIS" => Some(224.0),
+        "ILE" => Some(197.0),
+        "LEU" => Some(201.0),
+        "LYS" => Some(236.0),
+        "MET" => Some(224.0),
+        "PHE" => Some(240.0),
+        "PRO" => Some(159.0),
+        "SER" => Some(155.0),
+        "THR" => Some(172.0),
+        "TRP" => Some(285.0),
+        "TYR" => Some(263.0),
+        "VAL" => Some(174.0),
+        _ => None,
+    }
+}
+
+/// Calculate relative solvent accessible surface area (RSA) for each residue.
+///
+/// RSA is calculated as the ratio of observed SASA to the maximum possible SASA
+/// for each amino acid type, based on Tien et al. (2013) theoretical values.
+///
+/// # Arguments
+///
+/// * `pdb` - Reference to a PDB structure
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `n_points` - Number of points for surface calculation (typically 100)
+/// * `model_num` - Model number to analyze (0 for first model)
+/// * `num_threads` - Number of threads (-1 for all cores, 1 for single-threaded)
+///
+/// # Returns
+///
+/// A Polars DataFrame with columns:
+/// - chain, resn, resi, insertion, altloc, sasa, is_polar, max_sasa, relative_sasa
+///
+/// The relative_sasa column contains values between 0 and ~1 (can slightly exceed 1 due to
+/// structural context), or null for non-standard amino acids.
+pub fn get_relative_sasa(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: isize,
+) -> DataFrame {
+    // Get residue-level SASA
+    let residue_sasa = get_residue_sasa(pdb, probe_radius, n_points, model_num, num_threads);
+
+    // Calculate max_sasa and relative_sasa for each residue
+    let resn_col = residue_sasa.column("resn").unwrap();
+    let sasa_col = residue_sasa.column("sasa").unwrap();
+
+    let max_sasa_values: Vec<Option<f32>> = resn_col
+        .str()
+        .unwrap()
+        .into_iter()
+        .map(|opt_resn| opt_resn.and_then(get_max_asa))
+        .collect();
+
+    let relative_sasa_values: Vec<Option<f32>> = sasa_col
+        .f32()
+        .unwrap()
+        .into_iter()
+        .zip(max_sasa_values.iter())
+        .map(|(sasa_opt, max_opt)| match (sasa_opt, max_opt) {
+            (Some(sasa), Some(max)) if *max > 0.0 => Some(sasa / max),
+            _ => None,
+        })
+        .collect();
+
+    // Add the new columns to the DataFrame
+    let max_sasa_series = Series::new("max_sasa".into(), max_sasa_values);
+    let relative_sasa_series = Series::new("relative_sasa".into(), relative_sasa_values);
+
+    residue_sasa
+        .clone()
+        .lazy()
+        .with_columns([
+            max_sasa_series.lit(),
+            relative_sasa_series.lit(),
+        ])
+        .collect()
+        .unwrap()
+}
+
 /// Get sequences of all chains in a PDB structure.
 ///
 /// # Arguments
@@ -734,6 +933,136 @@ mod sasa_tests {
             expected_sasa,
             total_sasa
         );
+    }
+
+    #[test]
+    fn test_get_dsasa_returns_positive() {
+        // 6bft has multiple chains with interfaces
+        let pdb = load_multi_chain();
+
+        // Calculate dSASA between groups A,B,C and G,H,L
+        let dsasa = get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0, 1);
+
+        // dSASA should be positive for an interface
+        assert!(dsasa > 0.0, "dSASA should be positive, got {}", dsasa);
+    }
+
+    #[test]
+    fn test_get_dsasa_interface_value() {
+        // 6bft has multiple chains with interfaces
+        let pdb = load_multi_chain();
+
+        // Calculate dSASA between groups A,B,C and G,H,L
+        let dsasa = get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0, 1);
+
+        // Regression test: the dSASA should be around 2800-2900 Å²
+        // This is the value calculated from the CLI test
+        let expected_dsasa = 2848.0;
+        let tolerance = 200.0; // Allow some tolerance
+
+        assert!(
+            (dsasa - expected_dsasa).abs() < tolerance,
+            "6bft dSASA should be around {} Å², got {} Å²",
+            expected_dsasa,
+            dsasa
+        );
+    }
+
+    #[test]
+    fn test_get_dsasa_symmetric() {
+        // dSASA should be the same regardless of which group is first
+        let pdb = load_multi_chain();
+
+        let dsasa1 = get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0, 1);
+        let dsasa2 = get_dsasa(&pdb, "G,H,L/A,B,C", 1.4, 100, 0, 1);
+
+        let diff = (dsasa1 - dsasa2).abs();
+        assert!(
+            diff < 1.0,
+            "dSASA should be symmetric: {} vs {}",
+            dsasa1,
+            dsasa2
+        );
+    }
+
+    #[test]
+    fn test_get_relative_sasa_returns_data() {
+        let pdb = load_ubiquitin();
+        let df = get_relative_sasa(&pdb, 1.4, 100, 0, 1);
+
+        // Check that we get results
+        assert!(!df.is_empty(), "Relative SASA DataFrame should not be empty");
+
+        // Check that the expected columns exist
+        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
+        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
+        assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
+        assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
+        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
+        assert!(columns.contains(&"max_sasa".to_string()), "Should have 'max_sasa' column");
+        assert!(columns.contains(&"relative_sasa".to_string()), "Should have 'relative_sasa' column");
+    }
+
+    #[test]
+    fn test_get_relative_sasa_values_bounded() {
+        let pdb = load_ubiquitin();
+        let df = get_relative_sasa(&pdb, 1.4, 100, 0, 1);
+
+        // Get relative_sasa values
+        let rsa_values: Vec<f32> = df
+            .column("relative_sasa")
+            .unwrap()
+            .f32()
+            .unwrap()
+            .into_iter()
+            .filter_map(|v| v)
+            .collect();
+
+        // All values should be non-negative
+        assert!(
+            rsa_values.iter().all(|&v| v >= 0.0),
+            "All relative_sasa values should be non-negative"
+        );
+
+        // Most values should be <= 1.0 (some may slightly exceed due to structural context)
+        let below_threshold = rsa_values.iter().filter(|&&v| v <= 1.5).count();
+        let ratio = below_threshold as f64 / rsa_values.len() as f64;
+        assert!(
+            ratio > 0.95,
+            "Most relative_sasa values should be <= 1.5: ratio={}",
+            ratio
+        );
+    }
+
+    #[test]
+    fn test_get_max_asa_standard_amino_acids() {
+        // Test that all standard amino acids have MaxASA values
+        let amino_acids = [
+            "ALA", "ARG", "ASN", "ASP", "CYS", "GLU", "GLN", "GLY", "HIS", "ILE",
+            "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+        ];
+
+        for aa in amino_acids.iter() {
+            let max_asa = get_max_asa(aa);
+            assert!(
+                max_asa.is_some(),
+                "Should have MaxASA value for {}",
+                aa
+            );
+            assert!(
+                max_asa.unwrap() > 0.0,
+                "MaxASA for {} should be positive",
+                aa
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_max_asa_unknown_residue() {
+        // Unknown residues should return None
+        assert!(get_max_asa("XXX").is_none());
+        assert!(get_max_asa("HOH").is_none());
+        assert!(get_max_asa("").is_none());
     }
 }
 

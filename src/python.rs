@@ -269,6 +269,52 @@ fn pdb2seq(input_file: String) -> PyResult<std::collections::HashMap<String, Str
     Ok(seqs)
 }
 
+/// Load a PDB or mmCIF file and calculate relative SASA (RSA) for each residue.
+///
+/// RSA is calculated as the ratio of observed SASA to the maximum possible SASA
+/// for each amino acid type, based on Tien et al. (2013) theoretical values.
+///
+/// Args:
+///     input_file (str): Path to the PDB or mmCIF file
+///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
+///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
+///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
+///
+/// Returns:
+///     polars.DataFrame: A DataFrame with relative SASA values for each residue with columns:
+///         - chain, resn, resi, insertion, altloc, sasa, is_polar, max_sasa, relative_sasa
+///
+/// Example:
+///     >>> import arpeggia
+///     >>> rsa = arpeggia.relative_sasa("structure.pdb", probe_radius=1.4)
+///     >>> print(f"Calculated RSA for {len(rsa)} residues")
+#[pyfunction]
+#[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
+fn relative_sasa(
+    input_file: String,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: usize,
+) -> PyResult<PyDataFrame> {
+    // Load the PDB file
+    let (pdb, _warnings) = crate::load_model(&input_file);
+
+    // Convert num_threads: 0 means all cores (-1 for rust-sasa)
+    let threads: isize = if num_threads == 0 {
+        -1
+    } else {
+        num_threads as isize
+    };
+
+    // Get relative SASA
+    let df = crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, threads);
+
+    // Convert to PyDataFrame for Python
+    Ok(PyDataFrame(df))
+}
+
 /// Python module for protein structure analysis.
 ///
 /// This module provides functions for analyzing protein structures from PDB and mmCIF files,
@@ -278,6 +324,7 @@ fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(contacts, m)?)?;
     m.add_function(wrap_pyfunction!(sasa, m)?)?;
     m.add_function(wrap_pyfunction!(dsasa, m)?)?;
+    m.add_function(wrap_pyfunction!(relative_sasa, m)?)?;
     m.add_function(wrap_pyfunction!(pdb2seq, m)?)?;
     Ok(())
 }
