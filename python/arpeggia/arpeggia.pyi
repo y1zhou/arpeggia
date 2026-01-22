@@ -33,6 +33,7 @@ def sasa(
     probe_radius: float = 1.4,
     n_points: int = 100,
     model_num: int = 0,
+    num_threads: int = 1,
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) for each atom.
 
@@ -41,11 +42,56 @@ def sasa(
         probe_radius: Probe radius in Ångströms. Defaults to 1.4.
         n_points: Number of points for surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
 
     Returns:
         A Polars DataFrame with SASA values for each atom with columns:
         - atomi, sasa
         - chain, resn, resi, insertion, altloc, atomn
+    """
+    ...
+
+def residue_sasa(
+    input_file: str,
+    probe_radius: float = 1.4,
+    n_points: int = 100,
+    model_num: int = 0,
+    num_threads: int = 1,
+) -> pl.DataFrame:
+    """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) aggregated by residue.
+
+    Args:
+        input_file: Path to the PDB or mmCIF file
+        probe_radius: Probe radius in Ångströms. Defaults to 1.4.
+        n_points: Number of points for surface calculation. Defaults to 100.
+        model_num: Model number to analyze (0 for first model). Defaults to 0.
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
+
+    Returns:
+        A Polars DataFrame with SASA values for each residue with columns:
+        - chain, resn, resi, insertion, altloc, sasa, is_polar
+    """
+    ...
+
+def chain_sasa(
+    input_file: str,
+    probe_radius: float = 1.4,
+    n_points: int = 100,
+    model_num: int = 0,
+    num_threads: int = 1,
+) -> pl.DataFrame:
+    """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) aggregated by chain.
+
+    Args:
+        input_file: Path to the PDB or mmCIF file
+        probe_radius: Probe radius in Ångströms. Defaults to 1.4.
+        n_points: Number of points for surface calculation. Defaults to 100.
+        model_num: Model number to analyze (0 for first model). Defaults to 0.
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
+
+    Returns:
+        A Polars DataFrame with SASA values for each chain with columns:
+        - chain, sasa
     """
     ...
 

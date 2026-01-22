@@ -18,6 +18,8 @@ enum Commands {
     Contacts(crate::cli::contacts::Args),
     /// Calculate the solvent accessible surface area (SASA) of each atom in a PDB or mmCIF file
     Sasa(crate::cli::sasa::Args),
+    /// Calculate the buried surface area (dSASA) at the interface between chain groups
+    Dsasa(crate::cli::dsasa::Args),
     /// Print the sequences of all chains in a PDB or mmCIF file
     Seq(crate::cli::pdb2seq::Args),
 }
@@ -34,6 +36,9 @@ fn main() {
         }
         Commands::Sasa(args) => {
             crate::cli::sasa::run(args);
+        }
+        Commands::Dsasa(args) => {
+            crate::cli::dsasa::run(args);
         }
         Commands::Seq(args) => {
             crate::cli::pdb2seq::run(args);

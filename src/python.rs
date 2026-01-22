@@ -58,6 +58,7 @@ fn contacts(
 ///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
 ///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
 ///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame with SASA values for each atom with columns:
@@ -69,18 +70,112 @@ fn contacts(
 ///     >>> sasa = arpeggia.sasa("structure.pdb", probe_radius=1.4, n_points=100)
 ///     >>> print(f"Calculated SASA for {len(sasa)} atoms")
 #[pyfunction]
-#[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0))]
+#[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
 fn sasa(
     input_file: String,
     probe_radius: f32,
     n_points: usize,
     model_num: usize,
+    num_threads: usize,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
+    // Convert num_threads: 0 means all cores (-1 for rust-sasa)
+    let threads: isize = if num_threads == 0 {
+        -1
+    } else {
+        num_threads as isize
+    };
+
     // Get SASA
-    let df = crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num);
+    let df = crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num, threads);
+
+    // Convert to PyDataFrame for Python
+    Ok(PyDataFrame(df))
+}
+
+/// Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) aggregated by residue.
+///
+/// Args:
+///     input_file (str): Path to the PDB or mmCIF file
+///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
+///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
+///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
+///
+/// Returns:
+///     polars.DataFrame: A DataFrame with SASA values for each residue with columns:
+///         - chain, resn, resi, insertion, altloc, sasa, is_polar
+///
+/// Example:
+///     >>> import arpeggia
+///     >>> residue_sasa = arpeggia.residue_sasa("structure.pdb", probe_radius=1.4)
+///     >>> print(f"Calculated SASA for {len(residue_sasa)} residues")
+#[pyfunction]
+#[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
+fn residue_sasa(
+    input_file: String,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: usize,
+) -> PyResult<PyDataFrame> {
+    // Load the PDB file
+    let (pdb, _warnings) = crate::load_model(&input_file);
+
+    // Convert num_threads: 0 means all cores (-1 for rust-sasa)
+    let threads: isize = if num_threads == 0 {
+        -1
+    } else {
+        num_threads as isize
+    };
+
+    // Get residue-level SASA
+    let df = crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, threads);
+
+    // Convert to PyDataFrame for Python
+    Ok(PyDataFrame(df))
+}
+
+/// Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) aggregated by chain.
+///
+/// Args:
+///     input_file (str): Path to the PDB or mmCIF file
+///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
+///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
+///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
+///
+/// Returns:
+///     polars.DataFrame: A DataFrame with SASA values for each chain with columns:
+///         - chain, sasa
+///
+/// Example:
+///     >>> import arpeggia
+///     >>> chain_sasa = arpeggia.chain_sasa("structure.pdb", probe_radius=1.4)
+///     >>> print(f"Calculated SASA for {len(chain_sasa)} chains")
+#[pyfunction]
+#[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
+fn chain_sasa(
+    input_file: String,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: usize,
+) -> PyResult<PyDataFrame> {
+    // Load the PDB file
+    let (pdb, _warnings) = crate::load_model(&input_file);
+
+    // Convert num_threads: 0 means all cores (-1 for rust-sasa)
+    let threads: isize = if num_threads == 0 {
+        -1
+    } else {
+        num_threads as isize
+    };
+
+    // Get chain-level SASA
+    let df = crate::get_chain_sasa(&pdb, probe_radius, n_points, model_num, threads);
 
     // Convert to PyDataFrame for Python
     Ok(PyDataFrame(df))
@@ -118,6 +213,8 @@ fn pdb2seq(input_file: String) -> PyResult<std::collections::HashMap<String, Str
 fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(contacts, m)?)?;
     m.add_function(wrap_pyfunction!(sasa, m)?)?;
+    m.add_function(wrap_pyfunction!(residue_sasa, m)?)?;
+    m.add_function(wrap_pyfunction!(chain_sasa, m)?)?;
     m.add_function(wrap_pyfunction!(pdb2seq, m)?)?;
     Ok(())
 }
