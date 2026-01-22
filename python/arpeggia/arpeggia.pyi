@@ -1,5 +1,7 @@
 """Type stubs for arpeggia Rust module."""
 
+from typing import Literal
+
 import polars as pl
 
 def contacts(
@@ -30,68 +32,57 @@ def contacts(
 
 def sasa(
     input_file: str,
+    level: Literal["atom", "residue", "chain"] = "atom",
     probe_radius: float = 1.4,
     n_points: int = 100,
     model_num: int = 0,
     num_threads: int = 1,
 ) -> pl.DataFrame:
-    """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) for each atom.
+    """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA).
 
     Args:
         input_file: Path to the PDB or mmCIF file
+        level: Aggregation level for SASA calculation. Options:
+            - "atom": Calculate SASA for each atom (default)
+            - "residue": Aggregate SASA by residue
+            - "chain": Aggregate SASA by chain
         probe_radius: Probe radius in Ångströms. Defaults to 1.4.
         n_points: Number of points for surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
         num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
 
     Returns:
-        A Polars DataFrame with SASA values for each atom with columns:
-        - atomi, sasa
-        - chain, resn, resi, insertion, altloc, atomn
+        A Polars DataFrame with SASA values. Columns depend on the level:
+        - atom: atomi, sasa, chain, resn, resi, insertion, altloc, atomn
+        - residue: chain, resn, resi, insertion, altloc, sasa, is_polar
+        - chain: chain, sasa
     """
     ...
 
-def residue_sasa(
+def dsasa(
     input_file: str,
+    groups: str,
     probe_radius: float = 1.4,
     n_points: int = 100,
     model_num: int = 0,
     num_threads: int = 1,
-) -> pl.DataFrame:
-    """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) aggregated by residue.
+) -> float:
+    """Load a PDB or mmCIF file and calculate buried surface area at the interface.
+
+    The buried surface area (dSASA) is calculated as:
+    dSASA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
 
     Args:
         input_file: Path to the PDB or mmCIF file
+        groups: Chain groups specification for interface calculation.
+            Format: "A,B/C,D" where chains A,B form one side and C,D form the other side.
         probe_radius: Probe radius in Ångströms. Defaults to 1.4.
         n_points: Number of points for surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
         num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
 
     Returns:
-        A Polars DataFrame with SASA values for each residue with columns:
-        - chain, resn, resi, insertion, altloc, sasa, is_polar
-    """
-    ...
-
-def chain_sasa(
-    input_file: str,
-    probe_radius: float = 1.4,
-    n_points: int = 100,
-    model_num: int = 0,
-    num_threads: int = 1,
-) -> pl.DataFrame:
-    """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA) aggregated by chain.
-
-    Args:
-        input_file: Path to the PDB or mmCIF file
-        probe_radius: Probe radius in Ångströms. Defaults to 1.4.
-        n_points: Number of points for surface calculation. Defaults to 100.
-        model_num: Model number to analyze (0 for first model). Defaults to 0.
-        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
-
-    Returns:
-        A Polars DataFrame with SASA values for each chain with columns:
-        - chain, sasa
+        The buried surface area at the interface in square Ångströms.
     """
     ...
 

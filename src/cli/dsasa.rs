@@ -1,5 +1,7 @@
-use arpeggia::load_model;
+use arpeggia::{load_model, parse_groups};
 use clap::Parser;
+use polars::prelude::*;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
 
@@ -35,6 +37,21 @@ pub(crate) struct Args {
     num_threads: usize,
 }
 
+/// Sum the SASA column of a DataFrame using polars aggregation.
+fn sum_sasa(df: &DataFrame) -> f32 {
+    df.clone()
+        .lazy()
+        .select([col("sasa").sum()])
+        .collect()
+        .unwrap()
+        .column("sasa")
+        .unwrap()
+        .f32()
+        .unwrap()
+        .get(0)
+        .unwrap_or(0.0)
+}
+
 pub(crate) fn run(args: &Args) {
     trace!("{args:?}");
 
@@ -59,28 +76,11 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
-    // Parse groups
-    let groups_parts: Vec<&str> = args.groups.split('/').collect();
-    if groups_parts.len() != 2 {
-        error!("Invalid groups format. Expected format: 'A,B/C,D'");
-        return;
-    }
+    // Get all chains in the PDB
+    let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
 
-    let group1_chains: Vec<String> = groups_parts[0]
-        .split(',')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.trim().to_string())
-        .collect();
-    let group2_chains: Vec<String> = groups_parts[1]
-        .split(',')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.trim().to_string())
-        .collect();
-
-    if group1_chains.is_empty() || group2_chains.is_empty() {
-        error!("Both groups must have at least one chain. Got: group1={:?}, group2={:?}", group1_chains, group2_chains);
-        return;
-    }
+    // Parse groups using the utility function
+    let (group1_chains, group2_chains) = parse_groups(&all_chains, &args.groups);
 
     debug!("Group 1 chains: {:?}", group1_chains);
     debug!("Group 2 chains: {:?}", group2_chains);
@@ -92,9 +92,19 @@ pub(crate) fn run(args: &Args) {
         args.num_threads as isize
     };
 
-    // Calculate SASA for the combined complex
+    // Get combined chains (union of both groups)
+    let combined_group_chains: HashSet<String> = group1_chains
+        .union(&group2_chains)
+        .cloned()
+        .collect();
+
+    // Create PDB with only chains from both groups (remove unrelated chains)
+    let mut pdb_combined = pdb.clone();
+    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(&chain.id().to_string()));
+
+    // Calculate SASA for the combined complex (only chains in groups)
     let combined_sasa = arpeggia::get_chain_sasa(
-        &pdb,
+        &pdb_combined,
         args.probe_radius,
         args.n_points,
         args.model_num,
@@ -106,39 +116,8 @@ pub(crate) fn run(args: &Args) {
         return;
     }
 
-    // Get total SASA for all chains in both groups when together
-    let combined_group_chains: Vec<String> = group1_chains
-        .iter()
-        .chain(group2_chains.iter())
-        .cloned()
-        .collect();
-
-    let combined_total: f32 = combined_sasa
-        .column("chain")
-        .unwrap()
-        .str()
-        .unwrap()
-        .iter()
-        .zip(
-            combined_sasa
-                .column("sasa")
-                .unwrap()
-                .f32()
-                .unwrap()
-                .iter(),
-        )
-        .filter_map(|(chain_opt, sasa_opt)| {
-            if let (Some(chain), Some(sasa)) = (chain_opt, sasa_opt) {
-                if combined_group_chains.contains(&chain.to_string()) {
-                    Some(sasa)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .sum();
+    // Get total SASA for all chains in both groups when together using polars
+    let combined_total = sum_sasa(&combined_sasa);
 
     // Create PDB with only group1 chains and calculate SASA
     let mut pdb_group1 = pdb.clone();
@@ -152,14 +131,7 @@ pub(crate) fn run(args: &Args) {
         num_threads,
     );
 
-    let group1_total: f32 = group1_sasa
-        .column("sasa")
-        .unwrap()
-        .f32()
-        .unwrap()
-        .iter()
-        .filter_map(|v| v)
-        .sum();
+    let group1_total = sum_sasa(&group1_sasa);
 
     // Create PDB with only group2 chains and calculate SASA
     let mut pdb_group2 = pdb.clone();
@@ -173,14 +145,7 @@ pub(crate) fn run(args: &Args) {
         num_threads,
     );
 
-    let group2_total: f32 = group2_sasa
-        .column("sasa")
-        .unwrap()
-        .f32()
-        .unwrap()
-        .iter()
-        .filter_map(|v| v)
-        .sum();
+    let group2_total = sum_sasa(&group2_sasa);
 
     // Calculate buried surface area (dSASA)
     // BSA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
