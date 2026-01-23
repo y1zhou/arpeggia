@@ -401,8 +401,8 @@ pub fn get_dsasa(
     let group2_total = sum_sasa(&group2_sasa);
 
     // Calculate buried surface area (dSASA)
-    // BSA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
-    (group1_total + group2_total - combined_total) / 2.0
+    // dSASA = SASA_group1 + SASA_group2 - SASA_complex
+    group1_total + group2_total - combined_total
 }
 
 /// Maximum solvent accessible surface area (MaxASA) values for amino acids.
@@ -490,17 +490,13 @@ pub fn get_relative_sasa(
         })
         .collect();
 
-    // Add the new columns to the DataFrame
-    let max_sasa_series = Series::new("max_sasa".into(), max_sasa_values);
+    // Add the relative_sasa column to the DataFrame
     let relative_sasa_series = Series::new("relative_sasa".into(), relative_sasa_values);
 
     residue_sasa
         .clone()
         .lazy()
-        .with_columns([
-            max_sasa_series.lit(),
-            relative_sasa_series.lit(),
-        ])
+        .with_columns([relative_sasa_series.lit()])
         .collect()
         .unwrap()
 }
@@ -761,10 +757,10 @@ mod tests {
         // Calculate dSASA between groups A,B,C and G,H,L
         let dsasa = get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0, 1);
 
-        // Regression test: the dSASA should be around 2800-2900 Å²
+        // Regression test: the dSASA should be around 5600-5800 Å²
         // This is the value calculated from the CLI test
-        let expected_dsasa = 2848.0;
-        let tolerance = 200.0; // Allow some tolerance
+        let expected_dsasa = 5696.0;
+        let tolerance = 400.0; // Allow some tolerance
 
         assert!(
             (dsasa - expected_dsasa).abs() < tolerance,
@@ -805,7 +801,6 @@ mod tests {
         assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
         assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
         assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
-        assert!(columns.contains(&"max_sasa".to_string()), "Should have 'max_sasa' column");
         assert!(columns.contains(&"relative_sasa".to_string()), "Should have 'relative_sasa' column");
     }
 

@@ -78,7 +78,7 @@ print(contacts_df.head())
 
 # Calculate solvent accessible surface area
 # Atom-level (default)
-sasa_df = arpeggia.sasa("structure.pdb", level="atom")
+sasa_df = arpeggia.sasa("structure.pdb", level="atom", probe_radius=1.4, n_points=100, model_num=0)
 print(f"Calculated SASA for {len(sasa_df)} atoms")
 
 # Residue-level SASA

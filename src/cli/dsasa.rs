@@ -148,13 +148,20 @@ pub(crate) fn run(args: &Args) {
     let group2_total = sum_sasa(&group2_sasa);
 
     // Calculate buried surface area (dSASA)
-    // BSA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
+    // dSASA = SASA_group1 + SASA_group2 - SASA_complex
     // This gives the buried surface area at the interface
-    let dsasa = (group1_total + group2_total - combined_total) / 2.0;
+    let dsasa = group1_total + group2_total - combined_total;
 
     debug!("SASA of group 1 ({:?}): {:.2} Å²", group1_chains, group1_total);
     debug!("SASA of group 2 ({:?}): {:.2} Å²", group2_chains, group2_total);
     debug!("SASA of combined complex: {:.2} Å²", combined_total);
 
-    info!("{:.2}", dsasa);
+    let group1_str: Vec<String> = group1_chains.iter().map(|c| c.to_string()).collect();
+    let group2_str: Vec<String> = group2_chains.iter().map(|c| c.to_string()).collect();
+    info!(
+        "Buried surface area (dSASA) at the interface between chains [{}] and [{}]: {:.2} Å²",
+        group1_str.join(", "),
+        group2_str.join(", "),
+        dsasa
+    );
 }
