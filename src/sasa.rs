@@ -340,11 +340,12 @@ pub fn get_dsasa(
     let (group1_chains, group2_chains) = parse_groups(&all_chains, groups);
 
     // Get combined chains (union of both groups)
-    let combined_group_chains: HashSet<String> = group1_chains.union(&group2_chains).cloned().collect();
+    let combined_group_chains: HashSet<String> =
+        group1_chains.union(&group2_chains).cloned().collect();
 
     // Create PDB with only chains from both groups (remove unrelated chains)
     let mut pdb_combined = pdb.clone();
-    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(&chain.id().to_string()));
+    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(chain.id()));
 
     // Calculate SASA for the combined complex (only chains in groups)
     let combined_sasa = get_chain_sasa(
@@ -374,29 +375,17 @@ pub fn get_dsasa(
 
     // Create PDB with only group1 chains and calculate SASA
     let mut pdb_group1 = pdb.clone();
-    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(&chain.id().to_string()));
+    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(chain.id()));
 
-    let group1_sasa = get_chain_sasa(
-        &pdb_group1,
-        probe_radius,
-        n_points,
-        model_num,
-        num_threads,
-    );
+    let group1_sasa = get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, num_threads);
 
     let group1_total = sum_sasa(&group1_sasa);
 
     // Create PDB with only group2 chains and calculate SASA
     let mut pdb_group2 = pdb.clone();
-    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(&chain.id().to_string()));
+    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(chain.id()));
 
-    let group2_sasa = get_chain_sasa(
-        &pdb_group2,
-        probe_radius,
-        n_points,
-        model_num,
-        num_threads,
-    );
+    let group2_sasa = get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, num_threads);
 
     let group2_total = sum_sasa(&group2_sasa);
 
@@ -529,13 +518,35 @@ mod tests {
         assert!(!df.is_empty(), "SASA DataFrame should not be empty");
 
         // Check that the expected columns exist
-        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
-        assert!(columns.contains(&"atomi".to_string()), "Should have 'atomi' column");
-        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
-        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
-        assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
-        assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
-        assert!(columns.contains(&"atomn".to_string()), "Should have 'atomn' column");
+        let columns: Vec<String> = df
+            .get_column_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(
+            columns.contains(&"atomi".to_string()),
+            "Should have 'atomi' column"
+        );
+        assert!(
+            columns.contains(&"sasa".to_string()),
+            "Should have 'sasa' column"
+        );
+        assert!(
+            columns.contains(&"chain".to_string()),
+            "Should have 'chain' column"
+        );
+        assert!(
+            columns.contains(&"resn".to_string()),
+            "Should have 'resn' column"
+        );
+        assert!(
+            columns.contains(&"resi".to_string()),
+            "Should have 'resi' column"
+        );
+        assert!(
+            columns.contains(&"atomn".to_string()),
+            "Should have 'atomn' column"
+        );
     }
 
     #[test]
@@ -545,12 +556,7 @@ mod tests {
 
         // Get the SASA column and check values are non-negative
         let sasa_col = df.column("sasa").unwrap();
-        let sasa_values: Vec<f32> = sasa_col
-            .f32()
-            .unwrap()
-            .into_iter()
-            .filter_map(|v| v)
-            .collect();
+        let sasa_values: Vec<f32> = sasa_col.f32().unwrap().into_iter().flatten().collect();
 
         assert!(
             sasa_values.iter().all(|&v| v >= 0.0),
@@ -559,10 +565,7 @@ mod tests {
 
         // Check that some atoms have non-zero SASA (surface exposed)
         let non_zero_count = sasa_values.iter().filter(|&&v| v > 0.0).count();
-        assert!(
-            non_zero_count > 0,
-            "Some atoms should have non-zero SASA"
-        );
+        assert!(non_zero_count > 0, "Some atoms should have non-zero SASA");
     }
 
     #[test]
@@ -574,14 +577,39 @@ mod tests {
         assert!(!df.is_empty(), "Residue SASA DataFrame should not be empty");
 
         // Check that the expected columns exist
-        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
-        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
-        assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
-        assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
-        assert!(columns.contains(&"insertion".to_string()), "Should have 'insertion' column");
-        assert!(columns.contains(&"altloc".to_string()), "Should have 'altloc' column");
-        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
-        assert!(columns.contains(&"is_polar".to_string()), "Should have 'is_polar' column");
+        let columns: Vec<String> = df
+            .get_column_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(
+            columns.contains(&"chain".to_string()),
+            "Should have 'chain' column"
+        );
+        assert!(
+            columns.contains(&"resn".to_string()),
+            "Should have 'resn' column"
+        );
+        assert!(
+            columns.contains(&"resi".to_string()),
+            "Should have 'resi' column"
+        );
+        assert!(
+            columns.contains(&"insertion".to_string()),
+            "Should have 'insertion' column"
+        );
+        assert!(
+            columns.contains(&"altloc".to_string()),
+            "Should have 'altloc' column"
+        );
+        assert!(
+            columns.contains(&"sasa".to_string()),
+            "Should have 'sasa' column"
+        );
+        assert!(
+            columns.contains(&"is_polar".to_string()),
+            "Should have 'is_polar' column"
+        );
     }
 
     #[test]
@@ -605,17 +633,15 @@ mod tests {
             .unwrap()
             .f32()
             .unwrap()
-            .into_iter()
-            .filter_map(|v| v)
-            .sum();
+            .sum()
+            .unwrap();
         let residue_total: f32 = residue_df
             .column("sasa")
             .unwrap()
             .f32()
             .unwrap()
-            .into_iter()
-            .filter_map(|v| v)
-            .sum();
+            .sum()
+            .unwrap();
 
         // Allow for small differences due to potentially different filtering
         let ratio = residue_total / atom_total;
@@ -637,9 +663,19 @@ mod tests {
         assert!(!df.is_empty(), "Chain SASA DataFrame should not be empty");
 
         // Check that the expected columns exist
-        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
-        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
-        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
+        let columns: Vec<String> = df
+            .get_column_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(
+            columns.contains(&"chain".to_string()),
+            "Should have 'chain' column"
+        );
+        assert!(
+            columns.contains(&"sasa".to_string()),
+            "Should have 'sasa' column"
+        );
     }
 
     #[test]
@@ -666,12 +702,7 @@ mod tests {
 
         // Check that all SASA values are non-negative
         let sasa_col = df.column("sasa").unwrap();
-        let sasa_values: Vec<f32> = sasa_col
-            .f32()
-            .unwrap()
-            .into_iter()
-            .filter_map(|v| v)
-            .collect();
+        let sasa_values: Vec<f32> = sasa_col.f32().unwrap().into_iter().flatten().collect();
 
         assert!(
             sasa_values.iter().all(|&v| v >= 0.0),
@@ -716,13 +747,7 @@ mod tests {
         let pdb = load_ubiquitin();
         let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
 
-        let total_sasa: f32 = df
-            .column("sasa")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .get(0)
-            .unwrap();
+        let total_sasa: f32 = df.column("sasa").unwrap().f32().unwrap().get(0).unwrap();
 
         // Expected value from rust-sasa 0.9.0 with default parameters
         // This should be around 4813 Å² for ubiquitin
@@ -755,12 +780,12 @@ mod tests {
         let pdb = load_multi_chain();
 
         // Calculate dSASA between groups A,B,C and G,H,L
-        let dsasa = get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0, 1);
+        let dsasa = get_dsasa(&pdb, "C/H,L", 1.4, 100, 0, 1);
 
-        // Regression test: the dSASA should be around 5600-5800 Å²
-        // This is the value calculated from the CLI test
-        let expected_dsasa = 5696.0;
-        let tolerance = 400.0; // Allow some tolerance
+        // Regression test: the dSASA should be around 1644-1665 Å²
+        // as calculated from PyMOL and Rosetta InterfaceAnalyzer
+        let expected_dsasa = 1650.0;
+        let tolerance = 50.0; // Allow some tolerance
 
         assert!(
             (dsasa - expected_dsasa).abs() < tolerance,
@@ -793,15 +818,37 @@ mod tests {
         let df = get_relative_sasa(&pdb, 1.4, 100, 0, 1);
 
         // Check that we get results
-        assert!(!df.is_empty(), "Relative SASA DataFrame should not be empty");
+        assert!(
+            !df.is_empty(),
+            "Relative SASA DataFrame should not be empty"
+        );
 
         // Check that the expected columns exist
-        let columns: Vec<String> = df.get_column_names().iter().map(|s| s.to_string()).collect();
-        assert!(columns.contains(&"chain".to_string()), "Should have 'chain' column");
-        assert!(columns.contains(&"resn".to_string()), "Should have 'resn' column");
-        assert!(columns.contains(&"resi".to_string()), "Should have 'resi' column");
-        assert!(columns.contains(&"sasa".to_string()), "Should have 'sasa' column");
-        assert!(columns.contains(&"relative_sasa".to_string()), "Should have 'relative_sasa' column");
+        let columns: Vec<String> = df
+            .get_column_names()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(
+            columns.contains(&"chain".to_string()),
+            "Should have 'chain' column"
+        );
+        assert!(
+            columns.contains(&"resn".to_string()),
+            "Should have 'resn' column"
+        );
+        assert!(
+            columns.contains(&"resi".to_string()),
+            "Should have 'resi' column"
+        );
+        assert!(
+            columns.contains(&"sasa".to_string()),
+            "Should have 'sasa' column"
+        );
+        assert!(
+            columns.contains(&"relative_sasa".to_string()),
+            "Should have 'relative_sasa' column"
+        );
     }
 
     #[test]
@@ -816,7 +863,7 @@ mod tests {
             .f32()
             .unwrap()
             .into_iter()
-            .filter_map(|v| v)
+            .flatten()
             .collect();
 
         // All values should be non-negative
@@ -839,17 +886,13 @@ mod tests {
     fn test_get_max_asa_standard_amino_acids() {
         // Test that all standard amino acids have MaxASA values
         let amino_acids = [
-            "ALA", "ARG", "ASN", "ASP", "CYS", "GLU", "GLN", "GLY", "HIS", "ILE",
-            "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+            "ALA", "ARG", "ASN", "ASP", "CYS", "GLU", "GLN", "GLY", "HIS", "ILE", "LEU", "LYS",
+            "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
         ];
 
         for aa in amino_acids.iter() {
             let max_asa = get_max_asa(aa);
-            assert!(
-                max_asa.is_some(),
-                "Should have MaxASA value for {}",
-                aa
-            );
+            assert!(max_asa.is_some(), "Should have MaxASA value for {}", aa);
             assert!(
                 max_asa.unwrap() > 0.0,
                 "MaxASA for {} should be positive",

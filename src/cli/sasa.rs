@@ -1,4 +1,4 @@
-use arpeggia::{load_model, write_df_to_file, DataFrameFileType};
+use arpeggia::{DataFrameFileType, load_model, write_df_to_file};
 use clap::{Parser, ValueEnum};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
@@ -163,5 +163,3 @@ pub(crate) fn run(args: &Args) {
     let output_file_str = output_file.to_str().unwrap();
     info!("Results saved to {output_file_str}");
 }
-
-

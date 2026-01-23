@@ -93,14 +93,12 @@ pub(crate) fn run(args: &Args) {
     };
 
     // Get combined chains (union of both groups)
-    let combined_group_chains: HashSet<String> = group1_chains
-        .union(&group2_chains)
-        .cloned()
-        .collect();
+    let combined_group_chains: HashSet<String> =
+        group1_chains.union(&group2_chains).cloned().collect();
 
     // Create PDB with only chains from both groups (remove unrelated chains)
     let mut pdb_combined = pdb.clone();
-    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(&chain.id().to_string()));
+    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(chain.id()));
 
     // Calculate SASA for the combined complex (only chains in groups)
     let combined_sasa = arpeggia::get_chain_sasa(
@@ -121,7 +119,7 @@ pub(crate) fn run(args: &Args) {
 
     // Create PDB with only group1 chains and calculate SASA
     let mut pdb_group1 = pdb.clone();
-    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(&chain.id().to_string()));
+    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(chain.id()));
 
     let group1_sasa = arpeggia::get_chain_sasa(
         &pdb_group1,
@@ -135,7 +133,7 @@ pub(crate) fn run(args: &Args) {
 
     // Create PDB with only group2 chains and calculate SASA
     let mut pdb_group2 = pdb.clone();
-    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(&chain.id().to_string()));
+    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(chain.id()));
 
     let group2_sasa = arpeggia::get_chain_sasa(
         &pdb_group2,
@@ -152,8 +150,14 @@ pub(crate) fn run(args: &Args) {
     // This gives the buried surface area at the interface
     let dsasa = group1_total + group2_total - combined_total;
 
-    debug!("SASA of group 1 ({:?}): {:.2} Å²", group1_chains, group1_total);
-    debug!("SASA of group 2 ({:?}): {:.2} Å²", group2_chains, group2_total);
+    debug!(
+        "SASA of group 1 ({:?}): {:.2} Å²",
+        group1_chains, group1_total
+    );
+    debug!(
+        "SASA of group 2 ({:?}): {:.2} Å²",
+        group2_chains, group2_total
+    );
     debug!("SASA of combined complex: {:.2} Å²", combined_total);
 
     let group1_str: Vec<String> = group1_chains.iter().map(|c| c.to_string()).collect();

@@ -110,9 +110,10 @@ fn sasa(
         "residue" => crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, threads),
         "chain" => crate::get_chain_sasa(&pdb, probe_radius, n_points, model_num, threads),
         _ => {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid level '{}'. Must be one of: 'atom', 'residue', 'chain'", level),
-            ))
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid level '{}'. Must be one of: 'atom', 'residue', 'chain'",
+                level
+            )));
         }
     };
 
@@ -168,23 +169,16 @@ fn dsasa(
     };
 
     // Get combined chains (union of both groups)
-    let combined_group_chains: HashSet<String> = group1_chains
-        .union(&group2_chains)
-        .cloned()
-        .collect();
+    let combined_group_chains: HashSet<String> =
+        group1_chains.union(&group2_chains).cloned().collect();
 
     // Create PDB with only chains from both groups (remove unrelated chains)
     let mut pdb_combined = pdb.clone();
     pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(&chain.id().to_string()));
 
     // Calculate SASA for the combined complex (only chains in groups)
-    let combined_sasa = crate::get_chain_sasa(
-        &pdb_combined,
-        probe_radius,
-        n_points,
-        model_num,
-        threads,
-    );
+    let combined_sasa =
+        crate::get_chain_sasa(&pdb_combined, probe_radius, n_points, model_num, threads);
 
     if combined_sasa.is_empty() {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -214,13 +208,8 @@ fn dsasa(
     let mut pdb_group1 = pdb.clone();
     pdb_group1.remove_chains_by(|chain| !group1_chains.contains(&chain.id().to_string()));
 
-    let group1_sasa = crate::get_chain_sasa(
-        &pdb_group1,
-        probe_radius,
-        n_points,
-        model_num,
-        threads,
-    );
+    let group1_sasa =
+        crate::get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, threads);
 
     let group1_total = sum_sasa(&group1_sasa);
 
@@ -228,13 +217,8 @@ fn dsasa(
     let mut pdb_group2 = pdb.clone();
     pdb_group2.remove_chains_by(|chain| !group2_chains.contains(&chain.id().to_string()));
 
-    let group2_sasa = crate::get_chain_sasa(
-        &pdb_group2,
-        probe_radius,
-        n_points,
-        model_num,
-        threads,
-    );
+    let group2_sasa =
+        crate::get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, threads);
 
     let group2_total = sum_sasa(&group2_sasa);
 

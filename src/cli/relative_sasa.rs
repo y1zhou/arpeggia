@@ -1,4 +1,4 @@
-use arpeggia::{load_model, write_df_to_file, DataFrameFileType};
+use arpeggia::{DataFrameFileType, load_model, write_df_to_file};
 use clap::Parser;
 use polars::prelude::ChunkCompareEq;
 use std::path::{Path, PathBuf};

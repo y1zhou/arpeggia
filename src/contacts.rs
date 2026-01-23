@@ -139,7 +139,9 @@ pub(crate) fn results_to_df(res: &[ResultEntry]) -> DataFrame {
 }
 
 /// Convert sidechain statistics into a Polars DataFrame.
-pub(crate) fn sc_results_to_df(res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>) -> DataFrame {
+pub(crate) fn sc_results_to_df(
+    res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>,
+) -> DataFrame {
     df!(
         "model" => res.keys().map(|k| k.0.model as u32).collect::<Vec<u32>>(),
         "from_chain" => res.keys().map(|k| k.0.chain.to_owned()).collect::<Vec<String>>(),
