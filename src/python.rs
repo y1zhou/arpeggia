@@ -124,7 +124,7 @@ fn sasa(
 /// Load a PDB or mmCIF file and calculate buried surface area at the interface between chain groups.
 ///
 /// The buried surface area (dSASA) is calculated as:
-/// dSASA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
+/// dSASA = SASA_group1 + SASA_group2 - SASA_complex
 ///
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
@@ -223,8 +223,8 @@ fn dsasa(
     let group2_total = sum_sasa(&group2_sasa);
 
     // Calculate buried surface area (dSASA)
-    // BSA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
-    let dsasa = (group1_total + group2_total - combined_total) / 2.0;
+    // dSASA = SASA_group1 + SASA_group2 - SASA_complex
+    let dsasa = group1_total + group2_total - combined_total;
 
     Ok(dsasa)
 }
@@ -267,7 +267,7 @@ fn pdb2seq(input_file: String) -> PyResult<std::collections::HashMap<String, Str
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame with relative SASA values for each residue with columns:
-///         - chain, resn, resi, insertion, altloc, sasa, is_polar, max_sasa, relative_sasa
+///         - chain, resn, resi, insertion, altloc, sasa, is_polar, relative_sasa
 ///
 /// Example:
 ///     >>> import arpeggia

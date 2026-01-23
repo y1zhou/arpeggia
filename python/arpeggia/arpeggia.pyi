@@ -70,7 +70,7 @@ def dsasa(
     """Load a PDB or mmCIF file and calculate buried surface area at the interface.
 
     The buried surface area (dSASA) is calculated as:
-    dSASA = (SASA_group1 + SASA_group2 - SASA_complex) / 2
+    dSASA = SASA_group1 + SASA_group2 - SASA_complex
 
     Args:
         input_file: Path to the PDB or mmCIF file
@@ -107,7 +107,7 @@ def relative_sasa(
 
     Returns:
         A Polars DataFrame with relative SASA values for each residue with columns:
-        - chain, resn, resi, insertion, altloc, sasa, is_polar, max_sasa, relative_sasa
+        - chain, resn, resi, insertion, altloc, sasa, is_polar, relative_sasa
     """
     ...
 
