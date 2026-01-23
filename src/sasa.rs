@@ -5,7 +5,6 @@
 //! (buried surface area) and relative SASA.
 
 use crate::interactions::InteractingEntity;
-use crate::residues::ResidueExt;
 use crate::utils::parse_groups;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -40,6 +39,51 @@ pub(crate) fn filter_pdb_by_model(pdb: &PDB, model_num: usize) -> PDB {
         pdb_filtered.remove_models_except(&[model_idx]);
     }
     pdb_filtered
+}
+
+/// Common residue names for solvent molecules.
+const SOLVENT_RESIDUES: &[&str] = &["HOH", "H2O", "D2O", "WAT", "TIP", "TIP3", "TIP4", "SPC"];
+
+/// Common residue names for ions.
+const ION_RESIDUES: &[&str] = &[
+    "NA", "CL", "K", "CA", "MG", "ZN", "FE", "MN", "CU", "CO", "NI", "CD", "SO4", "PO4", "NO3",
+    "ACE", "NH2",
+];
+
+/// Prepare a PDB structure for SASA calculation by removing solvent, ions, and hydrogens.
+///
+/// This function creates a clone of the PDB and removes:
+/// - All hydrogen atoms
+/// - Solvent molecules (HOH, H2O, WAT, etc.)
+/// - Common ions (NA, CL, CA, MG, ZN, etc.)
+///
+/// # Arguments
+///
+/// * `pdb` - Reference to a PDB structure
+///
+/// # Returns
+///
+/// A filtered PDB structure suitable for SASA calculations.
+pub(crate) fn prepare_pdb_for_sasa(pdb: &PDB) -> PDB {
+    let mut pdb_prepared = pdb.clone();
+
+    // Remove hydrogens, solvent, and ions
+    pdb_prepared.remove_atoms_by(|atom| {
+        // Remove hydrogens
+        if atom.element() == Some(&Element::H) {
+            return true;
+        }
+        false
+    });
+
+    // Remove entire residues that are solvent or ions
+    // We need to check residue names using remove_residues_by
+    pdb_prepared.remove_residues_by(|residue| {
+        let resn = residue.name().unwrap_or("");
+        SOLVENT_RESIDUES.contains(&resn) || ION_RESIDUES.contains(&resn)
+    });
+
+    pdb_prepared
 }
 
 /// Calculate solvent accessible surface area (SASA) for each atom in a PDB structure.
@@ -77,9 +121,13 @@ pub fn get_atom_sasa(
 ) -> DataFrame {
     use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
 
+    // Prepare PDB: remove solvent, ions, and hydrogens
+    let pdb_prepared = prepare_pdb_for_sasa(pdb);
+
     // If model_num is 0, we use the first model; otherwise use the specified model
     let model_num = if model_num == 0 {
-        pdb.models()
+        pdb_prepared
+            .models()
             .collect::<Vec<_>>()
             .first()
             .map_or(0, |m| m.serial_number())
@@ -87,13 +135,10 @@ pub fn get_atom_sasa(
         model_num
     };
 
-    // Calculate the SASA for each atom
-    let atoms = pdb
+    // Calculate the SASA for each atom (excluding solvent, ions, hydrogens already removed)
+    let atoms = pdb_prepared
         .atoms_with_hierarchy()
-        .filter(|x| {
-            let resn = x.residue().resn().unwrap();
-            resn != "O" && resn != "X" && x.model().serial_number() == model_num
-        })
+        .filter(|x| x.model().serial_number() == model_num)
         .map(|x| SASAAtom {
             position: [
                 x.atom().pos().0 as f32,
@@ -114,7 +159,7 @@ pub fn get_atom_sasa(
     let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, num_threads);
 
     // Create a DataFrame with the results
-    let atom_annotations = pdb
+    let atom_annotations = pdb_prepared
         .atoms_with_hierarchy()
         .map(|x| InteractingEntity::from_hier(&x))
         .collect::<Vec<InteractingEntity>>();
@@ -182,7 +227,9 @@ pub fn get_residue_sasa(
 ) -> DataFrame {
     use rust_sasa::{ResidueLevel, SASAOptions};
 
-    let pdb_filtered = filter_pdb_by_model(pdb, model_num);
+    // Prepare PDB: remove solvent, ions, and hydrogens, then filter by model
+    let pdb_prepared = prepare_pdb_for_sasa(pdb);
+    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     let options = SASAOptions::<ResidueLevel>::new()
         .with_probe_radius(probe_radius)
@@ -287,7 +334,9 @@ pub fn get_chain_sasa(
 ) -> DataFrame {
     use rust_sasa::{ChainLevel, SASAOptions};
 
-    let pdb_filtered = filter_pdb_by_model(pdb, model_num);
+    // Prepare PDB: remove solvent, ions, and hydrogens, then filter by model
+    let pdb_prepared = prepare_pdb_for_sasa(pdb);
+    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     let options = SASAOptions::<ChainLevel>::new()
         .with_probe_radius(probe_radius)
