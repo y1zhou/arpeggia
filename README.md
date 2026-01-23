@@ -77,13 +77,25 @@ print(f"Found {len(contacts_df)} contacts")
 print(contacts_df.head())
 
 # Calculate solvent accessible surface area
-sasa_df = arpeggia.sasa(
-    "structure.pdb",
-    probe_radius=1.4,    # Probe radius in Ångströms
-    n_points=100,        # Number of surface points
-    model_num=0          # Model number (0 = first model)
-)
+# Atom-level (default)
+sasa_df = arpeggia.sasa("structure.pdb", level="atom")
 print(f"Calculated SASA for {len(sasa_df)} atoms")
+
+# Residue-level SASA
+residue_sasa = arpeggia.sasa("structure.pdb", level="residue")
+print(f"Calculated SASA for {len(residue_sasa)} residues")
+
+# Chain-level SASA
+chain_sasa = arpeggia.sasa("structure.pdb", level="chain")
+print(f"Calculated SASA for {len(chain_sasa)} chains")
+
+# Calculate relative SASA (RSA) normalized by Tien et al. (2013) MaxASA values
+rsa_df = arpeggia.relative_sasa("structure.pdb")
+print(f"Calculated RSA for {len(rsa_df)} residues")
+
+# Calculate buried surface area at the interface
+bsa = arpeggia.dsasa("structure.pdb", groups="A,B/C,D")
+print(f"Buried surface area: {bsa:.2f} Å²")
 
 # Extract protein sequences
 sequences = arpeggia.pdb2seq("structure.pdb")
@@ -115,8 +127,16 @@ arpeggia contacts -i structure.pdb -o output_dir -g "A,B/C,D" -t csv
 # Analyze contacts, ignoring atoms with zero occupancy
 arpeggia contacts -i structure.pdb -o output_dir --ignore-zero-occupancy
 
-# Calculate SASA
-arpeggia sasa -i structure.pdb -o output_dir -r 1.4 -n 100
+# Calculate SASA at different levels (atom, residue, chain)
+arpeggia sasa -i structure.pdb -o output_dir --level atom
+arpeggia sasa -i structure.pdb -o output_dir --level residue
+arpeggia sasa -i structure.pdb -o output_dir --level chain
+
+# Calculate relative SASA (RSA) for each residue
+arpeggia relative-sasa -i structure.pdb -o output_dir
+
+# Calculate buried surface area at the interface
+arpeggia dsasa -i structure.pdb -g "A,B/C,D"
 
 # Extract sequences
 arpeggia seq structure.pdb
