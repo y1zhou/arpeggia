@@ -242,7 +242,6 @@ pub fn get_residue_sasa(
         .expect("Failed to calculate residue-level SASA");
 
     // Build a map of (chain_id, resi) -> (insertion, altloc) from the PDB
-    // TODO: rust-sasa does not consider insertion codes; results may be inaccurate for residues with insertion codes
     let mut residue_info: HashMap<(String, isize), (String, String)> = HashMap::new();
     for chain in pdb_filtered.chains() {
         let chain_id = chain.id().to_string();
