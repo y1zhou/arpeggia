@@ -1,14 +1,14 @@
 name: Build and test
 
 on:
-  push:
-    branches: ["master"]
-    paths:
-      - src/**
-      - Cargo.toml
-      - python/**
-      - pyproject.toml
-      - .github/workflows/build-and-test.yml
+  # push:
+  #   branches: ["master"]
+  #   paths:
+  #     - src/**
+  #     - Cargo.toml
+  #     - python/**
+  #     - pyproject.toml
+  #     - .github/workflows/build-and-test.yml
   pull_request:
     branches: ["master"]
     paths:
