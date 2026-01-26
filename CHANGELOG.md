@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **rust-sasa v0.9.1 upgrade**: Updated from v0.3.2 with API changes, performance improvements, and insertion code support
+- **rust-sasa v0.9.2 upgrade**: Updated from v0.3.2 with API changes, performance improvements, and insertion code support
 - New `--level` option for `sasa` CLI command to calculate SASA at different granularities:
   - `atom` (default): Per-atom SASA values
   - `residue`: Aggregated SASA by residue with `is_polar` classification
@@ -25,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `sasa()` now accepts a `level` parameter ("atom", "residue", "chain")
   - New `dsasa()` function for buried surface area calculation
   - New `relative_sasa()` function for RSA calculation
-- Added `insertion` and `altloc` columns to residue-level SASA output
 - Added `num_threads` parameter to all SASA functions for parallel processing control
 - 16 new tests for SASA functionality
 
