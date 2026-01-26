@@ -8,7 +8,7 @@ use crate::interactions::InteractingEntity;
 use crate::utils::{parse_groups, sum_sasa};
 use pdbtbx::*;
 use polars::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Filter a PDB structure to keep only the specified model.
 ///
@@ -187,13 +187,14 @@ pub fn get_atom_sasa(
         None,
     )
     .unwrap()
-    .sort(["chain", "resi", "altloc", "atomi"], Default::default())
+    .sort(["atomi"], Default::default())
     .unwrap()
 }
 
 /// Calculate solvent accessible surface area (SASA) aggregated by residue.
 ///
 /// Uses the rust-sasa SASAOptions API to compute SASA at the residue level.
+/// Note there when there are multiple altlocs, only the first is considered.
 ///
 /// # Arguments
 ///
@@ -206,7 +207,7 @@ pub fn get_atom_sasa(
 /// # Returns
 ///
 /// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, altloc, sasa, is_polar
+/// - chain, resn, resi, insertion, sasa, is_polar
 ///
 /// # Example
 ///
@@ -241,59 +242,16 @@ pub fn get_residue_sasa(
         .process(&pdb_filtered)
         .expect("Failed to calculate residue-level SASA");
 
-    // Build a map of (chain_id, resi) -> (insertion, altloc) from the PDB
-    let mut residue_info: HashMap<(String, isize), (String, String)> = HashMap::new();
-    for chain in pdb_filtered.chains() {
-        let chain_id = chain.id().to_string();
-        for residue in chain.residues() {
-            let resi = residue.serial_number();
-            let insertion = residue
-                .insertion_code()
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            // Get altloc from first conformer if available
-            let altloc = residue
-                .conformers()
-                .next()
-                .and_then(|c| c.alternative_location())
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            residue_info.insert((chain_id.clone(), resi), (insertion, altloc));
-        }
-    }
-
-    // Extract insertion and altloc for each result
-    let insertions: Vec<String> = result
-        .iter()
-        .map(|r| {
-            residue_info
-                .get(&(r.chain_id.clone(), r.serial_number))
-                .map(|(ins, _)| ins.clone())
-                .unwrap_or_default()
-        })
-        .collect();
-
-    let altlocs: Vec<String> = result
-        .iter()
-        .map(|r| {
-            residue_info
-                .get(&(r.chain_id.clone(), r.serial_number))
-                .map(|(_, alt)| alt.clone())
-                .unwrap_or_default()
-        })
-        .collect();
-
     df!(
         "chain" => result.iter().map(|r| r.chain_id.clone()).collect::<Vec<String>>(),
         "resn" => result.iter().map(|r| r.name.clone()).collect::<Vec<String>>(),
         "resi" => result.iter().map(|r| r.serial_number as i32).collect::<Vec<i32>>(),
-        "insertion" => insertions,
-        "altloc" => altlocs,
+        "insertion" => result.iter().map(|r| r.insertion_code.clone()).collect::<Vec<String>>(),
         "sasa" => result.iter().map(|r| r.value).collect::<Vec<f32>>(),
         "is_polar" => result.iter().map(|r| r.is_polar).collect::<Vec<bool>>(),
     )
     .unwrap()
-    .sort(["chain", "resi", "insertion", "altloc"], Default::default())
+    .sort(["chain", "resi", "insertion"], Default::default())
     .unwrap()
 }
 
@@ -630,10 +588,6 @@ mod tests {
         assert!(
             columns.contains(&"insertion".to_string()),
             "Should have 'insertion' column"
-        );
-        assert!(
-            columns.contains(&"altloc".to_string()),
-            "Should have 'altloc' column"
         );
         assert!(
             columns.contains(&"sasa".to_string()),
