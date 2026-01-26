@@ -615,20 +615,8 @@ mod tests {
 
         // Total SASA at residue level should approximately match atom level
         // (may differ slightly due to different processing paths)
-        let atom_total: f32 = atom_df
-            .column("sasa")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .sum()
-            .unwrap();
-        let residue_total: f32 = residue_df
-            .column("sasa")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .sum()
-            .unwrap();
+        let atom_total: f32 = sum_sasa(&atom_df);
+        let residue_total: f32 = sum_sasa(&residue_df);
 
         // Allow for small differences due to potentially different filtering
         let ratio = residue_total / atom_total;
