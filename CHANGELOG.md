@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-01-23
+## [0.6.0] - 2026-01-26
 
 ### Added
 
-- **rust-sasa v0.9.0 upgrade**: Updated from v0.3.2 with API changes and performance improvements
+- **rust-sasa v0.9.1 upgrade**: Updated from v0.3.2 with API changes, performance improvements, and insertion code support
 - New `--level` option for `sasa` CLI command to calculate SASA at different granularities:
   - `atom` (default): Per-atom SASA values
   - `residue`: Aggregated SASA by residue with `is_polar` classification
@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `dsasa` CLI command to calculate buried surface area at the interface between chain groups
 - New `relative-sasa` CLI command to calculate relative solvent accessible surface area (RSA) normalized by Tien et al. (2013) MaxASA values
 - New library functions: `get_residue_sasa`, `get_chain_sasa`, `get_dsasa`, `get_relative_sasa`, `get_max_asa`
+- Preprocessing to remove solvent, ions, and hydrogens before SASA calculations (`prepare_pdb_for_sasa`)
+- Utility functions: `get_num_threads` for thread management, `sum_sasa` for SASA aggregation
 - Python bindings:
   - `sasa()` now accepts a `level` parameter ("atom", "residue", "chain")
   - New `dsasa()` function for buried surface area calculation
@@ -32,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored `lib.rs` into separate modules: `contacts.rs`, `sasa.rs`, `sequences.rs`
 - SASA functions now use rust-sasa's new `SASAOptions<T>` builder API
 - Renamed `--name` to `--filename` (short: `-f`) in `sasa` and `contacts` CLI commands for consistency
+- Consolidated duplicate code: Python `dsasa()` now uses `get_dsasa()` library function directly
 
 ### Fixed
 
