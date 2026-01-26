@@ -21,7 +21,7 @@ use std::{collections::HashSet, path::Path};
 /// # Returns
 ///
 /// Thread count as isize suitable for rust-sasa
-pub fn threads_to_isize(num_threads: usize) -> isize {
+pub fn get_num_threads(num_threads: usize) -> isize {
     if num_threads == 0 {
         -1
     } else {
@@ -29,7 +29,7 @@ pub fn threads_to_isize(num_threads: usize) -> isize {
     }
 }
 
-/// Sum the SASA column of a DataFrame using polars lazy aggregation.
+/// Sum the SASA column of a DataFrame.
 ///
 /// # Arguments
 ///
@@ -39,16 +39,11 @@ pub fn threads_to_isize(num_threads: usize) -> isize {
 ///
 /// The sum of all SASA values, or 0.0 if the column is empty or doesn't exist.
 pub fn sum_sasa(df: &DataFrame) -> f32 {
-    df.clone()
-        .lazy()
-        .select([col("sasa").sum()])
-        .collect()
-        .unwrap()
-        .column("sasa")
+    df.column("sasa")
         .unwrap()
         .f32()
         .unwrap()
-        .get(0)
+        .sum()
         .unwrap_or(0.0)
 }
 

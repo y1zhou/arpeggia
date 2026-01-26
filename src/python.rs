@@ -7,8 +7,8 @@ use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 
 /// Convert thread count from Python usize to rust-sasa isize.
-fn threads_to_isize(num_threads: usize) -> isize {
-    crate::threads_to_isize(num_threads)
+fn get_num_threads(num_threads: usize) -> isize {
+    crate::get_num_threads(num_threads)
 }
 
 /// Load a PDB or mmCIF file and calculate atomic and ring contacts.
@@ -102,7 +102,7 @@ fn sasa(
     let (pdb, _warnings) = crate::load_model(&input_file);
 
     // Convert num_threads for rust-sasa
-    let threads = threads_to_isize(num_threads);
+    let threads = get_num_threads(num_threads);
 
     // Get SASA based on level
     let df = match level.to_lowercase().as_str() {
@@ -156,7 +156,7 @@ fn dsasa(
     let (pdb, _warnings) = crate::load_model(&input_file);
 
     // Convert num_threads for rust-sasa
-    let threads = threads_to_isize(num_threads);
+    let threads = get_num_threads(num_threads);
 
     // Use the library function to calculate dSASA
     let result = crate::get_dsasa(&pdb, groups, probe_radius, n_points, model_num, threads);
@@ -231,7 +231,7 @@ fn relative_sasa(
     let (pdb, _warnings) = crate::load_model(&input_file);
 
     // Convert num_threads for rust-sasa
-    let threads = threads_to_isize(num_threads);
+    let threads = get_num_threads(num_threads);
 
     // Get relative SASA
     let df = crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, threads);

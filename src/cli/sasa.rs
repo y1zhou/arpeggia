@@ -1,4 +1,4 @@
-use arpeggia::{DataFrameFileType, load_model, threads_to_isize, write_df_to_file};
+use arpeggia::{DataFrameFileType, load_model, get_num_threads, write_df_to_file};
 use clap::{Parser, ValueEnum};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
@@ -91,7 +91,7 @@ pub(crate) fn run(args: &Args) {
     }
 
     // Convert thread count to isize for rust-sasa
-    let num_threads = threads_to_isize(args.num_threads);
+    let num_threads = get_num_threads(args.num_threads);
 
     // Calculate SASA based on the specified level
     let mut df_sasa = match args.level {

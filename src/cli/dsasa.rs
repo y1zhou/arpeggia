@@ -1,4 +1,4 @@
-use arpeggia::{load_model, parse_groups, sum_sasa, threads_to_isize};
+use arpeggia::{load_model, parse_groups, sum_sasa, get_num_threads};
 use clap::Parser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -70,7 +70,7 @@ pub(crate) fn run(args: &Args) {
     debug!("Group 2 chains: {:?}", group2_chains);
 
     // Convert thread count to isize for rust-sasa
-    let num_threads = threads_to_isize(args.num_threads);
+    let num_threads = get_num_threads(args.num_threads);
 
     // Get combined chains (union of both groups)
     let combined_group_chains: HashSet<String> =
