@@ -21,7 +21,9 @@ mod utils;
 // Re-export key public types
 pub use interactions::{InteractingEntity, Interaction, Interactions, ResultEntry};
 pub use residues::{Plane, ResidueExt, ResidueId};
-pub use utils::{DataFrameFileType, load_model, parse_groups, write_df_to_file};
+pub use utils::{
+    DataFrameFileType, load_model, parse_groups, sum_sasa, threads_to_isize, write_df_to_file,
+};
 
 // Re-export public functions from modules
 pub use contacts::get_contacts;

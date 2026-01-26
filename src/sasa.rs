@@ -5,7 +5,7 @@
 //! (buried surface area) and relative SASA.
 
 use crate::interactions::InteractingEntity;
-use crate::utils::parse_groups;
+use crate::utils::{parse_groups, sum_sasa};
 use pdbtbx::*;
 use polars::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -403,21 +403,6 @@ pub fn get_dsasa(
         model_num,
         num_threads,
     );
-
-    // Sum SASA using polars lazy aggregation
-    let sum_sasa = |df: &DataFrame| -> f32 {
-        df.clone()
-            .lazy()
-            .select([col("sasa").sum()])
-            .collect()
-            .unwrap()
-            .column("sasa")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .get(0)
-            .unwrap_or(0.0)
-    };
 
     let combined_total = sum_sasa(&combined_sasa);
 

@@ -5,7 +5,11 @@
 
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
-use std::collections::HashSet;
+
+/// Convert thread count from Python usize to rust-sasa isize.
+fn threads_to_isize(num_threads: usize) -> isize {
+    crate::threads_to_isize(num_threads)
+}
 
 /// Load a PDB or mmCIF file and calculate atomic and ring contacts.
 ///
@@ -97,12 +101,8 @@ fn sasa(
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
-    // Convert num_threads: 0 means all cores (-1 for rust-sasa)
-    let threads: isize = if num_threads == 0 {
-        -1
-    } else {
-        num_threads as isize
-    };
+    // Convert num_threads for rust-sasa
+    let threads = threads_to_isize(num_threads);
 
     // Get SASA based on level
     let df = match level.to_lowercase().as_str() {
@@ -155,78 +155,23 @@ fn dsasa(
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
-    // Get all chains in the PDB
-    let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
+    // Convert num_threads for rust-sasa
+    let threads = threads_to_isize(num_threads);
 
-    // Parse groups using the utility function
-    let (group1_chains, group2_chains) = crate::parse_groups(&all_chains, groups);
+    // Use the library function to calculate dSASA
+    let result = crate::get_dsasa(&pdb, groups, probe_radius, n_points, model_num, threads);
 
-    // Convert num_threads: 0 means all cores (-1 for rust-sasa)
-    let threads: isize = if num_threads == 0 {
-        -1
-    } else {
-        num_threads as isize
-    };
-
-    // Get combined chains (union of both groups)
-    let combined_group_chains: HashSet<String> =
-        group1_chains.union(&group2_chains).cloned().collect();
-
-    // Create PDB with only chains from both groups (remove unrelated chains)
-    let mut pdb_combined = pdb.clone();
-    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(&chain.id().to_string()));
-
-    // Calculate SASA for the combined complex (only chains in groups)
-    let combined_sasa =
-        crate::get_chain_sasa(&pdb_combined, probe_radius, n_points, model_num, threads);
-
-    if combined_sasa.is_empty() {
-        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-            "No SASA data found. Please check the input file and model number.",
-        ));
+    if result <= 0.0 {
+        // dSASA can be 0 for non-interacting groups, but we should warn about potential issues
+        // A negative dSASA would indicate an error in the calculation
+        if result < 0.0 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "Negative dSASA calculated. Please check the input file and chain groups.",
+            ));
+        }
     }
 
-    // Helper to sum SASA column
-    let sum_sasa = |df: &polars::prelude::DataFrame| -> f32 {
-        use polars::prelude::*;
-        df.clone()
-            .lazy()
-            .select([col("sasa").sum()])
-            .collect()
-            .unwrap()
-            .column("sasa")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .get(0)
-            .unwrap_or(0.0)
-    };
-
-    let combined_total = sum_sasa(&combined_sasa);
-
-    // Create PDB with only group1 chains and calculate SASA
-    let mut pdb_group1 = pdb.clone();
-    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(&chain.id().to_string()));
-
-    let group1_sasa =
-        crate::get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, threads);
-
-    let group1_total = sum_sasa(&group1_sasa);
-
-    // Create PDB with only group2 chains and calculate SASA
-    let mut pdb_group2 = pdb.clone();
-    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(&chain.id().to_string()));
-
-    let group2_sasa =
-        crate::get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, threads);
-
-    let group2_total = sum_sasa(&group2_sasa);
-
-    // Calculate buried surface area (dSASA)
-    // dSASA = SASA_group1 + SASA_group2 - SASA_complex
-    let dsasa = group1_total + group2_total - combined_total;
-
-    Ok(dsasa)
+    Ok(result)
 }
 
 /// Load a PDB or mmCIF file and extract sequences for all chains.
@@ -285,12 +230,8 @@ fn relative_sasa(
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
-    // Convert num_threads: 0 means all cores (-1 for rust-sasa)
-    let threads: isize = if num_threads == 0 {
-        -1
-    } else {
-        num_threads as isize
-    };
+    // Convert num_threads for rust-sasa
+    let threads = threads_to_isize(num_threads);
 
     // Get relative SASA
     let df = crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, threads);

@@ -3,6 +3,55 @@ use pdbtbx::*;
 use polars::prelude::*;
 use std::{collections::HashSet, path::Path};
 
+/// Convert thread count from usize to isize for rust-sasa.
+///
+/// The rust-sasa library uses isize for thread count where:
+/// - -1 means use all available cores
+/// - 1 means single-threaded
+/// - n > 1 means use n threads
+///
+/// This function converts from the user-facing usize convention where:
+/// - 0 means use all available cores
+/// - n > 0 means use n threads
+///
+/// # Arguments
+///
+/// * `num_threads` - Number of threads (0 for all cores)
+///
+/// # Returns
+///
+/// Thread count as isize suitable for rust-sasa
+pub fn threads_to_isize(num_threads: usize) -> isize {
+    if num_threads == 0 {
+        -1
+    } else {
+        num_threads as isize
+    }
+}
+
+/// Sum the SASA column of a DataFrame using polars lazy aggregation.
+///
+/// # Arguments
+///
+/// * `df` - DataFrame containing a "sasa" column
+///
+/// # Returns
+///
+/// The sum of all SASA values, or 0.0 if the column is empty or doesn't exist.
+pub fn sum_sasa(df: &DataFrame) -> f32 {
+    df.clone()
+        .lazy()
+        .select([col("sasa").sum()])
+        .collect()
+        .unwrap()
+        .column("sasa")
+        .unwrap()
+        .f32()
+        .unwrap()
+        .get(0)
+        .unwrap_or(0.0)
+}
+
 /// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
 pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
     // Load file as complex structure

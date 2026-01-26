@@ -1,6 +1,5 @@
-use arpeggia::{load_model, parse_groups};
+use arpeggia::{load_model, parse_groups, sum_sasa, threads_to_isize};
 use clap::Parser;
-use polars::prelude::*;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
@@ -37,21 +36,6 @@ pub(crate) struct Args {
     num_threads: usize,
 }
 
-/// Sum the SASA column of a DataFrame using polars aggregation.
-fn sum_sasa(df: &DataFrame) -> f32 {
-    df.clone()
-        .lazy()
-        .select([col("sasa").sum()])
-        .collect()
-        .unwrap()
-        .column("sasa")
-        .unwrap()
-        .f32()
-        .unwrap()
-        .get(0)
-        .unwrap_or(0.0)
-}
-
 pub(crate) fn run(args: &Args) {
     trace!("{args:?}");
 
@@ -85,12 +69,8 @@ pub(crate) fn run(args: &Args) {
     debug!("Group 1 chains: {:?}", group1_chains);
     debug!("Group 2 chains: {:?}", group2_chains);
 
-    // Calculate thread count: convert usize to isize, where 0 means use all cores (-1)
-    let num_threads: isize = if args.num_threads == 0 {
-        -1
-    } else {
-        args.num_threads as isize
-    };
+    // Convert thread count to isize for rust-sasa
+    let num_threads = threads_to_isize(args.num_threads);
 
     // Get combined chains (union of both groups)
     let combined_group_chains: HashSet<String> =

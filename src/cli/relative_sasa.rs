@@ -1,4 +1,4 @@
-use arpeggia::{DataFrameFileType, load_model, write_df_to_file};
+use arpeggia::{DataFrameFileType, load_model, threads_to_isize, write_df_to_file};
 use clap::Parser;
 use polars::prelude::ChunkCompareEq;
 use std::path::{Path, PathBuf};
@@ -64,12 +64,8 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
-    // Calculate thread count: convert usize to isize, where 0 means use all cores (-1)
-    let num_threads: isize = if args.num_threads == 0 {
-        -1
-    } else {
-        args.num_threads as isize
-    };
+    // Convert thread count to isize for rust-sasa
+    let num_threads = threads_to_isize(args.num_threads);
 
     // Calculate relative SASA
     let mut df_relative_sasa = arpeggia::get_relative_sasa(
