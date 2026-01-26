@@ -1,4 +1,4 @@
-use arpeggia::{DataFrameFileType, load_model, get_num_threads, write_df_to_file};
+use arpeggia::{DataFrameFileType, get_num_threads, load_model, write_df_to_file};
 use clap::{Parser, ValueEnum};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};

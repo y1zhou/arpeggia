@@ -1,4 +1,4 @@
-use arpeggia::{load_model, parse_groups, sum_sasa, get_num_threads};
+use arpeggia::{get_num_threads, load_model, parse_groups, sum_sasa};
 use clap::Parser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
