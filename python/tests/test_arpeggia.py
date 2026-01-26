@@ -88,14 +88,20 @@ def test_contacts_ignore_zero_occupancy(test_pdb_file):
 
     # Test with ignore_zero_occupancy=False (default)
     df1 = arpeggia.contacts(
-        test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5,
-        ignore_zero_occupancy=False
+        test_pdb_file,
+        groups="/",
+        vdw_comp=0.1,
+        dist_cutoff=6.5,
+        ignore_zero_occupancy=False,
     )
 
     # Test with ignore_zero_occupancy=True
     df2 = arpeggia.contacts(
-        test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5,
-        ignore_zero_occupancy=True
+        test_pdb_file,
+        groups="/",
+        vdw_comp=0.1,
+        dist_cutoff=6.5,
+        ignore_zero_occupancy=True,
     )
 
     # Both should return valid DataFrames

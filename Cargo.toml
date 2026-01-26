@@ -1,6 +1,6 @@
 [package]
 name = "arpeggia"
-version = "0.5.1"
+version = "0.6.0"
 description = "A port of the Arpeggio library for Rust"
 edition = "2024"
 authors = ["Yi Zhou <me@y1zhou.com>"]
@@ -25,7 +25,7 @@ pyo3 = { version = "^0.26", features = ["extension-module"], optional = true }
 pyo3-polars = { version = "0.25", features = ["derive", "lazy"], optional = true }
 rayon = "1.10.0"
 rstar = "0.12.2"
-rust-sasa = "0.3.2"
+rust-sasa = "0.9.2"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 

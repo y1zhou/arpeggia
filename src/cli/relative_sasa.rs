@@ -1,33 +1,11 @@
 use arpeggia::{DataFrameFileType, get_num_threads, load_model, write_df_to_file};
-use clap::{Parser, ValueEnum};
-use polars::prelude::*;
+use clap::Parser;
+use polars::prelude::ChunkCompareEq;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
 
-/// Granularity level for SASA calculation.
-#[derive(ValueEnum, Clone, Debug, Copy, Default)]
-pub enum SasaLevel {
-    /// Calculate SASA for each individual atom
-    #[default]
-    Atom,
-    /// Aggregate SASA by residue
-    Residue,
-    /// Aggregate SASA by chain
-    Chain,
-}
-
-impl std::fmt::Display for SasaLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SasaLevel::Atom => write!(f, "atom"),
-            SasaLevel::Residue => write!(f, "residue"),
-            SasaLevel::Chain => write!(f, "chain"),
-        }
-    }
-}
-
 #[derive(Parser, Debug, Clone)]
-#[command(version, about)]
+#[command(version, about = "Calculate relative SASA (RSA) for each residue")]
 pub(crate) struct Args {
     /// Path to the PDB or mmCIF file to be analyzed
     #[arg(short, long)]
@@ -38,7 +16,7 @@ pub(crate) struct Args {
     output: PathBuf,
 
     /// Name of the output file
-    #[arg(short = 'f', long = "filename", default_value_t = String::from("sasa"))]
+    #[arg(short = 'f', long = "filename", default_value_t = String::from("relative_sasa"))]
     filename: String,
 
     /// Output file type
@@ -60,10 +38,6 @@ pub(crate) struct Args {
     /// Number of threads to use for parallel processing
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
-
-    /// Granularity level for SASA calculation
-    #[arg(short = 'l', long = "level", default_value_t = SasaLevel::Atom)]
-    level: SasaLevel,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -93,32 +67,16 @@ pub(crate) fn run(args: &Args) {
     // Convert thread count to isize for rust-sasa
     let num_threads = get_num_threads(args.num_threads);
 
-    // Calculate SASA based on the specified level
-    let mut df_sasa = match args.level {
-        SasaLevel::Atom => arpeggia::get_atom_sasa(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
-            num_threads,
-        ),
-        SasaLevel::Residue => arpeggia::get_residue_sasa(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
-            num_threads,
-        ),
-        SasaLevel::Chain => arpeggia::get_chain_sasa(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
-            num_threads,
-        ),
-    };
+    // Calculate relative SASA
+    let mut df_relative_sasa = arpeggia::get_relative_sasa(
+        &pdb,
+        args.probe_radius,
+        args.n_points,
+        args.model_num,
+        num_threads,
+    );
 
-    if df_sasa.is_empty() {
+    if df_relative_sasa.is_empty() {
         error!(
             "No data found in the input file. Please check the provided arguments, especially the model number."
         );
@@ -134,28 +92,22 @@ pub(crate) fn run(args: &Args) {
     }
     .with_extension(args.output_format.to_string());
 
-    // Save results and log the identified SASA
-    let non_zero_sasa_mask = df_sasa
+    // Log summary statistics
+    let non_zero_sasa_mask = df_relative_sasa
         .column("sasa")
         .unwrap()
         .as_materialized_series()
         .not_equal(0.0)
         .unwrap();
-    let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
-    let entity_name = match args.level {
-        SasaLevel::Atom => "atoms",
-        SasaLevel::Residue => "residues",
-        SasaLevel::Chain => "chains",
-    };
+    let df_sasa_nonzero = df_relative_sasa.filter(&non_zero_sasa_mask).unwrap();
     debug!(
-        "Found {} {} with non-zero SASA\n{}",
+        "Found {} residues with non-zero SASA\n{}",
         df_sasa_nonzero.height(),
-        entity_name,
         df_sasa_nonzero
     );
 
-    // Save res to CSV files
-    write_df_to_file(&mut df_sasa, &output_file, args.output_format);
+    // Save results to file
+    write_df_to_file(&mut df_relative_sasa, &output_file, args.output_format);
     let output_file_str = output_file.to_str().unwrap();
     info!("Results saved to {output_file_str}");
 }

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "arpeggia"
-version = "0.5.1"
+version = "0.6.0"
 description = "A library for analyzing protein-protein interactions in PDB and mmCIF files"
 authors = [
     {name = "Yi Zhou", email = "me@y1zhou.com"}

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-01-26
+
+### Added
+
+- **rust-sasa v0.9.2 upgrade**: Updated from v0.3.2 with API changes, performance improvements, and insertion code support
+- New `--level` option for `sasa` CLI command to calculate SASA at different granularities:
+  - `atom` (default): Per-atom SASA values
+  - `residue`: Aggregated SASA by residue with `is_polar` classification
+  - `chain`: Aggregated SASA by chain
+- New `dsasa` CLI command to calculate buried surface area at the interface between chain groups
+- New `relative-sasa` CLI command to calculate relative solvent accessible surface area (RSA) normalized by Tien et al. (2013) MaxASA values
+- New library functions: `get_residue_sasa`, `get_chain_sasa`, `get_dsasa`, `get_relative_sasa`, `get_max_asa`
+- Preprocessing to remove solvent, ions, and hydrogens before SASA calculations (`prepare_pdb_for_sasa`)
+- Utility functions: `get_num_threads` for thread management, `sum_sasa` for SASA aggregation
+- Python bindings:
+  - `sasa()` now accepts a `level` parameter ("atom", "residue", "chain")
+  - New `dsasa()` function for buried surface area calculation
+  - New `relative_sasa()` function for RSA calculation
+- Added `num_threads` parameter to all SASA functions for parallel processing control
+- 16 new tests for SASA functionality
+
+### Changed
+
+- Refactored `lib.rs` into separate modules: `contacts.rs`, `sasa.rs`, `sequences.rs`
+- SASA functions now use rust-sasa's new `SASAOptions<T>` builder API
+- Renamed `--name` to `--filename` (short: `-f`) in `sasa` and `contacts` CLI commands for consistency
+- Consolidated duplicate code: Python `dsasa()` now uses `get_dsasa()` library function directly
+
+### Fixed
+
+- CLI short flag conflict between `--name` and `--num-points` (both used `-n`)
+
 ## [0.5.1] - 2026-01-20
 
 ### Added
@@ -129,7 +161,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.6.0
 [0.5.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.1
 [0.5.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.0
 [0.4.2]: https://github.com/y1zhou/arpeggia/releases/tag/v0.4.2
