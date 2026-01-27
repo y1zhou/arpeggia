@@ -240,16 +240,91 @@ fn relative_sasa(
     Ok(PyDataFrame(df))
 }
 
+/// Load a PDB or mmCIF file and calculate Spatial Aggregation Propensity (SAP) scores.
+///
+/// The SAP score quantifies the aggregation propensity by combining the solvent-accessible
+/// hydrophobic surface area of neighboring residues. It was developed by Chennamsetty et al.
+/// and is described in "Developability Index: A Rapid In Silico Tool for the Screening of
+/// Antibody Aggregation Propensity" (J Pharm Sci, 2012).
+///
+/// The formula is:
+/// SAP(i) = Σ{j ∈ neighbors(i, R)} [ Hydrophobicity(j) × (SASA(j) / SASA_max(j)) ]
+///
+/// Where:
+/// - Neighbors are atoms/residues within radius R of atom/residue i
+/// - Hydrophobicity uses the Black & Mould (1991) scale, normalized so glycine = 0
+/// - SASA is the side-chain solvent accessible surface area
+/// - SASA_max is the maximum SASA for that residue type
+///
+/// Args:
+///     input_file (str): Path to the PDB or mmCIF file
+///     level (str, optional): Aggregation level for SAP calculation. Options:
+///         - "atom": Calculate SAP for each atom (default)
+///         - "residue": Aggregate SAP by residue
+///     probe_radius (float, optional): Probe radius in Ångströms for SASA calculation. Defaults to 1.4.
+///     n_points (int, optional): Number of points for SASA surface calculation. Defaults to 100.
+///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     sap_radius (float, optional): Radius in Ångströms for neighbor search. Defaults to 5.0.
+///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
+///
+/// Returns:
+///     polars.DataFrame: A DataFrame with SAP scores. Columns depend on the level:
+///         - atom: chain, resn, resi, insertion, atomn, atomi, sasa, sap_score
+///         - residue: chain, resn, resi, insertion, sasa, sap_score
+///
+/// Example:
+///     >>> import arpeggia
+///     >>> # Atom-level SAP scores
+///     >>> sap_df = arpeggia.sap_score("structure.pdb", level="atom")
+///     >>> print(f"Calculated SAP for {len(sap_df)} atoms")
+///     >>>
+///     >>> # Residue-level SAP scores
+///     >>> residue_sap = arpeggia.sap_score("structure.pdb", level="residue")
+///     >>> print(f"Calculated SAP for {len(residue_sap)} residues")
+#[pyfunction]
+#[pyo3(signature = (input_file, level="residue", probe_radius=1.4, n_points=100, model_num=0, sap_radius=5.0, num_threads=1))]
+fn sap_score(
+    input_file: String,
+    level: &str,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    sap_radius: f32,
+    num_threads: usize,
+) -> PyResult<PyDataFrame> {
+    // Load the PDB file
+    let (pdb, _warnings) = crate::load_model(&input_file);
+
+    // Convert num_threads for rust-sasa
+    let threads = get_num_threads(num_threads);
+
+    // Get SAP scores based on level
+    let df = match level.to_lowercase().as_str() {
+        "atom" => crate::get_per_atom_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads),
+        "residue" => crate::get_per_residue_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads),
+        _ => {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid level '{}'. Must be one of: 'atom', 'residue'",
+                level
+            )));
+        }
+    };
+
+    // Convert to PyDataFrame for Python
+    Ok(PyDataFrame(df))
+}
+
 /// Python module for protein structure analysis.
 ///
 /// This module provides functions for analyzing protein structures from PDB and mmCIF files,
-/// including contact detection, SASA calculation, and sequence extraction.
+/// including contact detection, SASA calculation, SAP score calculation, and sequence extraction.
 #[pymodule]
 fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(contacts, m)?)?;
     m.add_function(wrap_pyfunction!(sasa, m)?)?;
     m.add_function(wrap_pyfunction!(dsasa, m)?)?;
     m.add_function(wrap_pyfunction!(relative_sasa, m)?)?;
+    m.add_function(wrap_pyfunction!(sap_score, m)?)?;
     m.add_function(wrap_pyfunction!(pdb2seq, m)?)?;
     Ok(())
 }

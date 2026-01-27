@@ -14,6 +14,7 @@ mod chains;
 mod contacts;
 mod interactions;
 mod residues;
+mod sap;
 mod sasa;
 mod sequences;
 mod utils;
@@ -27,6 +28,7 @@ pub use utils::{
 
 // Re-export public functions from modules
 pub use contacts::get_contacts;
+pub use sap::{get_per_atom_sap_score, get_per_residue_sap_score};
 pub use sasa::{
     get_atom_sasa, get_chain_sasa, get_dsasa, get_max_asa, get_relative_sasa, get_residue_sasa,
 };
