@@ -30,7 +30,7 @@ use rstar::{PointDistance, RTree, RTreeObject, AABB};
 /// and hydrophilic residues (less hydrophobic than Gly) have negative values.
 ///
 /// Original Black & Mould values (0-1 normalized):
-/// - PHE: 1.000, TYR: 0.880, TRP: 0.878, VAL: 0.825
+/// - PHE: 1.000, ILE: 0.943, LEU: 0.943, TYR: 0.880, TRP: 0.878, VAL: 0.825
 /// - MET: 0.738, PRO: 0.711, CYS: 0.680, ALA: 0.616
 /// - GLY: 0.501, THR: 0.450, SER: 0.359, LYS: 0.283
 /// - GLN: 0.251, ASN: 0.236, HIS: 0.165, GLU: 0.043
@@ -266,8 +266,10 @@ pub fn get_per_atom_sap_score(
                     get_max_sidechain_sasa(&neighbor.resn),
                 ) {
                     // Only consider side-chain atoms for SAP
-                    if neighbor.is_sidechain && max_sasa > 0.0 {
+                    if neighbor.is_sidechain {
                         // SAP contribution = hydrophobicity * (SASA / max_SASA)
+                        // Clamp to 1.0 because observed SASA can exceed theoretical max
+                        // due to structural context and calculation parameters
                         let sasa_fraction = (neighbor.sasa / max_sasa).min(1.0);
                         sap += hydrop * sasa_fraction;
                     }

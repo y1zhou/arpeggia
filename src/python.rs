@@ -274,13 +274,13 @@ fn relative_sasa(
 ///
 /// Example:
 ///     >>> import arpeggia
+///     >>> # Residue-level SAP scores (default)
+///     >>> residue_sap = arpeggia.sap_score("structure.pdb")
+///     >>> print(f"Calculated SAP for {len(residue_sap)} residues")
+///     >>>
 ///     >>> # Atom-level SAP scores
 ///     >>> sap_df = arpeggia.sap_score("structure.pdb", level="atom")
 ///     >>> print(f"Calculated SAP for {len(sap_df)} atoms")
-///     >>>
-///     >>> # Residue-level SAP scores
-///     >>> residue_sap = arpeggia.sap_score("structure.pdb", level="residue")
-///     >>> print(f"Calculated SAP for {len(residue_sap)} residues")
 #[pyfunction]
 #[pyo3(signature = (input_file, level="residue", probe_radius=1.4, n_points=100, model_num=0, sap_radius=5.0, num_threads=1))]
 fn sap_score(
