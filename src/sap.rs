@@ -11,7 +11,7 @@
 //! SAP(i) = Σ{j ∈ neighbors(i, R)} [ Hydrophobicity(j) × (SASA(j) / SASA_max(j)) ]
 //!
 //! Where:
-//! - Neighbors are atoms/residues within radius R of atom/residue i
+//! - Neighbors are atoms within radius R of atom i
 //! - Hydrophobicity uses the Black & Mould (1991) scale, normalized so glycine = 0
 //! - SASA is the side-chain solvent accessible surface area
 //! - SASA_max is the maximum SASA for that residue type
@@ -19,6 +19,7 @@
 use crate::sasa::{get_atom_sasa, get_max_asa};
 use pdbtbx::*;
 use polars::prelude::*;
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 /// Black & Mould (1991) hydrophobicity scale values for amino acids.
@@ -40,26 +41,26 @@ use std::collections::HashMap;
 fn get_hydrophobicity(resn: &str) -> Option<f32> {
     // Black & Mould values minus Glycine (0.501)
     match resn.to_uppercase().as_str() {
-        "ALA" => Some(0.616 - 0.501),  // 0.115
-        "ARG" => Some(0.000 - 0.501),  // -0.501
-        "ASN" => Some(0.236 - 0.501),  // -0.265
-        "ASP" => Some(0.028 - 0.501),  // -0.473
-        "CYS" => Some(0.680 - 0.501),  // 0.179
-        "GLU" => Some(0.043 - 0.501),  // -0.458
-        "GLN" => Some(0.251 - 0.501),  // -0.250
-        "GLY" => Some(0.0),            // 0.0 (reference)
-        "HIS" => Some(0.165 - 0.501),  // -0.336
-        "ILE" => Some(0.943 - 0.501),  // 0.442
-        "LEU" => Some(0.943 - 0.501),  // 0.442
-        "LYS" => Some(0.283 - 0.501),  // -0.218
-        "MET" => Some(0.738 - 0.501),  // 0.237
-        "PHE" => Some(1.000 - 0.501),  // 0.499
-        "PRO" => Some(0.711 - 0.501),  // 0.210
-        "SER" => Some(0.359 - 0.501),  // -0.142
-        "THR" => Some(0.450 - 0.501),  // -0.051
-        "TRP" => Some(0.878 - 0.501),  // 0.377
-        "TYR" => Some(0.880 - 0.501),  // 0.379
-        "VAL" => Some(0.825 - 0.501),  // 0.324
+        "ALA" => Some(0.616 - 0.501), // 0.115
+        "ARG" => Some(0.000 - 0.501), // -0.501
+        "ASN" => Some(0.236 - 0.501), // -0.265
+        "ASP" => Some(0.028 - 0.501), // -0.473
+        "CYS" => Some(0.680 - 0.501), // 0.179
+        "GLU" => Some(0.043 - 0.501), // -0.458
+        "GLN" => Some(0.251 - 0.501), // -0.250
+        "GLY" => Some(0.0),           // 0.0 (reference)
+        "HIS" => Some(0.165 - 0.501), // -0.336
+        "ILE" => Some(0.943 - 0.501), // 0.442
+        "LEU" => Some(0.943 - 0.501), // 0.442
+        "LYS" => Some(0.283 - 0.501), // -0.218
+        "MET" => Some(0.738 - 0.501), // 0.237
+        "PHE" => Some(1.000 - 0.501), // 0.499
+        "PRO" => Some(0.711 - 0.501), // 0.210
+        "SER" => Some(0.359 - 0.501), // -0.142
+        "THR" => Some(0.450 - 0.501), // -0.051
+        "TRP" => Some(0.878 - 0.501), // 0.377
+        "TYR" => Some(0.880 - 0.501), // 0.379
+        "VAL" => Some(0.825 - 0.501), // 0.324
         _ => None,
     }
 }
@@ -106,31 +107,30 @@ pub fn get_per_atom_sap_score(
     let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, num_threads);
 
     // Create a lookup map from atom serial number to SASA value
-    let atomi_col = atom_sasa_df.column("atomi").unwrap();
-    let sasa_col = atom_sasa_df.column("sasa").unwrap();
-    let atomi_values: Vec<i32> = atomi_col.i32().unwrap().into_iter().flatten().collect();
-    let sasa_values: Vec<f32> = sasa_col.f32().unwrap().into_iter().flatten().collect();
+    let atomi_col = atom_sasa_df
+        .column("atomi")
+        .unwrap()
+        .i32()
+        .unwrap()
+        .into_iter()
+        .flatten();
+    let sasa_col = atom_sasa_df
+        .column("sasa")
+        .unwrap()
+        .f32()
+        .unwrap()
+        .into_iter()
+        .flatten();
+    let sasa_map: HashMap<i32, f32> = atomi_col.into_iter().zip(sasa_col).collect();
 
-    let sasa_map: HashMap<usize, f32> = atomi_values
-        .iter()
-        .zip(sasa_values.iter())
-        .map(|(&atomi, &sasa)| (atomi as usize, sasa))
-        .collect();
-
-    // Also create a map of atom serial to residue name for hydrophobicity lookup
-    let resn_col = atom_sasa_df.column("resn").unwrap();
-    let resn_values: Vec<String> = resn_col
+    // Also create a map of residue name to hydrophobicity scale for lookup
+    let resn_col = atom_sasa_df.column("resn").unwrap().unique().unwrap();
+    let resn_hphobicity_map: HashMap<&str, f32> = resn_col
         .str()
         .unwrap()
         .into_iter()
         .flatten()
-        .map(|s| s.to_string())
-        .collect();
-
-    let resn_map: HashMap<usize, String> = atomi_values
-        .iter()
-        .zip(resn_values.iter())
-        .map(|(&atomi, resn)| (atomi as usize, resn.clone()))
+        .map(|s| (s, get_hydrophobicity(s).unwrap_or(0.0)))
         .collect();
 
     // Use pdbtbx's R-tree for spatial indexing (similar to InteractionComplex::get_atomic_contacts)
@@ -138,65 +138,77 @@ pub fn get_per_atom_sap_score(
     let sap_radius_sq = (sap_radius * sap_radius) as f64;
 
     // Calculate SAP score for each atom in the DataFrame
-    let sap_scores: Vec<f32> = atomi_values
-        .iter()
-        .map(|&atomi| {
-            // Find the atom in the hierarchy to get its position
-            let atom_hier = pdb
-                .atoms_with_hierarchy()
-                .find(|h| h.atom().serial_number() == atomi as usize);
+    let sap_scores_map: HashMap<usize, f32> = pdb
+        .atoms_with_hierarchy()
+        .filter(|h| h.is_sidechain())
+        .flat_map(|x| {
+            let x_atomi = x.atom().serial_number();
 
-            if let Some(hier) = atom_hier {
-                // Find neighbors using pdbtbx's R-tree
-                let neighbors = tree.locate_within_distance(hier.atom().pos(), sap_radius_sq);
-
-                // Calculate SAP contribution from each neighbor
-                let mut sap = 0.0f32;
-                for neighbor in neighbors {
-                    // Skip self
-                    if neighbor.atom().serial_number() == atomi as usize {
-                        continue;
+            let atom_sap_score = tree
+                // Find neighboring sidechain atoms within SAP radius
+                .locate_within_distance(x.atom().pos(), sap_radius_sq)
+                .filter(|y| (x_atomi != y.atom().serial_number()) & (y.is_sidechain()))
+                // SAP contribution = hydrophobicity * (SASA / max_SASA)
+                // Clamp to 1.0 because observed SASA can exceed theoretical max
+                .map(|y| {
+                    let neighbor_resn = y.residue().name().unwrap();
+                    if let (Some(neighbor_atom_sasa), Some(neighbor_res_hphobicity)) = (
+                        sasa_map.get(&(y.atom().serial_number() as i32)),
+                        resn_hphobicity_map.get(neighbor_resn),
+                    ) {
+                        let max_sasa = get_max_asa(neighbor_resn).unwrap();
+                        neighbor_res_hphobicity * (neighbor_atom_sasa / max_sasa).min(1.0)
+                    } else {
+                        0.0
                     }
-
-                    let neighbor_serial = neighbor.atom().serial_number();
-
-                    // Get SASA and residue name from our maps
-                    if let (Some(&neighbor_sasa), Some(neighbor_resn)) =
-                        (sasa_map.get(&neighbor_serial), resn_map.get(&neighbor_serial))
-                    {
-                        // Get hydrophobicity and max SASA for the neighbor's residue
-                        // Using get_max_asa from sasa.rs as requested
-                        if let (Some(hydrop), Some(max_sasa)) = (
-                            get_hydrophobicity(neighbor_resn),
-                            get_max_asa(neighbor_resn),
-                        ) {
-                            // Only consider side-chain atoms for SAP
-                            // Use pdbtbx's is_backbone method
-                            if !neighbor.atom().is_backbone() {
-                                // SAP contribution = hydrophobicity * (SASA / max_SASA)
-                                // Clamp to 1.0 because observed SASA can exceed theoretical max
-                                // due to structural context and calculation parameters
-                                let sasa_fraction = (neighbor_sasa / max_sasa).min(1.0);
-                                sap += hydrop * sasa_fraction;
-                            }
-                        }
-                    }
-                }
-                sap
-            } else {
-                0.0
-            }
+                })
+                .collect::<Vec<f32>>()
+                .iter()
+                .sum();
+            Some((x_atomi, atom_sap_score))
         })
         .collect();
 
+    // Returned DataFrame should only include side-chain atoms
+    let sidechain_atomi: Series = pdb
+        .par_atoms()
+        .filter(|a| !a.is_backbone())
+        .map(|a| a.serial_number() as i32)
+        .collect::<Vec<i32>>()
+        .iter()
+        .collect();
+    let sc_atom_sasa_df = atom_sasa_df
+        .lazy()
+        .filter(col("atomi").is_in(lit(sidechain_atomi).implode(), false))
+        .rename(["sasa"], ["sc_sasa"], true) // Be clear this is side-chain SASA
+        .collect()
+        .unwrap();
+    let sap_scores: Vec<f32> = sc_atom_sasa_df
+        .column("atomi")
+        .unwrap()
+        .i32()
+        .unwrap()
+        .into_iter()
+        .flatten()
+        .map(|atomi| *sap_scores_map.get(&(atomi as usize)).unwrap_or(&0.0))
+        .collect();
+
     // Add SAP scores to the DataFrame
-    atom_sasa_df
-        .clone()
+    sc_atom_sasa_df
         .lazy()
         .with_column(Series::new("sap_score".into(), sap_scores).lit())
         .collect()
         .unwrap()
-        .select(["chain", "resn", "resi", "insertion", "atomn", "atomi", "sasa", "sap_score"])
+        .select([
+            "chain",
+            "resn",
+            "resi",
+            "insertion",
+            "atomn",
+            "atomi",
+            "sc_sasa",
+            "sap_score",
+        ])
         .unwrap()
         .sort(["atomi"], Default::default())
         .unwrap()
@@ -240,20 +252,22 @@ pub fn get_per_residue_sap_score(
     num_threads: isize,
 ) -> DataFrame {
     // Get per-atom SAP scores
-    let atom_sap = get_per_atom_sap_score(pdb, probe_radius, n_points, model_num, sap_radius, num_threads);
+    let atom_sap = get_per_atom_sap_score(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        sap_radius,
+        num_threads,
+    );
 
     // Aggregate by residue
     atom_sap
         .lazy()
+        .filter(col("sap_score").gt(lit(0.0))) // Ref. calculate_per_res_sap in Rosetta
         .group_by([col("chain"), col("resn"), col("resi"), col("insertion")])
-        .agg([
-            col("sasa").sum(),
-            col("sap_score").sum(),
-        ])
-        .sort(
-            ["chain", "resi", "insertion"],
-            Default::default(),
-        )
+        .agg([col("sc_sasa").sum(), col("sap_score").sum()])
+        .sort(["chain", "resi", "insertion"], Default::default())
         .collect()
         .unwrap()
 }
@@ -298,20 +312,27 @@ mod tests {
     fn test_max_asa_values() {
         // All standard amino acids should have values (using get_max_asa from sasa.rs)
         let amino_acids = [
-            "ALA", "ARG", "ASN", "ASP", "CYS", "GLU", "GLN", "GLY", "HIS", "ILE",
-            "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+            "ALA", "ARG", "ASN", "ASP", "CYS", "GLU", "GLN", "GLY", "HIS", "ILE", "LEU", "LYS",
+            "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
         ];
 
         for aa in amino_acids.iter() {
             let max_sasa = get_max_asa(aa);
             assert!(max_sasa.is_some(), "Should have max SASA for {}", aa);
-            assert!(max_sasa.unwrap() > 0.0, "Max SASA for {} should be positive", aa);
+            assert!(
+                max_sasa.unwrap() > 0.0,
+                "Max SASA for {} should be positive",
+                aa
+            );
         }
 
         // Larger residues should have larger max SASA
         let gly_sasa = get_max_asa("GLY").unwrap();
         let trp_sasa = get_max_asa("TRP").unwrap();
-        assert!(trp_sasa > gly_sasa, "TRP should have larger max SASA than GLY");
+        assert!(
+            trp_sasa > gly_sasa,
+            "TRP should have larger max SASA than GLY"
+        );
     }
 
     #[test]
@@ -450,12 +471,11 @@ mod tests {
         assert!(!df.is_empty(), "Multi-chain SAP should not be empty");
 
         // Should have multiple chains
-        let chain_count = df
-            .column("chain")
-            .unwrap()
-            .unique()
-            .unwrap()
-            .len();
-        assert!(chain_count > 1, "Should have multiple chains: {}", chain_count);
+        let chain_count = df.column("chain").unwrap().unique().unwrap().len();
+        assert!(
+            chain_count > 1,
+            "Should have multiple chains: {}",
+            chain_count
+        );
     }
 }
