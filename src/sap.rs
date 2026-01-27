@@ -16,10 +16,10 @@
 //! - SASA is the side-chain solvent accessible surface area
 //! - SASA_max is the maximum SASA for that residue type
 
-use crate::sasa::{filter_pdb_by_model, prepare_pdb_for_sasa};
+use crate::sasa::{get_atom_sasa, get_max_asa};
 use pdbtbx::*;
 use polars::prelude::*;
-use rstar::{PointDistance, RTree, RTreeObject, AABB};
+use std::collections::HashMap;
 
 /// Black & Mould (1991) hydrophobicity scale values for amino acids.
 /// These values are normalized so that the scale ranges from 0 to 1,
@@ -64,78 +64,6 @@ fn get_hydrophobicity(resn: &str) -> Option<f32> {
     }
 }
 
-/// Maximum side-chain SASA values for amino acids in a Gly-X-Gly tripeptide context.
-/// These values are used to normalize the side-chain SASA for SAP calculations.
-///
-/// Values are derived from Tien et al. (2013) "Maximum Allowed Solvent Accessibilities
-/// of Residues in Proteins" PLOS ONE, specifically using side-chain values.
-/// For Glycine and Alanine, we use small positive values since they have minimal
-/// side chains but still contribute to the surface.
-fn get_max_sidechain_sasa(resn: &str) -> Option<f32> {
-    // Side-chain SASA values (approximate, based on literature)
-    // These represent the maximum exposed side-chain surface area
-    match resn.to_uppercase().as_str() {
-        "ALA" => Some(67.0),   // Small side chain (CB only)
-        "ARG" => Some(196.0),
-        "ASN" => Some(113.0),
-        "ASP" => Some(106.0),
-        "CYS" => Some(104.0),
-        "GLU" => Some(138.0),
-        "GLN" => Some(144.0),
-        "GLY" => Some(25.0),   // No side chain, but CA contributes
-        "HIS" => Some(151.0),
-        "ILE" => Some(140.0),
-        "LEU" => Some(137.0),
-        "LYS" => Some(167.0),
-        "MET" => Some(160.0),
-        "PHE" => Some(175.0),
-        "PRO" => Some(105.0),
-        "SER" => Some(80.0),
-        "THR" => Some(102.0),
-        "TRP" => Some(217.0),
-        "TYR" => Some(187.0),
-        "VAL" => Some(117.0),
-        _ => None,
-    }
-}
-
-/// Helper struct for R-tree spatial indexing of atoms
-#[derive(Debug, Clone)]
-struct SpatialAtom {
-    /// Atom position
-    position: [f32; 3],
-    /// Atom serial number
-    atom_serial: usize,
-    /// Residue name (3-letter code)
-    resn: String,
-    /// Is this a side-chain atom (not backbone N, CA, C, O)?
-    is_sidechain: bool,
-    /// SASA value for this atom
-    sasa: f32,
-}
-
-impl RTreeObject for SpatialAtom {
-    type Envelope = AABB<[f32; 3]>;
-
-    fn envelope(&self) -> Self::Envelope {
-        AABB::from_point(self.position)
-    }
-}
-
-impl PointDistance for SpatialAtom {
-    fn distance_2(&self, point: &[f32; 3]) -> f32 {
-        let dx = self.position[0] - point[0];
-        let dy = self.position[1] - point[1];
-        let dz = self.position[2] - point[2];
-        dx * dx + dy * dy + dz * dz
-    }
-}
-
-/// Check if an atom is a backbone atom
-fn is_backbone_atom(atom_name: &str) -> bool {
-    matches!(atom_name, "N" | "CA" | "C" | "O" | "OXT" | "H" | "HA" | "HA2" | "HA3")
-}
-
 /// Calculate the SAP score for each atom in a PDB structure.
 ///
 /// The SAP score quantifies the aggregation propensity by combining the
@@ -173,151 +101,105 @@ pub fn get_per_atom_sap_score(
     sap_radius: f32,
     num_threads: isize,
 ) -> DataFrame {
-    use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
+    // Use get_atom_sasa from sasa.rs for SASA calculation
+    // Note: This already handles hydrogen stripping and solvent/ion removal
+    let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, num_threads);
 
-    // Prepare PDB: remove solvent, ions, and hydrogens, then filter by model
-    let pdb_prepared = prepare_pdb_for_sasa(pdb);
-    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
+    // Create a lookup map from atom serial number to SASA value
+    let atomi_col = atom_sasa_df.column("atomi").unwrap();
+    let sasa_col = atom_sasa_df.column("sasa").unwrap();
+    let atomi_values: Vec<i32> = atomi_col.i32().unwrap().into_iter().flatten().collect();
+    let sasa_values: Vec<f32> = sasa_col.f32().unwrap().into_iter().flatten().collect();
 
-    // Get the actual model number we're using
-    let actual_model_num = if model_num == 0 {
-        pdb_filtered
-            .models()
-            .collect::<Vec<_>>()
-            .first()
-            .map_or(0, |m| m.serial_number())
-    } else {
-        model_num
-    };
-
-    // Collect atoms with hierarchy info for SASA calculation
-    let atoms_with_hier: Vec<_> = pdb_filtered
-        .atoms_with_hierarchy()
-        .filter(|x| x.model().serial_number() == actual_model_num)
+    let sasa_map: HashMap<usize, f32> = atomi_values
+        .iter()
+        .zip(sasa_values.iter())
+        .map(|(&atomi, &sasa)| (atomi as usize, sasa))
         .collect();
 
-    // Calculate SASA for each atom
-    let sasa_atoms: Vec<SASAAtom> = atoms_with_hier
-        .iter()
-        .map(|x| SASAAtom {
-            position: [
-                x.atom().pos().0 as f32,
-                x.atom().pos().1 as f32,
-                x.atom().pos().2 as f32,
-            ],
-            radius: x
-                .atom()
-                .element()
-                .unwrap()
-                .atomic_radius()
-                .van_der_waals
-                .unwrap() as f32,
-            id: x.atom().serial_number(),
-            parent_id: None,
-        })
+    // Also create a map of atom serial to residue name for hydrophobicity lookup
+    let resn_col = atom_sasa_df.column("resn").unwrap();
+    let resn_values: Vec<String> = resn_col
+        .str()
+        .unwrap()
+        .into_iter()
+        .flatten()
+        .map(|s| s.to_string())
         .collect();
 
-    let atom_sasa_values = calculate_sasa_internal(&sasa_atoms, probe_radius, n_points, num_threads);
-
-    // Build SpatialAtom list for R-tree
-    let spatial_atoms: Vec<SpatialAtom> = atoms_with_hier
+    let resn_map: HashMap<usize, String> = atomi_values
         .iter()
-        .zip(atom_sasa_values.iter())
-        .map(|(hier, &sasa)| {
-            let atom_name = hier.atom().name().to_string();
-            SpatialAtom {
-                position: [
-                    hier.atom().pos().0 as f32,
-                    hier.atom().pos().1 as f32,
-                    hier.atom().pos().2 as f32,
-                ],
-                atom_serial: hier.atom().serial_number(),
-                resn: hier.residue().name().unwrap_or("").to_string(),
-                is_sidechain: !is_backbone_atom(&atom_name),
-                sasa,
-            }
-        })
+        .zip(resn_values.iter())
+        .map(|(&atomi, resn)| (atomi as usize, resn.clone()))
         .collect();
 
-    // Build R-tree for spatial indexing
-    let rtree = RTree::bulk_load(spatial_atoms.clone());
+    // Use pdbtbx's R-tree for spatial indexing (similar to InteractionComplex::get_atomic_contacts)
+    let tree = pdb.create_hierarchy_rtree();
+    let sap_radius_sq = (sap_radius * sap_radius) as f64;
 
-    // Calculate SAP score for each atom
-    let sap_radius_sq = sap_radius * sap_radius;
-    let sap_scores: Vec<f32> = spatial_atoms
+    // Calculate SAP score for each atom in the DataFrame
+    let sap_scores: Vec<f32> = atomi_values
         .iter()
-        .map(|atom| {
-            // Find neighbors within sap_radius
-            let neighbors: Vec<_> = rtree
-                .locate_within_distance(atom.position, sap_radius_sq)
-                .collect();
+        .map(|&atomi| {
+            // Find the atom in the hierarchy to get its position
+            let atom_hier = pdb
+                .atoms_with_hierarchy()
+                .find(|h| h.atom().serial_number() == atomi as usize);
 
-            // Calculate SAP contribution from each neighbor
-            let mut sap = 0.0f32;
-            for neighbor in neighbors {
-                // Skip self
-                if neighbor.atom_serial == atom.atom_serial {
-                    continue;
-                }
+            if let Some(hier) = atom_hier {
+                // Find neighbors using pdbtbx's R-tree
+                let neighbors = tree.locate_within_distance(hier.atom().pos(), sap_radius_sq);
 
-                // Get hydrophobicity and max SASA for the neighbor's residue
-                if let (Some(hydrop), Some(max_sasa)) = (
-                    get_hydrophobicity(&neighbor.resn),
-                    get_max_sidechain_sasa(&neighbor.resn),
-                ) {
-                    // Only consider side-chain atoms for SAP
-                    if neighbor.is_sidechain {
-                        // SAP contribution = hydrophobicity * (SASA / max_SASA)
-                        // Clamp to 1.0 because observed SASA can exceed theoretical max
-                        // due to structural context and calculation parameters
-                        let sasa_fraction = (neighbor.sasa / max_sasa).min(1.0);
-                        sap += hydrop * sasa_fraction;
+                // Calculate SAP contribution from each neighbor
+                let mut sap = 0.0f32;
+                for neighbor in neighbors {
+                    // Skip self
+                    if neighbor.atom().serial_number() == atomi as usize {
+                        continue;
+                    }
+
+                    let neighbor_serial = neighbor.atom().serial_number();
+
+                    // Get SASA and residue name from our maps
+                    if let (Some(&neighbor_sasa), Some(neighbor_resn)) =
+                        (sasa_map.get(&neighbor_serial), resn_map.get(&neighbor_serial))
+                    {
+                        // Get hydrophobicity and max SASA for the neighbor's residue
+                        // Using get_max_asa from sasa.rs as requested
+                        if let (Some(hydrop), Some(max_sasa)) = (
+                            get_hydrophobicity(neighbor_resn),
+                            get_max_asa(neighbor_resn),
+                        ) {
+                            // Only consider side-chain atoms for SAP
+                            // Use pdbtbx's is_backbone method
+                            if !neighbor.atom().is_backbone() {
+                                // SAP contribution = hydrophobicity * (SASA / max_SASA)
+                                // Clamp to 1.0 because observed SASA can exceed theoretical max
+                                // due to structural context and calculation parameters
+                                let sasa_fraction = (neighbor_sasa / max_sasa).min(1.0);
+                                sap += hydrop * sasa_fraction;
+                            }
+                        }
                     }
                 }
+                sap
+            } else {
+                0.0
             }
-            sap
         })
         .collect();
 
-    // Build result DataFrame
-    let chains: Vec<String> = atoms_with_hier
-        .iter()
-        .map(|x| x.chain().id().to_string())
-        .collect();
-    let resns: Vec<String> = atoms_with_hier
-        .iter()
-        .map(|x| x.residue().name().unwrap_or("").to_string())
-        .collect();
-    let resis: Vec<i32> = atoms_with_hier
-        .iter()
-        .map(|x| x.residue().id().0 as i32)
-        .collect();
-    let insertions: Vec<String> = atoms_with_hier
-        .iter()
-        .map(|x| x.residue().id().1.unwrap_or("").to_string())
-        .collect();
-    let atomns: Vec<String> = atoms_with_hier
-        .iter()
-        .map(|x| x.atom().name().to_string())
-        .collect();
-    let atomis: Vec<i32> = atoms_with_hier
-        .iter()
-        .map(|x| x.atom().serial_number() as i32)
-        .collect();
-
-    df!(
-        "chain" => chains,
-        "resn" => resns,
-        "resi" => resis,
-        "insertion" => insertions,
-        "atomn" => atomns,
-        "atomi" => atomis,
-        "sasa" => atom_sasa_values,
-        "sap_score" => sap_scores,
-    )
-    .unwrap()
-    .sort(["atomi"], Default::default())
-    .unwrap()
+    // Add SAP scores to the DataFrame
+    atom_sasa_df
+        .clone()
+        .lazy()
+        .with_column(Series::new("sap_score".into(), sap_scores).lit())
+        .collect()
+        .unwrap()
+        .select(["chain", "resn", "resi", "insertion", "atomn", "atomi", "sasa", "sap_score"])
+        .unwrap()
+        .sort(["atomi"], Default::default())
+        .unwrap()
 }
 
 /// Calculate the SAP score aggregated by residue.
@@ -413,22 +295,22 @@ mod tests {
     }
 
     #[test]
-    fn test_max_sidechain_sasa() {
-        // All standard amino acids should have values
+    fn test_max_asa_values() {
+        // All standard amino acids should have values (using get_max_asa from sasa.rs)
         let amino_acids = [
             "ALA", "ARG", "ASN", "ASP", "CYS", "GLU", "GLN", "GLY", "HIS", "ILE",
             "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
         ];
 
         for aa in amino_acids.iter() {
-            let max_sasa = get_max_sidechain_sasa(aa);
+            let max_sasa = get_max_asa(aa);
             assert!(max_sasa.is_some(), "Should have max SASA for {}", aa);
             assert!(max_sasa.unwrap() > 0.0, "Max SASA for {} should be positive", aa);
         }
 
         // Larger residues should have larger max SASA
-        let gly_sasa = get_max_sidechain_sasa("GLY").unwrap();
-        let trp_sasa = get_max_sidechain_sasa("TRP").unwrap();
+        let gly_sasa = get_max_asa("GLY").unwrap();
+        let trp_sasa = get_max_asa("TRP").unwrap();
         assert!(trp_sasa > gly_sasa, "TRP should have larger max SASA than GLY");
     }
 
