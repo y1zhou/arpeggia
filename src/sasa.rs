@@ -125,18 +125,10 @@ pub fn get_atom_sasa(
     let pdb_prepared = prepare_pdb_for_sasa(pdb);
 
     // If model_num is 0, we use the first model; otherwise use the specified model
-    let model_num = if model_num == 0 {
-        pdb_prepared
-            .models()
-            .collect::<Vec<_>>()
-            .first()
-            .map_or(0, |m| m.serial_number())
-    } else {
-        model_num
-    };
+    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     // Calculate the SASA for each atom (excluding solvent, ions, hydrogens already removed)
-    let atoms = pdb_prepared
+    let atoms = pdb_filtered
         .atoms_with_hierarchy()
         .filter(|x| x.model().serial_number() == model_num)
         .map(|x| SASAAtom {
@@ -159,7 +151,7 @@ pub fn get_atom_sasa(
     let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, num_threads);
 
     // Create a DataFrame with the results
-    let atom_annotations = pdb_prepared
+    let atom_annotations = pdb_filtered
         .atoms_with_hierarchy()
         .map(|x| InteractingEntity::from_hier(&x))
         .collect::<Vec<InteractingEntity>>();
