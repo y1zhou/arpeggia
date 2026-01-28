@@ -23,7 +23,7 @@ mod utils;
 pub use interactions::{InteractingEntity, Interaction, Interactions, ResultEntry};
 pub use residues::{Plane, ResidueExt, ResidueId};
 pub use utils::{
-    DataFrameFileType, get_num_threads, load_model, parse_groups, sum_sasa, write_df_to_file,
+    DataFrameFileType, get_num_threads, load_model, parse_groups, sum_float_col, write_df_to_file,
 };
 
 // Re-export public functions from modules

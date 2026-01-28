@@ -5,7 +5,7 @@
 //! (buried surface area) and relative SASA.
 
 use crate::interactions::InteractingEntity;
-use crate::utils::{parse_groups, sum_sasa};
+use crate::utils::{parse_groups, sum_float_col};
 use pdbtbx::*;
 use polars::prelude::*;
 use std::collections::HashSet;
@@ -354,7 +354,7 @@ pub fn get_dsasa(
         num_threads,
     );
 
-    let combined_total = sum_sasa(&combined_sasa);
+    let combined_total = sum_float_col(&combined_sasa, "sasa");
 
     // Create PDB with only group1 chains and calculate SASA
     let mut pdb_group1 = pdb.clone();
@@ -362,7 +362,7 @@ pub fn get_dsasa(
 
     let group1_sasa = get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, num_threads);
 
-    let group1_total = sum_sasa(&group1_sasa);
+    let group1_total = sum_float_col(&group1_sasa, "sasa");
 
     // Create PDB with only group2 chains and calculate SASA
     let mut pdb_group2 = pdb.clone();
@@ -370,7 +370,7 @@ pub fn get_dsasa(
 
     let group2_sasa = get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, num_threads);
 
-    let group2_total = sum_sasa(&group2_sasa);
+    let group2_total = sum_float_col(&group2_sasa, "sasa");
 
     // Calculate buried surface area (dSASA)
     // dSASA = SASA_group1 + SASA_group2 - SASA_complex
@@ -607,8 +607,8 @@ mod tests {
 
         // Total SASA at residue level should approximately match atom level
         // (may differ slightly due to different processing paths)
-        let atom_total: f32 = sum_sasa(&atom_df);
-        let residue_total: f32 = sum_sasa(&residue_df);
+        let atom_total: f32 = sum_float_col(&atom_df, "sasa");
+        let residue_total: f32 = sum_float_col(&residue_df, "sasa");
 
         // Allow for small differences due to potentially different filtering
         let ratio = residue_total / atom_total;
