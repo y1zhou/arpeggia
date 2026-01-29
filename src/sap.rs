@@ -66,7 +66,15 @@ fn get_hydrophobicity(resn: &str) -> Option<f32> {
 }
 
 /// Get the maximum side-chain solvent accessible surface area (SASA).
-/// Values are adapted from Rosetta database/scoring/score_functions/sap_sasa_calib.dat.
+///
+/// These values are adapted from the Rosetta database file
+/// `database/scoring/score_functions/sap_sasa_calib.dat` and represent
+/// the maximum SASA contribution from side-chain atoms only.
+///
+/// Note: Glycine uses the CA atom contribution as it has no side-chain.
+///
+/// Returns the maximum side-chain SASA in Å² for a given 3-letter amino acid code,
+/// or None if the residue is not a standard amino acid.
 fn get_sc_max_asa(resn: &str) -> Option<f32> {
     match resn.to_uppercase().as_str() {
         "ALA" => Some(15.395),
@@ -156,13 +164,14 @@ pub fn get_per_atom_sap_score(
         .collect();
 
     // Also create a map of residue name to hydrophobicity scale for lookup
+    // Non-standard residues are filtered out as they don't have hydrophobicity values
     let resn_col = atom_sasa_df.column("resn").unwrap().unique().unwrap();
     let resn_hphobicity_map: HashMap<&str, f32> = resn_col
         .str()
         .unwrap()
         .into_iter()
         .flatten()
-        .map(|s| (s, get_hydrophobicity(s).unwrap()))
+        .filter_map(|s| get_hydrophobicity(s).map(|h| (s, h)))
         .collect();
 
     // Use pdbtbx's R-tree for spatial indexing (similar to InteractionComplex::get_atomic_contacts)
@@ -179,8 +188,9 @@ pub fn get_per_atom_sap_score(
 
             let atom_sap_score = tree
                 // Find neighboring sidechain atoms within SAP radius
+                // Note: Self is included in neighbors intentionally, as per the SAP formula
                 .locate_within_distance(x.atom().pos(), sap_radius_sq)
-                .filter(|y| y.is_sidechain()) // & (x_atomi != y.atom().serial_number())
+                .filter(|y| y.is_sidechain())
                 // SAP contribution = hydrophobicity * (SASA / max_SASA)
                 // Clamp to 1.0 in case the observed SASA exceed its theoretical max
                 .map(|y| {
@@ -190,11 +200,6 @@ pub fn get_per_atom_sap_score(
                         resn_hphobicity_map.get(neighbor_resn),
                     ) {
                         let max_res_asa = get_sc_max_asa(neighbor_resn).unwrap();
-                        // let max_atom_asa =
-                        //     get_atom_max_asa(neighbor_resn, y.atom().name()).unwrap_or(1.0);
-                        // neighbor_res_hphobicity
-                        // * (neighbor_atom_sasa / max_atom_asa).clamp(0.0, 1.0)
-                        // * (max_atom_asa / max_res_asa)
                         neighbor_res_hphobicity * (neighbor_atom_sasa / max_res_asa).clamp(0.0, 1.0)
                     } else {
                         0.0
