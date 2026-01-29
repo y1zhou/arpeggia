@@ -101,6 +101,7 @@ pub(crate) fn run(args: &Args) {
             args.n_points,
             args.model_num,
             num_threads,
+            true,
         ),
         SasaLevel::Residue => arpeggia::get_residue_sasa(
             &pdb,

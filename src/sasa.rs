@@ -126,11 +126,12 @@ pub fn get_atom_sasa(
     n_points: usize,
     model_num: usize,
     num_threads: isize,
+    remove_hydrogens: bool,
 ) -> DataFrame {
     use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
 
     // Prepare PDB: remove solvent, ions, and hydrogens
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true);
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, remove_hydrogens, true);
 
     // If model_num is 0, we use the first model; otherwise use the specified model
     let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
@@ -503,7 +504,7 @@ mod tests {
     #[test]
     fn test_get_atom_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
 
         // Check that we get results
         assert!(!df.is_empty(), "SASA DataFrame should not be empty");
@@ -543,7 +544,7 @@ mod tests {
     #[test]
     fn test_get_atom_sasa_values_reasonable() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
 
         // Get the SASA column and check values are non-negative
         let sasa_col = df.column("sasa").unwrap();
@@ -602,7 +603,7 @@ mod tests {
     #[test]
     fn test_get_residue_sasa_aggregation() {
         let pdb = load_ubiquitin();
-        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
         let residue_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
 
         // There should be fewer rows in residue-level than atom-level
