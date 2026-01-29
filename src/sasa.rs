@@ -5,7 +5,7 @@
 //! (buried surface area) and relative SASA.
 
 use crate::interactions::InteractingEntity;
-use crate::utils::{parse_groups, sum_sasa};
+use crate::utils::{parse_groups, sum_float_col};
 use pdbtbx::*;
 use polars::prelude::*;
 use std::collections::HashSet;
@@ -64,24 +64,32 @@ const ION_RESIDUES: &[&str] = &[
 /// # Returns
 ///
 /// A filtered PDB structure suitable for SASA calculations.
-pub(crate) fn prepare_pdb_for_sasa(pdb: &PDB) -> PDB {
+pub(crate) fn prepare_pdb_for_sasa(
+    pdb: &PDB,
+    remove_hydrogens: bool,
+    remove_solvent_and_ions: bool,
+) -> PDB {
     let mut pdb_prepared = pdb.clone();
 
     // Remove hydrogens, solvent, and ions
-    pdb_prepared.remove_atoms_by(|atom| {
-        // Remove hydrogens
-        if atom.element() == Some(&Element::H) {
-            return true;
-        }
-        false
-    });
+    if remove_hydrogens {
+        pdb_prepared.remove_atoms_by(|atom| {
+            // Remove hydrogens
+            if atom.element() == Some(&Element::H) {
+                return true;
+            }
+            false
+        });
+    }
 
     // Remove entire residues that are solvent or ions
     // We need to check residue names using remove_residues_by
-    pdb_prepared.remove_residues_by(|residue| {
-        let resn = residue.name().unwrap_or("");
-        SOLVENT_RESIDUES.contains(&resn) || ION_RESIDUES.contains(&resn)
-    });
+    if remove_solvent_and_ions {
+        pdb_prepared.remove_residues_by(|residue| {
+            let resn = residue.name().unwrap_or("");
+            SOLVENT_RESIDUES.contains(&resn) || ION_RESIDUES.contains(&resn)
+        });
+    }
 
     pdb_prepared
 }
@@ -118,25 +126,18 @@ pub fn get_atom_sasa(
     n_points: usize,
     model_num: usize,
     num_threads: isize,
+    remove_hydrogens: bool,
 ) -> DataFrame {
     use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
 
     // Prepare PDB: remove solvent, ions, and hydrogens
-    let pdb_prepared = prepare_pdb_for_sasa(pdb);
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, remove_hydrogens, true);
 
     // If model_num is 0, we use the first model; otherwise use the specified model
-    let model_num = if model_num == 0 {
-        pdb_prepared
-            .models()
-            .collect::<Vec<_>>()
-            .first()
-            .map_or(0, |m| m.serial_number())
-    } else {
-        model_num
-    };
+    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     // Calculate the SASA for each atom (excluding solvent, ions, hydrogens already removed)
-    let atoms = pdb_prepared
+    let atoms = pdb_filtered
         .atoms_with_hierarchy()
         .filter(|x| x.model().serial_number() == model_num)
         .map(|x| SASAAtom {
@@ -159,7 +160,7 @@ pub fn get_atom_sasa(
     let atom_sasa = calculate_sasa_internal(&atoms, probe_radius, n_points, num_threads);
 
     // Create a DataFrame with the results
-    let atom_annotations = pdb_prepared
+    let atom_annotations = pdb_filtered
         .atoms_with_hierarchy()
         .map(|x| InteractingEntity::from_hier(&x))
         .collect::<Vec<InteractingEntity>>();
@@ -229,7 +230,7 @@ pub fn get_residue_sasa(
     use rust_sasa::{ResidueLevel, SASAOptions};
 
     // Prepare PDB: remove solvent, ions, and hydrogens, then filter by model
-    let pdb_prepared = prepare_pdb_for_sasa(pdb);
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true);
     let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     let options = SASAOptions::<ResidueLevel>::new()
@@ -292,7 +293,7 @@ pub fn get_chain_sasa(
     use rust_sasa::{ChainLevel, SASAOptions};
 
     // Prepare PDB: remove solvent, ions, and hydrogens, then filter by model
-    let pdb_prepared = prepare_pdb_for_sasa(pdb);
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true);
     let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     let options = SASAOptions::<ChainLevel>::new()
@@ -362,7 +363,7 @@ pub fn get_dsasa(
         num_threads,
     );
 
-    let combined_total = sum_sasa(&combined_sasa);
+    let combined_total = sum_float_col(&combined_sasa, "sasa");
 
     // Create PDB with only group1 chains and calculate SASA
     let mut pdb_group1 = pdb.clone();
@@ -370,7 +371,7 @@ pub fn get_dsasa(
 
     let group1_sasa = get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, num_threads);
 
-    let group1_total = sum_sasa(&group1_sasa);
+    let group1_total = sum_float_col(&group1_sasa, "sasa");
 
     // Create PDB with only group2 chains and calculate SASA
     let mut pdb_group2 = pdb.clone();
@@ -378,7 +379,7 @@ pub fn get_dsasa(
 
     let group2_sasa = get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, num_threads);
 
-    let group2_total = sum_sasa(&group2_sasa);
+    let group2_total = sum_float_col(&group2_sasa, "sasa");
 
     // Calculate buried surface area (dSASA)
     // dSASA = SASA_group1 + SASA_group2 - SASA_complex
@@ -503,7 +504,7 @@ mod tests {
     #[test]
     fn test_get_atom_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
 
         // Check that we get results
         assert!(!df.is_empty(), "SASA DataFrame should not be empty");
@@ -543,7 +544,7 @@ mod tests {
     #[test]
     fn test_get_atom_sasa_values_reasonable() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
 
         // Get the SASA column and check values are non-negative
         let sasa_col = df.column("sasa").unwrap();
@@ -602,7 +603,7 @@ mod tests {
     #[test]
     fn test_get_residue_sasa_aggregation() {
         let pdb = load_ubiquitin();
-        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
         let residue_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
 
         // There should be fewer rows in residue-level than atom-level
@@ -615,8 +616,8 @@ mod tests {
 
         // Total SASA at residue level should approximately match atom level
         // (may differ slightly due to different processing paths)
-        let atom_total: f32 = sum_sasa(&atom_df);
-        let residue_total: f32 = sum_sasa(&residue_df);
+        let atom_total: f32 = sum_float_col(&atom_df, "sasa");
+        let residue_total: f32 = sum_float_col(&residue_df, "sasa");
 
         // Allow for small differences due to potentially different filtering
         let ratio = residue_total / atom_total;
