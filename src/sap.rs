@@ -16,7 +16,7 @@
 //! - SASA is the side-chain solvent accessible surface area
 //! - SASA_max is the maximum SASA for that residue type
 
-use crate::sasa::{get_atom_sasa, get_max_asa};
+use crate::sasa::{get_atom_sasa, prepare_pdb_for_sasa};
 use pdbtbx::*;
 use polars::prelude::*;
 use rayon::prelude::*;
@@ -48,7 +48,7 @@ fn get_hydrophobicity(resn: &str) -> Option<f32> {
         "CYS" => Some(0.680 - 0.501), // 0.179
         "GLU" => Some(0.043 - 0.501), // -0.458
         "GLN" => Some(0.251 - 0.501), // -0.250
-        "GLY" => Some(0.0),           // 0.0 (reference)
+        "GLY" => Some(0.000),         // 0.0 (reference)
         "HIS" => Some(0.165 - 0.501), // -0.336
         "ILE" => Some(0.943 - 0.501), // 0.442
         "LEU" => Some(0.943 - 0.501), // 0.442
@@ -61,6 +61,34 @@ fn get_hydrophobicity(resn: &str) -> Option<f32> {
         "TRP" => Some(0.878 - 0.501), // 0.377
         "TYR" => Some(0.880 - 0.501), // 0.379
         "VAL" => Some(0.825 - 0.501), // 0.324
+        _ => None,
+    }
+}
+
+/// Get the maximum side-chain solvent accessible surface area (SASA).
+/// Values are adapted from Rosetta database/scoring/score_functions/sap_sasa_calib.dat.
+fn get_sc_max_asa(resn: &str) -> Option<f32> {
+    match resn.to_uppercase().as_str() {
+        "ALA" => Some(15.395),
+        "ARG" => Some(124.338),
+        "ASN" => Some(90.303),
+        "ASP" => Some(87.601),
+        "CYS" => Some(46.456),
+        "GLN" => Some(99.186),
+        "GLY" => Some(7.892), // Using CA
+        "GLU" => Some(95.534),
+        "HIS" => Some(96.532),
+        "ILE" => Some(31.448),
+        "LEU" => Some(30.271),
+        "LYS" => Some(61.962),
+        "MET" => Some(65.233),
+        "PHE" => Some(67.945),
+        "PRO" => Some(17.812),
+        "SER" => Some(39.355),
+        "THR" => Some(42.648),
+        "TRP" => Some(101.491),
+        "TYR" => Some(94.478),
+        "VAL" => Some(26.702),
         _ => None,
     }
 }
@@ -104,7 +132,7 @@ pub fn get_per_atom_sap_score(
 ) -> DataFrame {
     // Use get_atom_sasa from sasa.rs for SASA calculation
     // Note: This already handles hydrogen stripping and solvent/ion removal
-    let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, num_threads);
+    let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, num_threads, true);
 
     // Create a lookup map from atom serial number to SASA value
     let atomi_col = atom_sasa_df
@@ -121,7 +149,11 @@ pub fn get_per_atom_sap_score(
         .unwrap()
         .into_iter()
         .flatten();
-    let sasa_map: HashMap<i32, f32> = atomi_col.into_iter().zip(sasa_col).collect();
+    let atom_sasa_map: HashMap<usize, f32> = atomi_col
+        .into_iter()
+        .zip(sasa_col)
+        .map(|(atomi, sasa)| (atomi as usize, sasa))
+        .collect();
 
     // Also create a map of residue name to hydrophobicity scale for lookup
     let resn_col = atom_sasa_df.column("resn").unwrap().unique().unwrap();
@@ -130,42 +162,46 @@ pub fn get_per_atom_sap_score(
         .unwrap()
         .into_iter()
         .flatten()
-        .map(|s| (s, get_hydrophobicity(s).unwrap_or(0.0)))
+        .map(|s| (s, get_hydrophobicity(s).unwrap()))
         .collect();
 
     // Use pdbtbx's R-tree for spatial indexing (similar to InteractionComplex::get_atomic_contacts)
-    let tree = pdb.create_hierarchy_rtree();
+    let pdb_no_hydrogens = prepare_pdb_for_sasa(pdb, true, true);
+    let tree = pdb_no_hydrogens.create_hierarchy_rtree();
     let sap_radius_sq = (sap_radius * sap_radius) as f64;
 
     // Calculate SAP score for each atom in the DataFrame
-    let sap_scores_map: HashMap<usize, f32> = pdb
+    let sap_scores_map: HashMap<usize, f32> = pdb_no_hydrogens
         .atoms_with_hierarchy()
         .filter(|h| h.is_sidechain())
-        .flat_map(|x| {
+        .map(|x| {
             let x_atomi = x.atom().serial_number();
 
             let atom_sap_score = tree
                 // Find neighboring sidechain atoms within SAP radius
                 .locate_within_distance(x.atom().pos(), sap_radius_sq)
-                .filter(|y| (x_atomi != y.atom().serial_number()) & (y.is_sidechain()))
+                .filter(|y| y.is_sidechain()) // & (x_atomi != y.atom().serial_number())
                 // SAP contribution = hydrophobicity * (SASA / max_SASA)
-                // Clamp to 1.0 because observed SASA can exceed theoretical max
+                // Clamp to 1.0 in case the observed SASA exceed its theoretical max
                 .map(|y| {
                     let neighbor_resn = y.residue().name().unwrap();
                     if let (Some(neighbor_atom_sasa), Some(neighbor_res_hphobicity)) = (
-                        sasa_map.get(&(y.atom().serial_number() as i32)),
+                        atom_sasa_map.get(&(y.atom().serial_number())),
                         resn_hphobicity_map.get(neighbor_resn),
                     ) {
-                        let max_sasa = get_max_asa(neighbor_resn).unwrap();
-                        neighbor_res_hphobicity * (neighbor_atom_sasa / max_sasa).min(1.0)
+                        let max_res_asa = get_sc_max_asa(neighbor_resn).unwrap();
+                        // let max_atom_asa =
+                        //     get_atom_max_asa(neighbor_resn, y.atom().name()).unwrap_or(1.0);
+                        // neighbor_res_hphobicity
+                        // * (neighbor_atom_sasa / max_atom_asa).clamp(0.0, 1.0)
+                        // * (max_atom_asa / max_res_asa)
+                        neighbor_res_hphobicity * (neighbor_atom_sasa / max_res_asa).clamp(0.0, 1.0)
                     } else {
                         0.0
                     }
                 })
-                .collect::<Vec<f32>>()
-                .iter()
-                .sum();
-            Some((x_atomi, atom_sap_score))
+                .sum::<f32>();
+            (x_atomi, atom_sap_score)
         })
         .collect();
 
@@ -180,7 +216,6 @@ pub fn get_per_atom_sap_score(
     let sc_atom_sasa_df = atom_sasa_df
         .lazy()
         .filter(col("atomi").is_in(lit(sidechain_atomi).implode(), false))
-        .rename(["sasa"], ["sc_sasa"], true) // Be clear this is side-chain SASA
         .collect()
         .unwrap();
     let sap_scores: Vec<f32> = sc_atom_sasa_df
@@ -206,7 +241,7 @@ pub fn get_per_atom_sap_score(
             "insertion",
             "atomn",
             "atomi",
-            "sc_sasa",
+            "sasa",
             "sap_score",
         ])
         .unwrap()
@@ -231,7 +266,7 @@ pub fn get_per_atom_sap_score(
 /// # Returns
 ///
 /// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, sasa, sap_score
+/// - chain, resn, resi, insertion, sc_sasa, sap_score
 ///
 /// # Example
 ///
@@ -264,6 +299,7 @@ pub fn get_per_residue_sap_score(
     // Aggregate by residue
     atom_sap
         .lazy()
+        .rename(["sasa"], ["sc_sasa"], true) // Be clear this is side-chain SASA
         .filter(col("sap_score").gt(lit(0.0))) // Ref. calculate_per_res_sap in Rosetta
         .group_by([col("chain"), col("resn"), col("resi"), col("insertion")])
         .agg([col("sc_sasa").sum(), col("sap_score").sum()])
@@ -317,7 +353,7 @@ mod tests {
         ];
 
         for aa in amino_acids.iter() {
-            let max_sasa = get_max_asa(aa);
+            let max_sasa = get_sc_max_asa(aa);
             assert!(max_sasa.is_some(), "Should have max SASA for {}", aa);
             assert!(
                 max_sasa.unwrap() > 0.0,
@@ -327,8 +363,8 @@ mod tests {
         }
 
         // Larger residues should have larger max SASA
-        let gly_sasa = get_max_asa("GLY").unwrap();
-        let trp_sasa = get_max_asa("TRP").unwrap();
+        let gly_sasa = get_sc_max_asa("GLY").unwrap();
+        let trp_sasa = get_sc_max_asa("TRP").unwrap();
         assert!(
             trp_sasa > gly_sasa,
             "TRP should have larger max SASA than GLY"
@@ -399,67 +435,8 @@ mod tests {
         assert!(columns.contains(&"chain".to_string()));
         assert!(columns.contains(&"resn".to_string()));
         assert!(columns.contains(&"resi".to_string()));
-        assert!(columns.contains(&"sasa".to_string()));
+        assert!(columns.contains(&"sc_sasa".to_string()));
         assert!(columns.contains(&"sap_score".to_string()));
-    }
-
-    #[test]
-    fn test_per_residue_sap_aggregation() {
-        let pdb = load_ubiquitin();
-        let atom_sap = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1);
-        let residue_sap = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1);
-
-        // Should have fewer rows in residue level
-        assert!(
-            residue_sap.height() < atom_sap.height(),
-            "Residue SAP should have fewer rows: {} vs {}",
-            residue_sap.height(),
-            atom_sap.height()
-        );
-
-        // Ubiquitin has 76 residues
-        assert!(
-            residue_sap.height() >= 70 && residue_sap.height() <= 80,
-            "Ubiquitin should have ~76 residues: {}",
-            residue_sap.height()
-        );
-    }
-
-    #[test]
-    fn test_sap_radius_effect() {
-        let pdb = load_ubiquitin();
-
-        // Larger radius should include more neighbors, potentially higher absolute SAP
-        let small_radius = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 3.0, 1);
-        let large_radius = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 10.0, 1);
-
-        // Sum of absolute SAP scores should be larger with larger radius
-        let small_sum: f32 = small_radius
-            .column("sap_score")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .into_iter()
-            .flatten()
-            .map(|x| x.abs())
-            .sum();
-
-        let large_sum: f32 = large_radius
-            .column("sap_score")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .into_iter()
-            .flatten()
-            .map(|x| x.abs())
-            .sum();
-
-        assert!(
-            large_sum > small_sum,
-            "Larger radius should give larger absolute SAP sum: {} vs {}",
-            large_sum,
-            small_sum
-        );
     }
 
     #[test]

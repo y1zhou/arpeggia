@@ -117,7 +117,7 @@ pub(crate) fn prepare_pdb_for_sasa(
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1);
+/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
 /// println!("Calculated SASA for {} atoms", sasa_df.height());
 /// ```
 pub fn get_atom_sasa(
