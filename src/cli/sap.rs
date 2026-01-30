@@ -64,6 +64,10 @@ pub(crate) struct Args {
     /// Granularity level for SAP calculation
     #[arg(short = 'l', long = "level", default_value_t = SapLevel::Residue)]
     level: SapLevel,
+
+    /// Comma-separated chain IDs to include (e.g., "H,L"). If empty, includes all chains.
+    #[arg(short = 'c', long = "chains", default_value_t = String::new())]
+    chains: String,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -102,6 +106,7 @@ pub(crate) fn run(args: &Args) {
             args.model_num,
             args.sap_radius,
             num_threads,
+            &args.chains,
         ),
         SapLevel::Residue => arpeggia::get_per_residue_sap_score(
             &pdb,
@@ -110,6 +115,7 @@ pub(crate) fn run(args: &Args) {
             args.model_num,
             args.sap_radius,
             num_threads,
+            &args.chains,
         ),
     };
 

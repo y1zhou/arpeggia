@@ -50,40 +50,87 @@ const ION_RESIDUES: &[&str] = &[
     "ACE", "NH2",
 ];
 
-/// Prepare a PDB structure for SASA calculation by removing solvent, ions, and hydrogens.
+/// Parse a comma-separated chain string into a HashSet of chain IDs.
+///
+/// # Arguments
+///
+/// * `chains` - Comma-separated chain IDs (e.g., "A,B,C"). Empty string means all chains.
+///
+/// # Returns
+///
+/// A HashSet of chain IDs. If the input is empty, returns an empty HashSet (meaning all chains).
+///
+/// # Example
+///
+/// ```ignore
+/// let chains = parse_chain_string("A,B,C");
+/// assert!(chains.contains("A"));
+/// assert!(chains.contains("B"));
+/// assert!(chains.contains("C"));
+/// ```
+fn parse_chain_string(chains: &str) -> HashSet<String> {
+    if chains.is_empty() {
+        HashSet::new()
+    } else {
+        chains
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
+}
+
+/// Prepare a PDB structure for SASA calculation by removing solvent, ions, hydrogens,
+/// and optionally filtering to specific chains.
 ///
 /// This function creates a clone of the PDB and removes:
-/// - All hydrogen atoms
-/// - Solvent molecules (HOH, H2O, WAT, etc.)
-/// - Common ions (NA, CL, CA, MG, ZN, etc.)
+/// - Chains not in the specified list (if chains is not empty)
+/// - All hydrogen atoms (if remove_hydrogens is true)
+/// - Solvent molecules (HOH, H2O, WAT, etc.) (if remove_solvent_and_ions is true)
+/// - Common ions (NA, CL, CA, MG, ZN, etc.) (if remove_solvent_and_ions is true)
 ///
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
+/// * `remove_hydrogens` - Whether to remove hydrogen atoms
+/// * `remove_solvent_and_ions` - Whether to remove solvent and ion residues
+/// * `chains` - Comma-separated chain IDs to keep (e.g., "A,B,C"). Empty string keeps all chains.
 ///
 /// # Returns
 ///
 /// A filtered PDB structure suitable for SASA calculations.
+///
+/// # Example
+///
+/// ```ignore
+/// // Keep only chains A and B, remove hydrogens and solvent
+/// let filtered = prepare_pdb_for_sasa(&pdb, true, true, "A,B");
+///
+/// // Keep all chains
+/// let all_chains = prepare_pdb_for_sasa(&pdb, true, true, "");
+/// ```
 pub(crate) fn prepare_pdb_for_sasa(
     pdb: &PDB,
     remove_hydrogens: bool,
     remove_solvent_and_ions: bool,
+    chains: &str,
 ) -> PDB {
     let mut pdb_prepared = pdb.clone();
 
-    // Remove hydrogens, solvent, and ions
+    // Filter to specific chains if specified
+    let chain_filter = parse_chain_string(chains);
+    if !chain_filter.is_empty() {
+        pdb_prepared.remove_chains_by(|chain| !chain_filter.contains(chain.id()));
+    }
+
+    // Remove hydrogens
     if remove_hydrogens {
         pdb_prepared.remove_atoms_by(|atom| {
-            // Remove hydrogens
-            if atom.element() == Some(&Element::H) {
-                return true;
-            }
-            false
+            atom.element() == Some(&Element::H)
         });
     }
 
     // Remove entire residues that are solvent or ions
-    // We need to check residue names using remove_residues_by
     if remove_solvent_and_ions {
         pdb_prepared.remove_residues_by(|residue| {
             let resn = residue.name().unwrap_or("");
@@ -103,6 +150,8 @@ pub(crate) fn prepare_pdb_for_sasa(
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `num_threads` - Number of threads for parallel processing (1 for single-threaded, -1 for all cores)
+/// * `remove_hydrogens` - Whether to remove hydrogen atoms before calculation
+/// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
 ///
@@ -117,8 +166,13 @@ pub(crate) fn prepare_pdb_for_sasa(
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
+///
+/// // Calculate SASA for all chains
+/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true, "");
 /// println!("Calculated SASA for {} atoms", sasa_df.height());
+///
+/// // Calculate SASA for only chains A and B
+/// let sasa_ab = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true, "A,B");
 /// ```
 pub fn get_atom_sasa(
     pdb: &PDB,
@@ -127,11 +181,12 @@ pub fn get_atom_sasa(
     model_num: usize,
     num_threads: isize,
     remove_hydrogens: bool,
+    chains: &str,
 ) -> DataFrame {
     use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
 
-    // Prepare PDB: remove solvent, ions, and hydrogens
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, remove_hydrogens, true);
+    // Prepare PDB: remove solvent, ions, hydrogens, and filter chains
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, remove_hydrogens, true, chains);
 
     // If model_num is 0, we use the first model; otherwise use the specified model
     let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
@@ -204,6 +259,7 @@ pub fn get_atom_sasa(
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `num_threads` - Number of threads for parallel processing (1 for single-threaded, -1 for all cores)
+/// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
 ///
@@ -217,8 +273,13 @@ pub fn get_atom_sasa(
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sasa_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
+///
+/// // Calculate SASA for all chains
+/// let sasa_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1, "");
 /// println!("Calculated SASA for {} residues", sasa_df.height());
+///
+/// // Calculate SASA for only chain A
+/// let sasa_a = get_residue_sasa(&pdb, 1.4, 100, 0, 1, "A");
 /// ```
 pub fn get_residue_sasa(
     pdb: &PDB,
@@ -226,11 +287,12 @@ pub fn get_residue_sasa(
     n_points: usize,
     model_num: usize,
     num_threads: isize,
+    chains: &str,
 ) -> DataFrame {
     use rust_sasa::{ResidueLevel, SASAOptions};
 
-    // Prepare PDB: remove solvent, ions, and hydrogens, then filter by model
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true);
+    // Prepare PDB: remove solvent, ions, hydrogens, and filter chains, then filter by model
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true, chains);
     let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     let options = SASAOptions::<ResidueLevel>::new()
@@ -267,6 +329,7 @@ pub fn get_residue_sasa(
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `num_threads` - Number of threads for parallel processing (1 for single-threaded, -1 for all cores)
+/// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
 ///
@@ -280,8 +343,13 @@ pub fn get_residue_sasa(
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sasa_df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
+///
+/// // Calculate SASA for all chains
+/// let sasa_df = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "");
 /// println!("Calculated SASA for {} chains", sasa_df.height());
+///
+/// // Calculate SASA for only chains A and B
+/// let sasa_ab = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "A,B");
 /// ```
 pub fn get_chain_sasa(
     pdb: &PDB,
@@ -289,11 +357,12 @@ pub fn get_chain_sasa(
     n_points: usize,
     model_num: usize,
     num_threads: isize,
+    chains: &str,
 ) -> DataFrame {
     use rust_sasa::{ChainLevel, SASAOptions};
 
-    // Prepare PDB: remove solvent, ions, and hydrogens, then filter by model
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true);
+    // Prepare PDB: remove solvent, ions, hydrogens, and filter chains, then filter by model
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true, chains);
     let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
 
     let options = SASAOptions::<ChainLevel>::new()
@@ -361,6 +430,7 @@ pub fn get_dsasa(
         n_points,
         model_num,
         num_threads,
+        "", // Already filtered by combined_group_chains
     );
 
     let combined_total = sum_float_col(&combined_sasa, "sasa");
@@ -369,7 +439,7 @@ pub fn get_dsasa(
     let mut pdb_group1 = pdb.clone();
     pdb_group1.remove_chains_by(|chain| !group1_chains.contains(chain.id()));
 
-    let group1_sasa = get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, num_threads);
+    let group1_sasa = get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, num_threads, "");
 
     let group1_total = sum_float_col(&group1_sasa, "sasa");
 
@@ -377,7 +447,7 @@ pub fn get_dsasa(
     let mut pdb_group2 = pdb.clone();
     pdb_group2.remove_chains_by(|chain| !group2_chains.contains(chain.id()));
 
-    let group2_sasa = get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, num_threads);
+    let group2_sasa = get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, num_threads, "");
 
     let group2_total = sum_float_col(&group2_sasa, "sasa");
 
@@ -431,6 +501,7 @@ pub fn get_max_asa(resn: &str) -> Option<f32> {
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `num_threads` - Number of threads (-1 for all cores, 1 for single-threaded)
+/// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
 ///
@@ -439,15 +510,31 @@ pub fn get_max_asa(resn: &str) -> Option<f32> {
 ///
 /// The relative_sasa column contains values between 0 and ~1 (can slightly exceed 1 due to
 /// structural context), or null for non-standard amino acids.
+///
+/// # Example
+///
+/// ```no_run
+/// use arpeggia::{load_model, get_relative_sasa};
+///
+/// let input_file = "path/to/structure.pdb".to_string();
+/// let (pdb, _errors) = load_model(&input_file);
+///
+/// // Calculate RSA for all chains
+/// let rsa_df = get_relative_sasa(&pdb, 1.4, 100, 0, 1, "");
+///
+/// // Calculate RSA for only chain A
+/// let rsa_a = get_relative_sasa(&pdb, 1.4, 100, 0, 1, "A");
+/// ```
 pub fn get_relative_sasa(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
     model_num: usize,
     num_threads: isize,
+    chains: &str,
 ) -> DataFrame {
     // Get residue-level SASA
-    let residue_sasa = get_residue_sasa(pdb, probe_radius, n_points, model_num, num_threads);
+    let residue_sasa = get_residue_sasa(pdb, probe_radius, n_points, model_num, num_threads, chains);
 
     // Calculate max_sasa and relative_sasa for each residue
     let resn_col = residue_sasa.column("resn").unwrap();
@@ -504,7 +591,7 @@ mod tests {
     #[test]
     fn test_get_atom_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true, "");
 
         // Check that we get results
         assert!(!df.is_empty(), "SASA DataFrame should not be empty");
@@ -544,7 +631,7 @@ mod tests {
     #[test]
     fn test_get_atom_sasa_values_reasonable() {
         let pdb = load_ubiquitin();
-        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
+        let df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true, "");
 
         // Get the SASA column and check values are non-negative
         let sasa_col = df.column("sasa").unwrap();
@@ -563,7 +650,7 @@ mod tests {
     #[test]
     fn test_get_residue_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_residue_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         // Check that we get results
         assert!(!df.is_empty(), "Residue SASA DataFrame should not be empty");
@@ -603,8 +690,8 @@ mod tests {
     #[test]
     fn test_get_residue_sasa_aggregation() {
         let pdb = load_ubiquitin();
-        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true);
-        let residue_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1);
+        let atom_df = get_atom_sasa(&pdb, 1.4, 100, 0, 1, true, "");
+        let residue_df = get_residue_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         // There should be fewer rows in residue-level than atom-level
         assert!(
@@ -633,7 +720,7 @@ mod tests {
     #[test]
     fn test_get_chain_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         // Check that we get results
         assert!(!df.is_empty(), "Chain SASA DataFrame should not be empty");
@@ -657,7 +744,7 @@ mod tests {
     #[test]
     fn test_get_chain_sasa_single_chain() {
         let pdb = load_ubiquitin();
-        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         // Ubiquitin (1ubq) has a single chain A
         assert_eq!(df.height(), 1, "1ubq should have 1 chain");
@@ -671,7 +758,7 @@ mod tests {
     #[test]
     fn test_get_chain_sasa_multi_chain() {
         let pdb = load_multi_chain();
-        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         // 6bft should have multiple chains
         assert!(df.height() > 1, "6bft should have multiple chains");
@@ -691,8 +778,8 @@ mod tests {
         let pdb = load_ubiquitin();
 
         // Smaller probe radius should result in larger SASA
-        let small_probe = get_chain_sasa(&pdb, 1.0, 100, 0, 1);
-        let large_probe = get_chain_sasa(&pdb, 2.0, 100, 0, 1);
+        let small_probe = get_chain_sasa(&pdb, 1.0, 100, 0, 1, "");
+        let large_probe = get_chain_sasa(&pdb, 2.0, 100, 0, 1, "");
 
         let small_sasa: f32 = small_probe
             .column("sasa")
@@ -721,7 +808,7 @@ mod tests {
     fn test_sasa_regression_ubiquitin() {
         // Regression test to ensure SASA values remain consistent
         let pdb = load_ubiquitin();
-        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         let total_sasa: f32 = df.column("sasa").unwrap().f32().unwrap().get(0).unwrap();
 
@@ -791,7 +878,7 @@ mod tests {
     #[test]
     fn test_get_relative_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_relative_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_relative_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         // Check that we get results
         assert!(
@@ -830,7 +917,7 @@ mod tests {
     #[test]
     fn test_get_relative_sasa_values_bounded() {
         let pdb = load_ubiquitin();
-        let df = get_relative_sasa(&pdb, 1.4, 100, 0, 1);
+        let df = get_relative_sasa(&pdb, 1.4, 100, 0, 1, "");
 
         // Get relative_sasa values
         let rsa_values: Vec<f32> = df
@@ -883,5 +970,62 @@ mod tests {
         assert!(get_max_asa("XXX").is_none());
         assert!(get_max_asa("HOH").is_none());
         assert!(get_max_asa("").is_none());
+    }
+
+    #[test]
+    fn test_chain_filter_empty_keeps_all() {
+        let pdb = load_multi_chain();
+
+        // Empty chain filter should keep all chains
+        let df_all = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "");
+        let chain_count_all = df_all.height();
+
+        assert!(
+            chain_count_all > 1,
+            "Multi-chain structure should have multiple chains: {}",
+            chain_count_all
+        );
+    }
+
+    #[test]
+    fn test_chain_filter_single_chain() {
+        let pdb = load_multi_chain();
+
+        // Filter to only chain A
+        let df_a = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "A");
+
+        assert_eq!(df_a.height(), 1, "Should have only one chain when filtering to A");
+
+        // Check that the chain is A
+        let chain_col = df_a.column("chain").unwrap();
+        let chain_id = chain_col.str().unwrap().get(0).unwrap();
+        assert_eq!(chain_id, "A", "Chain should be A");
+    }
+
+    #[test]
+    fn test_chain_filter_multiple_chains() {
+        let pdb = load_multi_chain();
+
+        // Filter to chains A, B
+        let df_ab = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "A,B");
+        let df_all = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "");
+
+        assert!(
+            df_ab.height() <= df_all.height(),
+            "Filtered results should have equal or fewer chains: {} vs {}",
+            df_ab.height(),
+            df_all.height()
+        );
+
+        // Check that we only have A and B chains
+        let chain_col = df_ab.column("chain").unwrap();
+        let chain_ids: Vec<&str> = chain_col.str().unwrap().into_iter().flatten().collect();
+        for chain_id in &chain_ids {
+            assert!(
+                *chain_id == "A" || *chain_id == "B",
+                "Only A and B chains should be present, got: {}",
+                chain_id
+            );
+        }
     }
 }

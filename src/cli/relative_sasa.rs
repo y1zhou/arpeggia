@@ -38,6 +38,10 @@ pub(crate) struct Args {
     /// Number of threads to use for parallel processing
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
+
+    /// Comma-separated chain IDs to include (e.g., "A,B,C"). If empty, includes all chains.
+    #[arg(short = 'c', long = "chains", default_value_t = String::new())]
+    chains: String,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -74,6 +78,7 @@ pub(crate) fn run(args: &Args) {
         args.n_points,
         args.model_num,
         num_threads,
+        &args.chains,
     );
 
     if df_relative_sasa.is_empty() {

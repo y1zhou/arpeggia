@@ -64,6 +64,10 @@ pub(crate) struct Args {
     /// Granularity level for SASA calculation
     #[arg(short = 'l', long = "level", default_value_t = SasaLevel::Atom)]
     level: SasaLevel,
+
+    /// Comma-separated chain IDs to include (e.g., "A,B,C"). If empty, includes all chains.
+    #[arg(short = 'c', long = "chains", default_value_t = String::new())]
+    chains: String,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -102,6 +106,7 @@ pub(crate) fn run(args: &Args) {
             args.model_num,
             num_threads,
             true,
+            &args.chains,
         ),
         SasaLevel::Residue => arpeggia::get_residue_sasa(
             &pdb,
@@ -109,6 +114,7 @@ pub(crate) fn run(args: &Args) {
             args.n_points,
             args.model_num,
             num_threads,
+            &args.chains,
         ),
         SasaLevel::Chain => arpeggia::get_chain_sasa(
             &pdb,
@@ -116,6 +122,7 @@ pub(crate) fn run(args: &Args) {
             args.n_points,
             args.model_num,
             num_threads,
+            &args.chains,
         ),
     };
 

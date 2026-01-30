@@ -68,6 +68,8 @@ fn contacts(
 ///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
 ///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
 ///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
+///     chains (str, optional): Comma-separated chain IDs to include (e.g., "A,B,C").
+///         If empty, includes all chains. Defaults to "".
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame with SASA values. Columns depend on the level:
@@ -77,19 +79,19 @@ fn contacts(
 ///
 /// Example:
 ///     >>> import arpeggia
-///     >>> # Atom-level SASA
+///     >>> # Atom-level SASA for all chains
 ///     >>> sasa_df = arpeggia.sasa("structure.pdb", level="atom")
 ///     >>> print(f"Calculated SASA for {len(sasa_df)} atoms")
 ///     >>>
-///     >>> # Residue-level SASA
-///     >>> residue_sasa = arpeggia.sasa("structure.pdb", level="residue")
+///     >>> # Residue-level SASA for only chains A and B
+///     >>> residue_sasa = arpeggia.sasa("structure.pdb", level="residue", chains="A,B")
 ///     >>> print(f"Calculated SASA for {len(residue_sasa)} residues")
 ///     >>>
 ///     >>> # Chain-level SASA
 ///     >>> chain_sasa = arpeggia.sasa("structure.pdb", level="chain")
 ///     >>> print(f"Calculated SASA for {len(chain_sasa)} chains")
 #[pyfunction]
-#[pyo3(signature = (input_file, level="atom", probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
+#[pyo3(signature = (input_file, level="atom", probe_radius=1.4, n_points=100, model_num=0, num_threads=1, chains=""))]
 fn sasa(
     input_file: String,
     level: &str,
@@ -97,6 +99,7 @@ fn sasa(
     n_points: usize,
     model_num: usize,
     num_threads: usize,
+    chains: &str,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
@@ -106,9 +109,9 @@ fn sasa(
 
     // Get SASA based on level
     let df = match level.to_lowercase().as_str() {
-        "atom" => crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num, threads),
-        "residue" => crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, threads),
-        "chain" => crate::get_chain_sasa(&pdb, probe_radius, n_points, model_num, threads),
+        "atom" => crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num, threads, true, chains),
+        "residue" => crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, threads, chains),
+        "chain" => crate::get_chain_sasa(&pdb, probe_radius, n_points, model_num, threads, chains),
         _ => {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Invalid level '{}'. Must be one of: 'atom', 'residue', 'chain'",
@@ -209,6 +212,8 @@ fn pdb2seq(input_file: String) -> PyResult<std::collections::HashMap<String, Str
 ///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
 ///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
 ///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
+///     chains (str, optional): Comma-separated chain IDs to include (e.g., "A,B,C").
+///         If empty, includes all chains. Defaults to "".
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame with relative SASA values for each residue with columns:
@@ -216,16 +221,21 @@ fn pdb2seq(input_file: String) -> PyResult<std::collections::HashMap<String, Str
 ///
 /// Example:
 ///     >>> import arpeggia
+///     >>> # RSA for all chains
 ///     >>> rsa = arpeggia.relative_sasa("structure.pdb", probe_radius=1.4)
 ///     >>> print(f"Calculated RSA for {len(rsa)} residues")
+///     >>>
+///     >>> # RSA for only chain A
+///     >>> rsa_a = arpeggia.relative_sasa("structure.pdb", chains="A")
 #[pyfunction]
-#[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
+#[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0, num_threads=1, chains=""))]
 fn relative_sasa(
     input_file: String,
     probe_radius: f32,
     n_points: usize,
     model_num: usize,
     num_threads: usize,
+    chains: &str,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
@@ -234,7 +244,7 @@ fn relative_sasa(
     let threads = get_num_threads(num_threads);
 
     // Get relative SASA
-    let df = crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, threads);
+    let df = crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, threads, chains);
 
     // Convert to PyDataFrame for Python
     Ok(PyDataFrame(df))
@@ -259,13 +269,15 @@ fn relative_sasa(
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
 ///     level (str, optional): Aggregation level for SAP calculation. Options:
-///         - "atom": Calculate SAP for each atom (default)
-///         - "residue": Aggregate SAP by residue
+///         - "atom": Calculate SAP for each atom
+///         - "residue": Aggregate SAP by residue (default)
 ///     probe_radius (float, optional): Probe radius in Ångströms for SASA calculation. Defaults to 1.4.
 ///     n_points (int, optional): Number of points for SASA surface calculation. Defaults to 100.
 ///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
 ///     sap_radius (float, optional): Radius in Ångströms for neighbor search. Defaults to 5.0.
 ///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
+///     chains (str, optional): Comma-separated chain IDs to include (e.g., "H,L").
+///         If empty, includes all chains. Defaults to "".
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame with SAP scores. Columns depend on the level:
@@ -274,15 +286,15 @@ fn relative_sasa(
 ///
 /// Example:
 ///     >>> import arpeggia
-///     >>> # Residue-level SAP scores (default)
+///     >>> # Residue-level SAP scores for all chains
 ///     >>> residue_sap = arpeggia.sap_score("structure.pdb")
 ///     >>> print(f"Calculated SAP for {len(residue_sap)} residues")
 ///     >>>
-///     >>> # Atom-level SAP scores
-///     >>> sap_df = arpeggia.sap_score("structure.pdb", level="atom")
-///     >>> print(f"Calculated SAP for {len(sap_df)} atoms")
+///     >>> # SAP scores for only antibody heavy and light chains
+///     >>> sap_hl = arpeggia.sap_score("antibody.pdb", chains="H,L")
+///     >>> print(f"Calculated SAP for {len(sap_hl)} residues")
 #[pyfunction]
-#[pyo3(signature = (input_file, level="residue", probe_radius=1.4, n_points=100, model_num=0, sap_radius=5.0, num_threads=1))]
+#[pyo3(signature = (input_file, level="residue", probe_radius=1.4, n_points=100, model_num=0, sap_radius=5.0, num_threads=1, chains=""))]
 fn sap_score(
     input_file: String,
     level: &str,
@@ -291,6 +303,7 @@ fn sap_score(
     model_num: usize,
     sap_radius: f32,
     num_threads: usize,
+    chains: &str,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
@@ -300,8 +313,8 @@ fn sap_score(
 
     // Get SAP scores based on level
     let df = match level.to_lowercase().as_str() {
-        "atom" => crate::get_per_atom_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads),
-        "residue" => crate::get_per_residue_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads),
+        "atom" => crate::get_per_atom_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads, chains),
+        "residue" => crate::get_per_residue_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads, chains),
         _ => {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Invalid level '{}'. Must be one of: 'atom', 'residue'",
