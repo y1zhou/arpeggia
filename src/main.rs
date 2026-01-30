@@ -22,6 +22,8 @@ enum Commands {
     Dsasa(crate::cli::dsasa::Args),
     /// Calculate relative SASA (RSA) for each residue, normalized by Tien et al. (2013) MaxASA values
     RelativeSasa(crate::cli::relative_sasa::Args),
+    /// Calculate Spatial Aggregation Propensity (SAP) score for aggregation-prone region prediction
+    Sap(crate::cli::sap::Args),
     /// Print the sequences of all chains in a PDB or mmCIF file
     Seq(crate::cli::pdb2seq::Args),
 }
@@ -44,6 +46,9 @@ fn main() {
         }
         Commands::RelativeSasa(args) => {
             crate::cli::relative_sasa::run(args);
+        }
+        Commands::Sap(args) => {
+            crate::cli::sap::run(args);
         }
         Commands::Seq(args) => {
             crate::cli::pdb2seq::run(args);

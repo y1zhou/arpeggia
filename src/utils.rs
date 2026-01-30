@@ -38,8 +38,8 @@ pub fn get_num_threads(num_threads: usize) -> isize {
 /// # Returns
 ///
 /// The sum of all SASA values, or 0.0 if the column is empty or doesn't exist.
-pub fn sum_sasa(df: &DataFrame) -> f32 {
-    df.column("sasa")
+pub fn sum_float_col(df: &DataFrame, colname: &str) -> f32 {
+    df.column(colname)
         .unwrap()
         .f32()
         .unwrap()

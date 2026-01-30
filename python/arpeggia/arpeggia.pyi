@@ -37,6 +37,7 @@ def sasa(
     n_points: int = 100,
     model_num: int = 0,
     num_threads: int = 1,
+    chains: str = "",
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA).
 
@@ -50,6 +51,8 @@ def sasa(
         n_points: Number of points for surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
         num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
+        chains: Comma-separated chain IDs to include (e.g., "A,B,C").
+            If empty, includes all chains. Defaults to "".
 
     Returns:
         A Polars DataFrame with SASA values. Columns depend on the level:
@@ -92,6 +95,7 @@ def relative_sasa(
     n_points: int = 100,
     model_num: int = 0,
     num_threads: int = 1,
+    chains: str = "",
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate relative SASA (RSA) for each residue.
 
@@ -104,10 +108,58 @@ def relative_sasa(
         n_points: Number of points for surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
         num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
+        chains: Comma-separated chain IDs to include (e.g., "A,B,C").
+            If empty, includes all chains. Defaults to "".
 
     Returns:
         A Polars DataFrame with relative SASA values for each residue with columns:
         - chain, resn, resi, insertion, altloc, sasa, is_polar, relative_sasa
+    """
+    ...
+
+def sap_score(
+    input_file: str,
+    level: Literal["atom", "residue"] = "residue",
+    probe_radius: float = 1.4,
+    n_points: int = 100,
+    model_num: int = 0,
+    sap_radius: float = 5.0,
+    num_threads: int = 1,
+    chains: str = "",
+) -> pl.DataFrame:
+    """Load a PDB or mmCIF file and calculate Spatial Aggregation Propensity (SAP) scores.
+
+    The SAP score quantifies the aggregation propensity by combining the solvent-accessible
+    hydrophobic surface area of neighboring residues. It was developed by Chennamsetty et al.
+    and is described in "Developability Index: A Rapid In Silico Tool for the Screening of
+    Antibody Aggregation Propensity" (J Pharm Sci, 2012).
+
+    The formula is:
+    SAP(i) = Σ{j ∈ neighbors(i, R)} [ Hydrophobicity(j) × (SASA(j) / SASA_max(j)) ]
+
+    Where:
+    - Neighbors are atoms/residues within radius R of atom/residue i
+    - Hydrophobicity uses the Black & Mould (1991) scale, normalized so glycine = 0
+    - SASA is the side-chain solvent accessible surface area
+    - SASA_max is the maximum SASA for that residue type
+
+    Args:
+        input_file: Path to the PDB or mmCIF file
+        level: Aggregation level for SAP calculation. Options:
+            - "atom": Calculate SAP for each atom
+            - "residue": Aggregate SAP by residue (default)
+        probe_radius: Probe radius in Ångströms for SASA calculation. Defaults to 1.4.
+        n_points: Number of points for SASA surface calculation. Defaults to 100.
+        model_num: Model number to analyze (0 for first model). Defaults to 0.
+        sap_radius: Radius in Ångströms for neighbor search. Defaults to 5.0.
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
+        chains: Comma-separated chain IDs to include (e.g., "H,L").
+            If empty, includes all chains. Defaults to "".
+
+    Returns:
+        A Polars DataFrame with SAP scores. Columns depend on the level:
+        - atom: chain, resn, resi, insertion, atomn, atomi, sasa, sap_score
+        - residue: chain, resn, resi, insertion, sc_sasa, sap_score
     """
     ...
 

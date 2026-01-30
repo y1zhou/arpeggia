@@ -185,6 +185,29 @@ avg_sasa = sasa.group_by([
 print(avg_sasa)
 ```
 
+### Example 4: SAP Score for Aggregation Prediction
+
+```python
+import arpeggia
+import polars as pl
+
+# Calculate SAP scores for an antibody
+sap = arpeggia.sap_score("antibody.pdb", level="residue")
+
+# Find aggregation-prone residues (high positive SAP)
+aggregation_prone = sap.filter(pl.col("sap_score") > 0.5)
+print(f"Found {len(aggregation_prone)} aggregation-prone residues")
+
+# SAP for only heavy and light chains
+sap_hl = arpeggia.sap_score("antibody.pdb", chains="H,L")
+print(f"Analyzed {len(sap_hl)} residues in H and L chains")
+
+# Sort by SAP score to find hotspots
+hotspots = sap.sort("sap_score", descending=True).head(10)
+print("Top 10 aggregation hotspots:")
+print(hotspots)
+```
+
 ## Troubleshooting
 
 ### Import Error

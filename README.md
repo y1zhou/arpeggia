@@ -24,6 +24,10 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   - [x] Weak hydrogen bonds
   - [x] Disulfide bonds
   - [x] Covalent bonds
+- [x] Calculate SASA (Solvent Accessible Surface Area) at atom, residue, and chain levels
+- [x] Calculate relative SASA (RSA) normalized by MaxASA values
+- [x] Calculate SAP (Spatial Aggregation Propensity) scores for aggregation prediction
+- [x] Filter calculations to specific chains
 - [x] Output results in various formats (e.g., JSON, CSV, Parquet)
 - [x] Python bindings via PyO3
 - [x] Returns Polars DataFrames for efficient data manipulation
@@ -86,13 +90,21 @@ print(f"Calculated SASA for {len(sasa_df)} atoms")
 residue_sasa = arpeggia.sasa("structure.pdb", level="residue")
 print(f"Calculated SASA for {len(residue_sasa)} residues")
 
-# Chain-level SASA
-chain_sasa = arpeggia.sasa("structure.pdb", level="chain")
-print(f"Calculated SASA for {len(chain_sasa)} chains")
+# Chain-level SASA for specific chains only
+chain_sasa = arpeggia.sasa("structure.pdb", level="chain", chains="A,B")
+print(f"Calculated SASA for chains A and B")
 
 # Calculate relative SASA (RSA) normalized by Tien et al. (2013) MaxASA values
 rsa_df = arpeggia.relative_sasa("structure.pdb")
 print(f"Calculated RSA for {len(rsa_df)} residues")
+
+# Calculate Spatial Aggregation Propensity (SAP) scores for aggregation prediction
+sap_df = arpeggia.sap_score("antibody.pdb", level="residue")
+print(f"Calculated SAP for {len(sap_df)} residues")
+
+# SAP for specific chains (e.g., antibody heavy and light chains)
+sap_hl = arpeggia.sap_score("antibody.pdb", chains="H,L", sap_radius=5.0)
+print(f"Calculated SAP for H and L chains")
 
 # Calculate buried surface area at the interface
 bsa = arpeggia.dsasa("structure.pdb", groups="A,B/C,D")
@@ -133,8 +145,17 @@ arpeggia sasa -i structure.pdb -o output_dir --level atom
 arpeggia sasa -i structure.pdb -o output_dir --level residue
 arpeggia sasa -i structure.pdb -o output_dir --level chain
 
+# Calculate SASA for specific chains only
+arpeggia sasa -i structure.pdb -o output_dir --level residue --chains "A,B"
+
 # Calculate relative SASA (RSA) for each residue
 arpeggia relative-sasa -i structure.pdb -o output_dir
+
+# Calculate SAP scores for aggregation prediction
+arpeggia sap -i antibody.pdb -o output_dir --level residue
+
+# Calculate SAP for specific chains (e.g., antibody H and L chains)
+arpeggia sap -i antibody.pdb -o output_dir --chains "H,L"
 
 # Calculate buried surface area at the interface
 arpeggia dsasa -i structure.pdb -g "A,B/C,D"

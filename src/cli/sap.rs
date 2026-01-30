@@ -1,27 +1,23 @@
 use arpeggia::{DataFrameFileType, get_num_threads, load_model, write_df_to_file};
 use clap::{Parser, ValueEnum};
-use polars::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
 
-/// Granularity level for SASA calculation.
+/// Granularity level for SAP score calculation.
 #[derive(ValueEnum, Clone, Debug, Copy, Default)]
-pub enum SasaLevel {
-    /// Calculate SASA for each individual atom
-    #[default]
+pub enum SapLevel {
+    /// Calculate SAP score for each individual atom
     Atom,
-    /// Aggregate SASA by residue
+    /// Aggregate SAP score by residue
+    #[default]
     Residue,
-    /// Aggregate SASA by chain
-    Chain,
 }
 
-impl std::fmt::Display for SasaLevel {
+impl std::fmt::Display for SapLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            SasaLevel::Atom => write!(f, "atom"),
-            SasaLevel::Residue => write!(f, "residue"),
-            SasaLevel::Chain => write!(f, "chain"),
+            SapLevel::Atom => write!(f, "atom"),
+            SapLevel::Residue => write!(f, "residue"),
         }
     }
 }
@@ -38,7 +34,7 @@ pub(crate) struct Args {
     output: PathBuf,
 
     /// Name of the output file
-    #[arg(short = 'f', long = "filename", default_value_t = String::from("sasa"))]
+    #[arg(short = 'f', long = "filename", default_value_t = String::from("sap"))]
     filename: String,
 
     /// Output file type
@@ -49,23 +45,27 @@ pub(crate) struct Args {
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Probe radius r (smaller r detects more surface details and reports a larger surface)
+    /// Probe radius r for SASA calculation (smaller r detects more surface details)
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
     probe_radius: f32,
 
-    /// Number of points on the sphere for sampling
+    /// Number of points on the sphere for SASA sampling
     #[arg(short = 'n', long = "num-points", default_value_t = 100)]
     n_points: usize,
+
+    /// Radius for SAP neighbor search in Ångströms
+    #[arg(short = 's', long = "sap-radius", default_value_t = 5.0)]
+    sap_radius: f32,
 
     /// Number of threads to use for parallel processing
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
 
-    /// Granularity level for SASA calculation
-    #[arg(short = 'l', long = "level", default_value_t = SasaLevel::Atom)]
-    level: SasaLevel,
+    /// Granularity level for SAP calculation
+    #[arg(short = 'l', long = "level", default_value_t = SapLevel::Residue)]
+    level: SapLevel,
 
-    /// Comma-separated chain IDs to include (e.g., "A,B,C"). If empty, includes all chains.
+    /// Comma-separated chain IDs to include (e.g., "H,L"). If empty, includes all chains.
     #[arg(short = 'c', long = "chains", default_value_t = String::new())]
     chains: String,
 }
@@ -97,36 +97,29 @@ pub(crate) fn run(args: &Args) {
     // Convert thread count to isize for rust-sasa
     let num_threads = get_num_threads(args.num_threads);
 
-    // Calculate SASA based on the specified level
-    let mut df_sasa = match args.level {
-        SasaLevel::Atom => arpeggia::get_atom_sasa(
+    // Calculate SAP score based on the specified level
+    let mut df_sap = match args.level {
+        SapLevel::Atom => arpeggia::get_per_atom_sap_score(
             &pdb,
             args.probe_radius,
             args.n_points,
             args.model_num,
-            num_threads,
-            true,
-            &args.chains,
-        ),
-        SasaLevel::Residue => arpeggia::get_residue_sasa(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
+            args.sap_radius,
             num_threads,
             &args.chains,
         ),
-        SasaLevel::Chain => arpeggia::get_chain_sasa(
+        SapLevel::Residue => arpeggia::get_per_residue_sap_score(
             &pdb,
             args.probe_radius,
             args.n_points,
             args.model_num,
+            args.sap_radius,
             num_threads,
             &args.chains,
         ),
     };
 
-    if df_sasa.is_empty() {
+    if df_sap.is_empty() {
         error!(
             "No data found in the input file. Please check the provided arguments, especially the model number."
         );
@@ -142,28 +135,20 @@ pub(crate) fn run(args: &Args) {
     }
     .with_extension(args.output_format.to_string());
 
-    // Save results and log the identified SASA
-    let non_zero_sasa_mask = df_sasa
-        .column("sasa")
-        .unwrap()
-        .as_materialized_series()
-        .not_equal(0.0)
-        .unwrap();
-    let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
+    // Log SAP score summary
     let entity_name = match args.level {
-        SasaLevel::Atom => "atoms",
-        SasaLevel::Residue => "residues",
-        SasaLevel::Chain => "chains",
+        SapLevel::Atom => "atoms",
+        SapLevel::Residue => "residues",
     };
     debug!(
-        "Found {} {} with non-zero SASA\n{}",
-        df_sasa_nonzero.height(),
+        "Calculated SAP score for {} {}\n{}",
+        df_sap.height(),
         entity_name,
-        df_sasa_nonzero
+        df_sap
     );
 
-    // Save res to CSV files
-    write_df_to_file(&mut df_sasa, &output_file, args.output_format);
+    // Save results to file
+    write_df_to_file(&mut df_sap, &output_file, args.output_format);
     let output_file_str = output_file.to_str().unwrap();
     info!("Results saved to {output_file_str}");
 }

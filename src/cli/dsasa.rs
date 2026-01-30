@@ -1,6 +1,5 @@
-use arpeggia::{get_num_threads, load_model, parse_groups, sum_sasa};
+use arpeggia::{get_dsasa, get_num_threads, load_model};
 use clap::Parser;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
 
@@ -60,92 +59,20 @@ pub(crate) fn run(args: &Args) {
         });
     }
 
-    // Get all chains in the PDB
-    let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
-
-    // Parse groups using the utility function
-    let (group1_chains, group2_chains) = parse_groups(&all_chains, &args.groups);
-
-    debug!("Group 1 chains: {:?}", group1_chains);
-    debug!("Group 2 chains: {:?}", group2_chains);
-
     // Convert thread count to isize for rust-sasa
     let num_threads = get_num_threads(args.num_threads);
 
-    // Get combined chains (union of both groups)
-    let combined_group_chains: HashSet<String> =
-        group1_chains.union(&group2_chains).cloned().collect();
-
-    // Create PDB with only chains from both groups (remove unrelated chains)
-    let mut pdb_combined = pdb.clone();
-    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(chain.id()));
-
-    // Calculate SASA for the combined complex (only chains in groups)
-    let combined_sasa = arpeggia::get_chain_sasa(
-        &pdb_combined,
+    let dsasa = get_dsasa(
+        &pdb,
+        &args.groups,
         args.probe_radius,
         args.n_points,
         args.model_num,
         num_threads,
     );
 
-    if combined_sasa.is_empty() {
-        error!("No SASA data found. Please check the input file and model number.");
-        return;
-    }
-
-    // Get total SASA for all chains in both groups when together using polars
-    let combined_total = sum_sasa(&combined_sasa);
-
-    // Create PDB with only group1 chains and calculate SASA
-    let mut pdb_group1 = pdb.clone();
-    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(chain.id()));
-
-    let group1_sasa = arpeggia::get_chain_sasa(
-        &pdb_group1,
-        args.probe_radius,
-        args.n_points,
-        args.model_num,
-        num_threads,
-    );
-
-    let group1_total = sum_sasa(&group1_sasa);
-
-    // Create PDB with only group2 chains and calculate SASA
-    let mut pdb_group2 = pdb.clone();
-    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(chain.id()));
-
-    let group2_sasa = arpeggia::get_chain_sasa(
-        &pdb_group2,
-        args.probe_radius,
-        args.n_points,
-        args.model_num,
-        num_threads,
-    );
-
-    let group2_total = sum_sasa(&group2_sasa);
-
-    // Calculate buried surface area (dSASA)
-    // dSASA = SASA_group1 + SASA_group2 - SASA_complex
-    // This gives the buried surface area at the interface
-    let dsasa = group1_total + group2_total - combined_total;
-
-    debug!(
-        "SASA of group 1 ({:?}): {:.2} Å²",
-        group1_chains, group1_total
-    );
-    debug!(
-        "SASA of group 2 ({:?}): {:.2} Å²",
-        group2_chains, group2_total
-    );
-    debug!("SASA of combined complex: {:.2} Å²", combined_total);
-
-    let group1_str: Vec<String> = group1_chains.iter().map(|c| c.to_string()).collect();
-    let group2_str: Vec<String> = group2_chains.iter().map(|c| c.to_string()).collect();
     info!(
-        "Buried surface area (dSASA) at the interface between chains [{}] and [{}]: {:.2} Å²",
-        group1_str.join(", "),
-        group2_str.join(", "),
-        dsasa
+        "Buried surface area (dSASA) at the interface between chains [{}]: {:.2} Å²",
+        args.groups, dsasa
     );
 }
