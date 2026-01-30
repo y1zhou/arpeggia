@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-01-30
+
+### Added
+
+- **Spatial Aggregation Propensity (SAP) score calculation**: New functionality to predict aggregation-prone regions in proteins based on the Chennamsetty et al. paper "Developability Index: A Rapid In Silico Tool for the Screening of Antibody Aggregation Propensity" (DOI: 10.1002/jps.22758)
+  - New `sap.rs` module with Black & Mould (1991) hydrophobicity scale, glycine-normalized
+  - `get_per_atom_sap_score()` for atom-level SAP calculation with R-tree spatial indexing
+  - `get_per_residue_sap_score()` for residue-level SAP aggregation
+  - New `sap` CLI command with `--level` flag for atom/residue level calculation
+  - Python binding: `sap_score()` function with `level`, `sap_radius`, and `chains` parameters
+
+- **Chain filtering for SASA and SAP functions**: New `chains` parameter to filter structures to specific chains before calculation
+  - Added `--chains` / `-c` flag to `sasa`, `relative-sasa`, and `sap` CLI commands
+  - Python bindings: `chains` parameter added to `sasa()`, `relative_sasa()`, and `sap_score()`
+  - Empty string (default) keeps all chains; comma-separated chain IDs filter to specified chains (e.g., "H,L")
+  - Example: `arpeggia sap -i antibody.pdb -o output/ -c "H,L"` to analyze only heavy and light chains
+
+### Changed
+
+- `prepare_pdb_for_sasa()` now accepts a `chains` parameter for chain filtering
+- All SASA functions (`get_atom_sasa`, `get_residue_sasa`, `get_chain_sasa`, `get_relative_sasa`) updated with `chains` parameter
+- Updated documentation with SAP score examples and chain filtering usage
+
 ## [0.6.0] - 2026-01-26
 
 ### Added
@@ -161,7 +184,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.7.0
 [0.6.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.6.0
 [0.5.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.1
 [0.5.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.0
