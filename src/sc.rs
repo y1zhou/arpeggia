@@ -72,7 +72,7 @@ pub struct ScSettings {
     pub density: f64,
     /// Peripheral band width for trimming (Å)
     pub band: f64,
-    /// Separation distance for attention number assignment (Å)
+    /// Separation distance for interface atom classification (Å)
     pub separation: f64,
     /// Gaussian weight for distance-weighted dot products (Å^-2)
     pub weight: f64,
@@ -388,7 +388,7 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize, settings: Option<ScSett
 
         let n = distances.len() as f64;
         let d_mean = distances.iter().sum::<f64>() / n;
-        let s_mean = -scores.iter().sum::<f64>() / n;
+        let s_mean = scores.iter().sum::<f64>() / n;
 
         let d_median = {
             let mid = distances.len() / 2;

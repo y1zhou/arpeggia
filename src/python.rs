@@ -352,7 +352,7 @@ fn sap_score(
 ///         - area (float): Total trimmed interface area in Ų
 ///         - valid (bool): Whether the calculation was successful
 ///         - surfaces (list): Per-surface statistics [surface1, surface2], each containing:
-///             - n_atoms, n_buried_atoms, n_dots, n_trimmed_dots, trimmed_area
+///             - n_atoms, n_buried_atoms, n_blocked_atoms, n_dots, n_trimmed_dots, trimmed_area
 ///             - s_median, s_mean, d_median, d_mean
 ///
 /// Example:
