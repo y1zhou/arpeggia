@@ -173,3 +173,69 @@ def pdb2seq(input_file: str) -> dict[str, str]:
         A dictionary mapping chain IDs to their sequences
     """
     ...
+
+
+class ScSurfaceResult:
+    """Shape complementarity result for a single surface."""
+
+    n_atoms: int
+    n_buried_atoms: int
+    n_blocked_atoms: int
+    n_dots: int
+    n_trimmed_dots: int
+    trimmed_area: float
+    d_mean: float
+    d_median: float
+    s_mean: float
+    s_median: float
+
+
+class ScResult:
+    """Shape complementarity calculation result."""
+
+    sc: float
+    distance: float
+    area: float
+    valid: bool
+    surfaces: list[ScSurfaceResult]
+
+
+def sc(
+    input_file: str,
+    groups: str,
+    model_num: int = 0,
+    probe_radius: float = 1.7,
+    density: float = 15.0,
+    band: float = 1.5,
+    separation: float = 8.0,
+    weight: float = 0.5,
+) -> dict:
+    """Calculate Shape Complementarity (SC) between two chain groups.
+
+    Shape complementarity measures how well two molecular surfaces fit together,
+    following Lawrence & Colman (1993) "Shape Complementarity at Protein/Protein Interfaces".
+    Higher SC values (closer to 1.0) indicate better geometric fit between surfaces.
+    Typical protein-protein interfaces have SC values between 0.5 and 0.7.
+
+    Args:
+        input_file: Path to the PDB or mmCIF file
+        groups: Chain groups specification, e.g., "H,L/A" for chains H,L vs chain A.
+            Both groups must be specified separated by "/".
+        model_num: Model number to analyze (0 for first model). Defaults to 0.
+        probe_radius: Probe radius for surface generation in Ångströms. Defaults to 1.7.
+        density: Dot density for surface sampling (dots per Ų). Defaults to 15.0.
+        band: Peripheral band width for trimming in Ångströms. Defaults to 1.5.
+        separation: Separation cutoff for interface classification in Ångströms. Defaults to 8.0.
+        weight: Gaussian weight for distance-weighted SC calculation (Å^-2). Defaults to 0.5.
+
+    Returns:
+        A dictionary containing SC results:
+        - sc (float): The overall shape complementarity score (0-1)
+        - distance (float): Median distance between facing surfaces in Ångströms
+        - area (float): Total trimmed interface area in Ų
+        - valid (bool): Whether the calculation was successful
+        - surfaces (list): Per-surface statistics [surface1, surface2], each containing:
+            - n_atoms, n_buried_atoms, n_dots, n_trimmed_dots, trimmed_area
+            - s_median, s_mean, d_median, d_mean
+    """
+    ...

@@ -7,6 +7,7 @@ It includes functionality for:
 - Calculating relative SASA (RSA) for residues normalized by Tien et al. (2013) MaxASA values
 - Calculating Spatial Aggregation Propensity (SAP) scores for predicting aggregation-prone regions
 - Calculating buried surface area (dSASA) at interfaces between chain groups
+- Calculating Shape Complementarity (SC) between chain groups
 - Extracting protein sequences from structures
 
 The module is built on Rust using PyO3 and returns results as Polars DataFrames for
@@ -42,6 +43,10 @@ Example:
     >>> bsa = arpeggia.dsasa("structure.pdb", groups="A,B/C,D")
     >>> print(f"Buried surface area: {bsa:.2f} Å²")
     >>>
+    >>> # Calculate shape complementarity at interface
+    >>> sc_result = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
+    >>> print(f"Shape complementarity: {sc_result['sc']:.3f}")
+    >>>
     >>> # Extract sequences
     >>> sequences = arpeggia.pdb2seq("structure.pdb")
     >>> for chain_id, seq in sequences.items():
@@ -50,7 +55,7 @@ Example:
 
 from importlib.metadata import version
 
-from arpeggia.arpeggia import contacts, dsasa, pdb2seq, relative_sasa, sap_score, sasa
+from arpeggia.arpeggia import contacts, dsasa, pdb2seq, relative_sasa, sap_score, sasa, sc
 
 __version__ = version("arpeggia")
-__all__ = ["contacts", "sasa", "relative_sasa", "sap_score", "dsasa", "pdb2seq"]
+__all__ = ["contacts", "sasa", "relative_sasa", "sap_score", "dsasa", "sc", "pdb2seq"]
