@@ -71,7 +71,7 @@ fn get_hydrophobicity(resn: &str) -> Option<f32> {
 /// `database/scoring/score_functions/sap_sasa_calib.dat` and represent
 /// the maximum SASA contribution from side-chain atoms only.
 ///
-/// Note: Glycine uses the CA atom contribution as it has no side-chain.
+/// Note: Glycine uses the H atom contribution as it has no side-chain.
 ///
 /// Returns the maximum side-chain SASA in Å² for a given 3-letter amino acid code,
 /// or None if the residue is not a standard amino acid.
@@ -83,7 +83,7 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
         "ASP" => Some(87.601),
         "CYS" => Some(46.456),
         "GLN" => Some(99.186),
-        "GLY" => Some(7.892), // Using CA
+        "GLY" => Some(3.229), // Using H
         "GLU" => Some(95.534),
         "HIS" => Some(96.532),
         "ILE" => Some(31.448),
@@ -147,7 +147,15 @@ pub fn get_per_atom_sap_score(
 ) -> DataFrame {
     // Use get_atom_sasa from sasa.rs for SASA calculation
     // Note: This already handles hydrogen stripping and solvent/ion removal
-    let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, num_threads, true, chains);
+    let atom_sasa_df = get_atom_sasa(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        num_threads,
+        true,
+        chains,
+    );
 
     // Create a lookup map from atom serial number to SASA value
     let atomi_col = atom_sasa_df
@@ -317,13 +325,36 @@ pub fn get_per_residue_sap_score(
     );
 
     // Aggregate by residue
-    atom_sap
+    let residue_sap = atom_sap
         .lazy()
         .rename(["sasa"], ["sc_sasa"], true) // Be clear this is side-chain SASA
         .filter(col("sap_score").gt(lit(0.0))) // Ref. calculate_per_res_sap in Rosetta
         .group_by([col("chain"), col("resn"), col("resi"), col("insertion")])
         .agg([col("sc_sasa").sum(), col("sap_score").sum()])
         .sort(["chain", "resi", "insertion"], Default::default())
+        .collect()
+        .unwrap();
+
+    // Annotate theroetical max sidechain SASA for reference
+    let max_sc_asa: Vec<f32> = residue_sap
+        .column("resn")
+        .unwrap()
+        .str()
+        .unwrap()
+        .into_iter()
+        .flatten()
+        .map(|resn| get_sc_max_asa(resn).unwrap())
+        .collect();
+
+    residue_sap
+        .lazy()
+        .with_column(Series::new("max_sc_asa".into(), max_sc_asa).lit())
+        .with_column(
+            (col("sc_sasa") / col("max_sc_asa"))
+                .clip(lit(0.0), lit(1.0))
+                .alias("relative_sc_sasa")
+                .cast(DataType::Float32),
+        )
         .collect()
         .unwrap()
 }
