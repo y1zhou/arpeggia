@@ -339,84 +339,26 @@ fn sap_score(
 ///     groups (str): Chain groups specification, e.g., "H,L/A" for chains H,L vs chain A.
 ///         Both groups must be specified separated by "/".
 ///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
-///     probe_radius (float, optional): Probe radius for surface generation in Ångströms. Defaults to 1.7.
-///     density (float, optional): Dot density for surface sampling (dots per Ų). Defaults to 15.0.
-///     band (float, optional): Peripheral band width for trimming in Ångströms. Defaults to 1.5.
-///     separation (float, optional): Separation cutoff for interface classification in Ångströms. Defaults to 8.0.
-///     weight (float, optional): Gaussian weight for distance-weighted SC calculation (Å^-2). Defaults to 0.5.
 ///
 /// Returns:
-///     dict: A dictionary containing SC results:
-///         - sc (float): The overall shape complementarity score (0-1)
-///         - distance (float): Median distance between facing surfaces in Ångströms
-///         - area (float): Total trimmed interface area in Ų
-///         - valid (bool): Whether the calculation was successful
-///         - surfaces (list): Per-surface statistics [surface1, surface2], each containing:
-///             - n_atoms, n_buried_atoms, n_blocked_atoms, n_dots, n_trimmed_dots, trimmed_area
-///             - s_median, s_mean, d_median, d_mean
+///     float: The shape complementarity score (0-1), or -1.0 if calculation fails.
 ///
 /// Example:
 ///     >>> import arpeggia
-///     >>> result = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
-///     >>> print(f"SC Score: {result['sc']:.3f}")
-///     >>> print(f"Interface Area: {result['area']:.1f} Ų")
+///     >>> sc = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
+///     >>> print(f"SC Score: {sc:.3f}")
 #[pyfunction]
-#[pyo3(signature = (input_file, groups, model_num=0, probe_radius=1.7, density=15.0, band=1.5, separation=8.0, weight=0.5))]
+#[pyo3(signature = (input_file, groups, model_num=0))]
 fn sc(
     input_file: String,
     groups: &str,
     model_num: usize,
-    probe_radius: f64,
-    density: f64,
-    band: f64,
-    separation: f64,
-    weight: f64,
-) -> PyResult<pyo3::Py<pyo3::types::PyDict>> {
-    use pyo3::types::PyDict;
-
+) -> PyResult<f64> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
-    // Create settings
-    let settings = crate::ScSettings {
-        probe_radius,
-        density,
-        band,
-        separation,
-        weight,
-    };
-
     // Calculate SC
-    let result = crate::get_sc(&pdb, groups, model_num, Some(settings));
-
-    // Convert to Python dict
-    Python::with_gil(|py| {
-        let dict = PyDict::new(py);
-        dict.set_item("sc", result.sc)?;
-        dict.set_item("distance", result.distance)?;
-        dict.set_item("area", result.area)?;
-        dict.set_item("valid", result.valid)?;
-
-        // Surface results
-        let surfaces = pyo3::types::PyList::empty(py);
-        for surf in &result.surfaces {
-            let surf_dict = PyDict::new(py);
-            surf_dict.set_item("n_atoms", surf.n_atoms)?;
-            surf_dict.set_item("n_buried_atoms", surf.n_buried_atoms)?;
-            surf_dict.set_item("n_blocked_atoms", surf.n_blocked_atoms)?;
-            surf_dict.set_item("n_dots", surf.n_dots)?;
-            surf_dict.set_item("n_trimmed_dots", surf.n_trimmed_dots)?;
-            surf_dict.set_item("trimmed_area", surf.trimmed_area)?;
-            surf_dict.set_item("d_mean", surf.d_mean)?;
-            surf_dict.set_item("d_median", surf.d_median)?;
-            surf_dict.set_item("s_mean", surf.s_mean)?;
-            surf_dict.set_item("s_median", surf.s_median)?;
-            surfaces.append(surf_dict)?;
-        }
-        dict.set_item("surfaces", surfaces)?;
-
-        Ok(dict.into())
-    })
+    Ok(crate::get_sc(&pdb, groups, model_num))
 }
 
 /// Python module for protein structure analysis.

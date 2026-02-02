@@ -44,8 +44,8 @@ Example:
     >>> print(f"Buried surface area: {bsa:.2f} Å²")
     >>>
     >>> # Calculate shape complementarity at interface
-    >>> sc_result = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
-    >>> print(f"Shape complementarity: {sc_result['sc']:.3f}")
+    >>> sc = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
+    >>> print(f"Shape complementarity: {sc:.3f}")
     >>>
     >>> # Extract sequences
     >>> sequences = arpeggia.pdb2seq("structure.pdb")

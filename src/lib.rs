@@ -33,7 +33,7 @@ pub use sap::{get_per_atom_sap_score, get_per_residue_sap_score};
 pub use sasa::{
     get_atom_sasa, get_chain_sasa, get_dsasa, get_max_asa, get_relative_sasa, get_residue_sasa,
 };
-pub use sc::{ScResult, ScSettings, ScSurfaceResult, get_sc, get_sc_score};
+pub use sc::get_sc;
 pub use sequences::get_sequences;
 
 // Python bindings module (only compiled when python feature is enabled)
