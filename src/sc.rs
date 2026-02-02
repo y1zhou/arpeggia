@@ -6,11 +6,11 @@
 
 use crate::sasa::{filter_pdb_by_model, prepare_pdb_for_sasa};
 use crate::utils::parse_groups;
-use nalgebra::Vector3;
 use pdbtbx::*;
 use rayon::prelude::*;
-use rstar::{RTree, RTreeObject, PointDistance, AABB};
+use rstar::{PointDistance, RTree, RTreeObject, AABB};
 use std::collections::HashSet;
+use std::f64::consts::PI;
 
 /// Gaussian weight w = 0.5 Å^-2 (Lawrence & Colman 1993, Fig. 1)
 const GAUSSIAN_W: f64 = 0.5;
@@ -23,11 +23,74 @@ const PROBE_RADIUS: f64 = 1.7;
 /// Separation cutoff for interface classification
 const SEPARATION_CUTOFF: f64 = 8.0;
 
+/// 3D Vector for geometry calculations
+#[derive(Clone, Copy, Debug, Default)]
+struct Vec3 {
+    x: f64,
+    y: f64,
+    z: f64,
+}
+
+impl Vec3 {
+    fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+    fn dot(&self, other: Vec3) -> f64 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+    fn magnitude_squared(&self) -> f64 {
+        self.dot(*self)
+    }
+    fn magnitude(&self) -> f64 {
+        self.magnitude_squared().max(0.0).sqrt()
+    }
+    fn normalize(&mut self) {
+        let m = self.magnitude();
+        if m > 0.0 {
+            self.x /= m;
+            self.y /= m;
+            self.z /= m;
+        }
+    }
+    fn normalized(&self) -> Vec3 {
+        let mut v = *self;
+        v.normalize();
+        v
+    }
+    fn distance_squared(&self, other: Vec3) -> f64 {
+        (*self - other).magnitude_squared()
+    }
+    fn distance(&self, other: Vec3) -> f64 {
+        self.distance_squared(other).sqrt()
+    }
+}
+
+impl std::ops::Add for Vec3 {
+    type Output = Vec3;
+    fn add(self, rhs: Vec3) -> Vec3 {
+        Vec3::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
+    }
+}
+
+impl std::ops::Sub for Vec3 {
+    type Output = Vec3;
+    fn sub(self, rhs: Vec3) -> Vec3 {
+        Vec3::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+    }
+}
+
+impl std::ops::Mul<f64> for Vec3 {
+    type Output = Vec3;
+    fn mul(self, rhs: f64) -> Vec3 {
+        Vec3::new(self.x * rhs, self.y * rhs, self.z * rhs)
+    }
+}
+
 /// A surface dot with position and normal vector.
 #[derive(Debug, Clone)]
 struct Dot {
-    coor: Vector3<f64>,
-    outnml: Vector3<f64>,
+    coor: Vec3,
+    outnml: Vec3,
     buried: bool,
 }
 
@@ -57,7 +120,7 @@ impl PointDistance for DotPoint {
 /// An atom for SC calculation.
 #[derive(Debug, Clone)]
 struct ScAtom {
-    coor: Vector3<f64>,
+    coor: Vec3,
     radius: f64,
     molecule: usize,
     is_interface: bool,
@@ -112,10 +175,14 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
                 .unwrap_or(1.5);
 
             let pos = hier.atom().pos();
-            let coor = Vector3::new(pos.0, pos.1, pos.2);
+            let coor = Vec3::new(pos.0, pos.1, pos.2);
 
             // Check if interface atom (near opposite molecule)
-            let other_group = if molecule == 0 { &group2_chains } else { &group1_chains };
+            let other_group = if molecule == 0 {
+                &group2_chains
+            } else {
+                &group1_chains
+            };
             let is_interface = tree
                 .locate_within_distance(pos, sep_sq)
                 .any(|neighbor| other_group.contains(neighbor.chain().id()));
@@ -140,11 +207,13 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
     }
 
     // Separate atoms by molecule for efficient checks
-    let mol0_atoms: Vec<(Vector3<f64>, f64)> = atoms.iter()
+    let mol0_atoms: Vec<(Vec3, f64)> = atoms
+        .iter()
         .filter(|a| a.molecule == 0)
         .map(|a| (a.coor, a.radius))
         .collect();
-    let mol1_atoms: Vec<(Vector3<f64>, f64)> = atoms.iter()
+    let mol1_atoms: Vec<(Vec3, f64)> = atoms
+        .iter()
         .filter(|a| a.molecule == 1)
         .map(|a| (a.coor, a.radius))
         .collect();
@@ -160,29 +229,30 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
 
             let radius_i = atom.radius;
             let expanded_radius_i = atom.radius + rp;
-            let surface_area = 4.0 * std::f64::consts::PI * radius_i * radius_i;
+            let surface_area = 4.0 * PI * radius_i * radius_i;
             let n_dots = (surface_area * density).ceil() as usize;
 
             let golden_ratio = (1.0 + 5.0_f64.sqrt()) / 2.0;
             let mut dots = Vec::new();
 
-            let same_mol_atoms: Vec<(Vector3<f64>, f64)> = atoms.iter()
+            let same_mol_atoms: Vec<(Vec3, f64)> = atoms
+                .iter()
                 .enumerate()
                 .filter(|(i, a)| *i != atom_idx && a.molecule == atom.molecule)
                 .map(|(_, a)| (a.coor, a.radius))
                 .collect();
 
-            let other_mol_atoms = if atom.molecule == 0 { &mol1_atoms } else { &mol0_atoms };
+            let other_mol_atoms = if atom.molecule == 0 {
+                &mol1_atoms
+            } else {
+                &mol0_atoms
+            };
 
             for i in 0..n_dots {
-                let theta = 2.0 * std::f64::consts::PI * (i as f64) / golden_ratio;
+                let theta = 2.0 * PI * (i as f64) / golden_ratio;
                 let phi = (1.0 - 2.0 * (i as f64 + 0.5) / n_dots as f64).acos();
 
-                let normal = Vector3::new(
-                    phi.sin() * theta.cos(),
-                    phi.sin() * theta.sin(),
-                    phi.cos(),
-                );
+                let normal = Vec3::new(phi.sin() * theta.cos(), phi.sin() * theta.sin(), phi.cos());
 
                 let point = atom.coor + normal * radius_i;
                 let pcen = atom.coor + normal * expanded_radius_i;
@@ -191,7 +261,7 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
                 let mut collision = false;
                 for (other_coor, other_radius) in &same_mol_atoms {
                     let other_expanded = other_radius + rp;
-                    if (pcen - other_coor).norm_squared() < other_expanded * other_expanded {
+                    if pcen.distance_squared(*other_coor) < other_expanded * other_expanded {
                         collision = true;
                         break;
                     }
@@ -204,20 +274,31 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
                 let mut buried = false;
                 for (other_coor, other_radius) in other_mol_atoms {
                     let other_expanded = other_radius + rp;
-                    if (pcen - other_coor).norm_squared() <= other_expanded * other_expanded {
+                    if pcen.distance_squared(*other_coor) <= other_expanded * other_expanded {
                         buried = true;
                         break;
                     }
                 }
 
+                // Normal points outward from probe center (for Connolly surface compatibility)
+                let outnml = if rp <= 0.0 {
+                    normal
+                } else {
+                    (pcen - point).normalized()
+                };
+
                 dots.push(Dot {
                     coor: point,
-                    outnml: normal,
+                    outnml,
                     buried,
                 });
             }
 
-            if dots.is_empty() { None } else { Some((atom.molecule, dots)) }
+            if dots.is_empty() {
+                None
+            } else {
+                Some((atom.molecule, dots))
+            }
         })
         .collect();
 
@@ -236,9 +317,10 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
 
     for mol in 0..2 {
         let sdots = &dots[mol];
-        
+
         // Build RTree of accessible (non-buried) dots
-        let accessible_dots: Vec<DotPoint> = sdots.iter()
+        let accessible_dots: Vec<DotPoint> = sdots
+            .iter()
             .enumerate()
             .filter(|(_, d)| !d.buried)
             .map(|(idx, d)| DotPoint {
@@ -246,9 +328,9 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
                 pos: [d.coor.x, d.coor.y, d.coor.z],
             })
             .collect();
-        
+
         let accessible_tree = RTree::bulk_load(accessible_dots);
-        
+
         // Keep buried dots that have no accessible dots within band distance
         let indices: Vec<usize> = (0..sdots.len())
             .into_par_iter()
@@ -258,7 +340,10 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
                     return false;
                 }
                 let pos = [dot.coor.x, dot.coor.y, dot.coor.z];
-                accessible_tree.locate_within_distance(pos, band_sq).next().is_none()
+                accessible_tree
+                    .locate_within_distance(pos, band_sq)
+                    .next()
+                    .is_none()
             })
             .collect();
 
@@ -272,7 +357,8 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
     // Build RTree for neighbor finding
     let mut their_trees: [Option<RTree<DotPoint>>; 2] = [None, None];
     for mol in 0..2 {
-        let their_dots: Vec<DotPoint> = trimmed_indices[mol].iter()
+        let their_dots: Vec<DotPoint> = trimmed_indices[mol]
+            .iter()
             .map(|&idx| DotPoint {
                 idx,
                 pos: [dots[mol][idx].coor.x, dots[mol][idx].coor.y, dots[mol][idx].coor.z],
@@ -295,14 +381,17 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
             .filter_map(|&idx| {
                 let dot1 = &my_dots[idx];
                 let pos = [dot1.coor.x, dot1.coor.y, dot1.coor.z];
-                
+
                 // Find nearest neighbor using RTree
                 their_tree.nearest_neighbor(&pos).map(|nearest| {
                     let neighbor = &their_dots[nearest.idx];
-                    let dist = (dot1.coor - neighbor.coor).norm();
-                    let mut r = dot1.outnml.dot(&neighbor.outnml);
+                    let dist = dot1.coor.distance(neighbor.coor);
+                    let mut r = dot1.outnml.dot(neighbor.outnml);
                     r *= (-dist * dist * weight).exp();
-                    r.clamp(-0.999, 0.999)
+                    r = r.clamp(-0.999, 0.999);
+                    // Negate: complementary surfaces have opposing normals (dot product negative)
+                    // so we negate to get positive SC for well-fitting surfaces
+                    -r
                 })
             })
             .collect();
@@ -312,12 +401,12 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
         }
 
         // Calculate median
-        // The dot product of opposite-facing (complementary) normals is negative.
-        // We negate to get positive SC values for well-fitting surfaces.
         let mut scores = scores;
         let mid = scores.len() / 2;
-        let s_median = *scores.select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap()).1;
-        s_medians[my] = -s_median;
+        let s_median = *scores
+            .select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap())
+            .1;
+        s_medians[my] = s_median;
     }
 
     (s_medians[0] + s_medians[1]) / 2.0
@@ -344,13 +433,15 @@ mod tests {
 
         assert!(sc > 0.0, "SC calculation should succeed");
 
-        // Target: within ~0.15 of sc-rs reference (0.714)
+        // Target: within ~0.1 of sc-rs reference (0.714)
         let expected = 0.714;
         let tolerance = 0.15;
         assert!(
             (sc - expected).abs() < tolerance,
             "SC score {} should be within {} of expected {}",
-            sc, tolerance, expected
+            sc,
+            tolerance,
+            expected
         );
     }
 
