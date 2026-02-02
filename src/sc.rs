@@ -28,8 +28,6 @@ const SEPARATION_CUTOFF: f64 = 8.0;
 struct Dot {
     coor: Vector3<f64>,
     outnml: Vector3<f64>,
-    #[allow(dead_code)]
-    area: f64,
     buried: bool,
 }
 
@@ -164,7 +162,6 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
             let expanded_radius_i = atom.radius + rp;
             let surface_area = 4.0 * std::f64::consts::PI * radius_i * radius_i;
             let n_dots = (surface_area * density).ceil() as usize;
-            let area_per_dot = surface_area / n_dots as f64;
 
             let golden_ratio = (1.0 + 5.0_f64.sqrt()) / 2.0;
             let mut dots = Vec::new();
@@ -216,7 +213,6 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
                 dots.push(Dot {
                     coor: point,
                     outnml: normal,
-                    area: area_per_dot,
                     buried,
                 });
             }
@@ -316,10 +312,12 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> f64 {
         }
 
         // Calculate median
+        // The dot product of opposite-facing (complementary) normals is negative.
+        // We negate to get positive SC values for well-fitting surfaces.
         let mut scores = scores;
         let mid = scores.len() / 2;
         let s_median = *scores.select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap()).1;
-        s_medians[my] = -s_median; // Negate for positive SC with complementary normals
+        s_medians[my] = -s_median;
     }
 
     (s_medians[0] + s_medians[1]) / 2.0
