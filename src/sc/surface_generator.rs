@@ -63,26 +63,6 @@ impl SurfaceGenerator {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn set_radii(&mut self, radii: Vec<AtomRadius>) {
-        self.radii = radii;
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn reset(&mut self) {
-        for a in &mut self.run.atoms {
-            a.neighbor_indices.clear();
-            a.buried_by_indices.clear();
-        }
-        self.run.atoms.clear();
-        self.run.probes.clear();
-        self.run.dots[0].clear();
-        self.run.dots[1].clear();
-        self.run.trimmed_dots[0].clear();
-        self.run.trimmed_dots[1].clear();
-        self.run.results = Results::default();
-    }
-
     pub fn add_atom(&mut self, molecule: i32, mut atom: Atom) -> Result<(), SurfaceCalculatorError> {
         if self.radii.is_empty() {
             self.init()?;
@@ -179,18 +159,6 @@ impl SurfaceGenerator {
                 self.run.results.surfaces[mol].n_buried_atoms += 1;
             }
         }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn calc(&mut self) -> Result<(), SurfaceCalculatorError> {
-        self.init()?;
-        self.run.results.valid = 0;
-        if self.run.atoms.is_empty() {
-            return Err(SurfaceCalculatorError::NoAtoms);
-        }
-        self.assign_attention_numbers();
-        self.generate_molecular_surfaces()?;
-        Ok(())
     }
 
     pub(crate) fn generate_molecular_surfaces(&mut self) -> Result<(), SurfaceCalculatorError> {
