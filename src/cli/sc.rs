@@ -51,12 +51,14 @@ pub(crate) fn run(args: &Args) {
     }
 
     // Calculate SC
-    let sc = arpeggia::get_sc(&pdb, &args.groups, args.model_num);
+    let sc = arpeggia::get_sc(&pdb, &args.groups);
 
-    if sc < 0.0 {
-        error!("SC calculation failed. Check that both chain groups have atoms at the interface.");
-        return;
+    match sc {
+        Ok(score) => {
+            info!("SC: {:.4}", score);
+        }
+        Err(e) => {
+            error!("SC calculation failed: {}", e);
+        }
     }
-
-    info!("SC: {:.4}", sc);
 }

@@ -352,13 +352,15 @@ fn sap_score(
 fn sc(
     input_file: String,
     groups: &str,
+    #[allow(unused_variables)]
     model_num: usize,
 ) -> PyResult<f64> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
     // Calculate SC
-    Ok(crate::get_sc(&pdb, groups, model_num))
+    crate::get_sc(&pdb, groups)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("SC calculation failed: {}", e)))
 }
 
 /// Python module for protein structure analysis.
