@@ -127,34 +127,10 @@ impl SurfaceGenerator {
             atom.radius = radius.radius;
             return Ok(());
         }
-        // Element fallback from embedded table
-        let elem = atom
-            .atom
-            .chars()
-            .find(|c| c.is_ascii_alphabetic())
-            .map(|c| c.to_ascii_uppercase())
-            .unwrap_or(' ');
-        if elem != ' ' {
-            let elem_str = elem.to_string();
-            for radius in &self.radii {
-                if !radius.residue.trim().starts_with("***") {
-                    continue;
-                }
-                if radius.atom.trim() != elem_str {
-                    continue;
-                }
-                atom.radius = radius.radius;
-                return Ok(());
-            }
-        }
         // Fallback to pdbtbx element VdW radius
-        if let Some(ref pdbtbx_atom) = atom.pdbtbx_atom {
-            if let Some(element) = pdbtbx_atom.element() {
-                if let Some(vdw_radius) = element.atomic_radius().van_der_waals {
-                    atom.radius = vdw_radius;
-                    return Ok(());
-                }
-            }
+        if let Some(elem_radius) = atom.elem_radius {
+            atom.radius = elem_radius;
+            return Ok(());
         }
         Err(SurfaceCalculatorError::Io(std::io::Error::other(format!(
             "No radius for {}:{}",

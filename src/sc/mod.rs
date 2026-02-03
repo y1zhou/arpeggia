@@ -110,7 +110,7 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize, threads: usize) -> Resu
                     coor: Vec3::new(pos.0, pos.1, pos.2),
                     neighbor_indices: Vec::new(),
                     buried_by_indices: Vec::new(),
-                    pdbtbx_atom: Some(atom.clone()),
+                    elem_radius: atom.element().unwrap().atomic_radius().van_der_waals,
                 },
             ))
         })
