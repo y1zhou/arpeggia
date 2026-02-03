@@ -162,17 +162,27 @@ impl SurfaceGenerator {
         ))))
     }
 
-    /// Get a thread pool respecting the configured thread limit.
-    pub fn get_thread_pool(&self) -> rayon::ThreadPool {
-        let num_threads = if self.settings.threads == 0 {
-            rayon::current_num_threads()
+    /// Execute a parallel operation with the configured thread limit.
+    /// Uses rayon's thread pool with the specified number of threads.
+    pub fn run_parallel<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce() -> T + Send,
+        T: Send,
+    {
+        if self.settings.threads == 0 || self.settings.threads >= rayon::current_num_threads() {
+            // Use global pool directly when auto or enough threads
+            f()
         } else {
-            self.settings.threads
-        };
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(num_threads)
-            .build()
-            .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().unwrap())
+            // Create a scoped pool with limited threads
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(self.settings.threads)
+                .build()
+                .unwrap_or_else(|_| {
+                    // Fallback to global pool if creation fails
+                    rayon::ThreadPoolBuilder::new().build().expect("Failed to create thread pool")
+                });
+            pool.install(f)
+        }
     }
 
     pub fn assign_attention_numbers(&mut self) {

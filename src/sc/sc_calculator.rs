@@ -114,8 +114,7 @@ impl ScCalculator {
     fn trim_peripheral_band(&mut self, i: usize) -> Result<ScValue, SurfaceCalculatorError> {
         let (indices, area) = if self.base.settings.enable_parallel {
             let sdots = &self.base.run.dots[i];
-            let pool = self.base.get_thread_pool();
-            pool.install(|| {
+            self.base.run_parallel(|| {
                 let indices: Vec<usize> = (0..sdots.len())
                     .into_par_iter()
                     .filter(|&idx| sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots))
@@ -158,8 +157,7 @@ impl ScCalculator {
         let (distances, scores, distmin_sum, score_sum) = if self.base.settings.enable_parallel {
             let gaussian_w = self.base.settings.gaussian_w;
             let run_ref = &self.base.run;
-            let pool = self.base.get_thread_pool();
-            pool.install(|| {
+            self.base.run_parallel(|| {
                 let pairs: Vec<(f64, f64)> = my_dots
                     .par_iter()
                     .filter_map(|&pd| {

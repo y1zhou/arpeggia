@@ -77,7 +77,8 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize, threads: usize) -> Resu
     calc.set_threads(threads);
 
     // Load atoms from PDB into the calculator using filter_map/collect pattern
-    let atoms: Vec<(i32, Atom)> = pdb_filtered
+    // Each entry is (molecule_id, Atom) where molecule_id is 0 for group1, 1 for group2
+    let atom_assignments: Vec<(i32, Atom)> = pdb_filtered
         .atoms_with_hierarchy()
         .filter_map(|hier| {
             let chain_id = hier.chain().id().to_string();
@@ -116,7 +117,7 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize, threads: usize) -> Resu
         .collect();
 
     // Add atoms to calculator
-    for (molecule, atom) in atoms {
+    for (molecule, atom) in atom_assignments {
         calc.add_atom(molecule, atom)?;
     }
 
