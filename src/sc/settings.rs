@@ -19,8 +19,6 @@ pub struct Settings {
     pub separation_cutoff: f64,
     /// Gaussian weight parameter w in Å^-2
     pub gaussian_w: f64,
-    /// Prefer using provided per-atom type radii
-    pub use_atom_type_radius: bool,
     /// Enable parallel processing
     pub enable_parallel: bool,
 }
@@ -33,7 +31,6 @@ impl Default for Settings {
             peripheral_band: PERIPH_BAND,
             separation_cutoff: 8.0,
             gaussian_w: GAUSSIAN_W,
-            use_atom_type_radius: false,
             enable_parallel: true,
         }
     }

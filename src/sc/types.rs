@@ -8,6 +8,8 @@ pub enum Attention {
     /// Far from the interface; not considered for surface emission
     Far,
     /// Consider for geometric constructions (e.g., re-entrant surfaces)
+    /// Currently not assigned but kept for compatibility with sc-rs
+    #[allow(dead_code)]
     Consider,
     /// Buried and flagged for interface processing
     #[default]
@@ -19,7 +21,6 @@ pub struct Atom {
     pub natom: i32,
     pub molecule: usize,
     pub radius: ScValue,
-    pub atom_type_radius: ScValue,
     /// Per-atom sampling density (~15 dots/Å²)
     pub density: ScValue,
     pub attention: Attention,
@@ -35,27 +36,8 @@ pub struct Atom {
 }
 
 impl Atom {
-    pub fn new() -> Self {
-        Self {
-            natom: 0,
-            molecule: 0,
-            radius: 0.0,
-            atom_type_radius: 0.0,
-            density: 0.0,
-            attention: Attention::Buried,
-            accessible: false,
-            atom: String::new(),
-            residue: String::new(),
-            coor: Vec3::zero(),
-            neighbor_indices: Vec::new(),
-            buried_by_indices: Vec::new(),
-        }
-    }
     pub fn distance_squared(&self, other: &Atom) -> ScValue {
         self.coor.distance_squared(other.coor)
-    }
-    pub fn distance(&self, other: &Atom) -> ScValue {
-        self.coor.distance(other.coor)
     }
 }
 
@@ -76,6 +58,7 @@ pub enum DotKind {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Dot {
     /// Discretized surface point
     pub coor: Vec3,
@@ -83,7 +66,9 @@ pub struct Dot {
     pub outnml: Vec3,
     pub area: ScValue,
     pub buried: bool,
+    /// Type of surface (contact, reentrant, cavity) - kept for compatibility
     pub kind: DotKind,
+    /// Index of the atom this dot belongs to - kept for compatibility
     pub atom_index: usize,
 }
 

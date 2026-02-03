@@ -1,7 +1,6 @@
 //! SC Calculator wrapping SurfaceGenerator with trimming and SC score calculation.
 //! Ported from https://github.com/cytokineking/sc-rs
 
-use super::settings::Settings;
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
 use super::vector3::ScValue;
@@ -28,18 +27,6 @@ impl ScCalculator {
         Self {
             base: SurfaceGenerator::new(),
         }
-    }
-
-    pub fn settings_mut(&mut self) -> &mut Settings {
-        &mut self.base.settings
-    }
-
-    pub fn settings(&self) -> &Settings {
-        &self.base.settings
-    }
-
-    pub fn set_radii(&mut self, radii: Vec<AtomRadius>) {
-        self.base.set_radii(radii);
     }
 
     pub fn calc(&mut self) -> Result<Results, SurfaceCalculatorError> {
@@ -267,19 +254,11 @@ impl ScCalculator {
 
         self.base.run.results.surfaces[my].d_mean = distmin_sum / d_len;
         self.base.run.results.surfaces[my].d_median = d_median_val;
-        self.base.run.results.surfaces[my].s_mean = score_sum / s_len * -1.0;
+        self.base.run.results.surfaces[my].s_mean = -(score_sum / s_len);
         self.base.run.results.surfaces[my].s_median = s_median_val;
     }
 
     pub fn add_atom(&mut self, molecule: i32, atom: Atom) -> Result<(), SurfaceCalculatorError> {
         self.base.add_atom(molecule, atom)
-    }
-
-    pub fn reset(&mut self) {
-        self.base.reset();
-    }
-
-    pub fn results(&self) -> &Results {
-        &self.base.run.results
     }
 }

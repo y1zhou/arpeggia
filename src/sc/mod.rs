@@ -19,10 +19,7 @@ use std::collections::HashSet;
 use types::Atom;
 use vector3::Vec3;
 
-pub use sc_calculator::ScCalculator as Calculator;
-pub use settings::Settings;
 pub use surface_generator::SurfaceCalculatorError;
-pub use types::{Dot, Probe, Results, SurfaceStats};
 
 /// Calculate Shape Complementarity (SC) between two chain groups.
 ///
@@ -90,7 +87,6 @@ pub fn get_sc(pdb: &PDB, groups: &str) -> Result<f64, SurfaceCalculatorError> {
             natom: 0, // Will be assigned by add_atom
             molecule: 0,
             radius: 0.0, // Will be assigned from radii table
-            atom_type_radius: 0.0,
             density: 0.0,
             attention: types::Attention::Buried,
             accessible: false,
@@ -101,7 +97,7 @@ pub fn get_sc(pdb: &PDB, groups: &str) -> Result<f64, SurfaceCalculatorError> {
             buried_by_indices: Vec::new(),
         };
 
-        calc.add_atom(molecule as i32, sc_atom)?;
+        calc.add_atom(molecule, sc_atom)?;
     }
 
     // Calculate SC

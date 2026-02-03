@@ -22,6 +22,9 @@ pub enum SurfaceCalculatorError {
     TooManySubdivisions,
 }
 
+/// Type alias for parallel neighbor computation results
+type NeighborResult = Result<Vec<(Vec<usize>, Vec<usize>, bool)>, SurfaceCalculatorError>;
+
 pub struct SurfaceGenerator {
     pub settings: Settings,
     radii: Vec<AtomRadius>,
@@ -60,11 +63,13 @@ impl SurfaceGenerator {
         Ok(())
     }
 
-    pub fn set_radii(&mut self, radii: Vec<AtomRadius>) {
+    #[allow(dead_code)]
+    pub(crate) fn set_radii(&mut self, radii: Vec<AtomRadius>) {
         self.radii = radii;
     }
 
-    pub fn reset(&mut self) {
+    #[allow(dead_code)]
+    pub(crate) fn reset(&mut self) {
         for a in &mut self.run.atoms {
             a.neighbor_indices.clear();
             a.buried_by_indices.clear();
@@ -176,7 +181,8 @@ impl SurfaceGenerator {
         }
     }
 
-    pub fn calc(&mut self) -> Result<(), SurfaceCalculatorError> {
+    #[allow(dead_code)]
+    pub(crate) fn calc(&mut self) -> Result<(), SurfaceCalculatorError> {
         self.init()?;
         self.run.results.valid = 0;
         if self.run.atoms.is_empty() {
@@ -227,18 +233,16 @@ impl SurfaceGenerator {
         let len = self.run.atoms.len();
         let rp = self.settings.rp;
         let atoms: &Vec<Atom> = &self.run.atoms;
-        let results: Result<Vec<(Vec<usize>, Vec<usize>, bool)>, SurfaceCalculatorError> =
-            (0..len)
-                .into_par_iter()
-                .map(|i| {
+        let results: NeighborResult = (0..len)
+            .into_par_iter()
+            .map(|i| {
                     let atom1 = &atoms[i];
                     let mut neighbor_indices: Vec<usize> = Vec::new();
                     let mut buried_by_indices: Vec<usize> = Vec::new();
-                    for j in 0..len {
+                    for (j, atom2) in atoms.iter().enumerate() {
                         if j == i {
                             continue;
                         }
-                        let atom2 = &atoms[j];
                         if atom1.natom == atom2.natom {
                             continue;
                         }
@@ -527,7 +531,6 @@ impl SurfaceGenerator {
         let expanded_radius_j = atom2.radius + self.settings.rp;
         let atom2_natom = atom2.natom;
         let atom2_coor = atom2.coor;
-        let atom2_radius = atom2.radius;
         let atom2_att = atom2.attention;
         let mut made_probe = false;
         for &k in &neighbor_indices {
@@ -803,8 +806,8 @@ impl SurfaceGenerator {
                 vectors[2] = vp[2].cross(vp[0]).normalized();
                 let mut dm = -1.0;
                 let mut mm = 0usize;
-                for k in 0..3 {
-                    let dt = uijk.dot(vp[k]);
+                for (k, vp_k) in vp.iter().enumerate() {
+                    let dt = uijk.dot(*vp_k);
                     if dt > dm {
                         dm = dt;
                         mm = k;
@@ -973,6 +976,7 @@ impl SurfaceGenerator {
         d2.sqrt()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn sample_arc(
         &self,
         cen: Vec3,
@@ -1019,6 +1023,7 @@ impl SurfaceGenerator {
         self.sample_arc_segment(cen, rad, x, y, 2.0 * PI, density, points)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn sample_arc_segment(
         &self,
         cen: Vec3,
@@ -1054,13 +1059,6 @@ impl SurfaceGenerator {
             0.0
         };
         Ok(ps)
-    }
-
-    pub fn results(&self) -> &Results {
-        &self.run.results
-    }
-    pub fn dots(&self, molecule: usize) -> &Vec<Dot> {
-        &self.run.dots[molecule]
     }
 }
 
