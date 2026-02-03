@@ -1,6 +1,6 @@
 //! SC calculation types.
 
-use super::vector3::{ScValue, Vec3};
+use super::vector3::Vec3;
 
 /// Atom attention/visibility state.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -22,9 +22,9 @@ pub enum Attention {
 pub struct Atom {
     pub natom: i32,
     pub molecule: usize,
-    pub radius: ScValue,
+    pub radius: f64,
     /// Per-atom sampling density (~15 dots/Å²)
-    pub density: ScValue,
+    pub density: f64,
     pub attention: Attention,
     /// Is atom accessible to solvent/contact surface
     pub accessible: bool,
@@ -40,7 +40,7 @@ pub struct Atom {
 }
 
 impl Atom {
-    pub fn distance_squared(&self, other: &Atom) -> ScValue {
+    pub fn distance_squared(&self, other: &Atom) -> f64 {
         self.coor.distance_squared(other.coor)
     }
 }
@@ -49,7 +49,7 @@ impl Atom {
 pub struct Probe {
     /// Indices of the three atoms defining the probe center
     pub atom_indices: [usize; 3],
-    pub height: ScValue,
+    pub height: f64,
     pub point: Vec3,
     pub alt: Vec3,
 }
@@ -67,7 +67,7 @@ pub struct Dot {
     pub coor: Vec3,
     /// Outward unit normal at the point
     pub outnml: Vec3,
-    pub area: ScValue,
+    pub area: f64,
     pub buried: bool,
     // The following fields are set during surface generation but currently
     // only used internally. They're kept for potential debugging and future use.
@@ -91,13 +91,13 @@ pub struct SurfaceStats {
     pub n_atoms: usize,
     pub n_buried_atoms: usize,
     pub n_blocked_atoms: usize,
-    pub d_mean: ScValue,
-    pub d_median: ScValue,
-    pub s_mean: ScValue,
-    pub s_median: ScValue,
+    pub d_mean: f64,
+    pub d_median: f64,
+    pub s_mean: f64,
+    pub s_median: f64,
     pub n_all_dots: usize,
     pub n_trimmed_dots: usize,
-    pub trimmed_area: ScValue,
+    pub trimmed_area: f64,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -107,14 +107,14 @@ pub struct Results {
     pub surfaces: [SurfaceStats; 2],
     pub combined: SurfaceStats,
     pub dots: DotStats,
-    pub sc: ScValue,
-    pub distance: ScValue,
-    pub area: ScValue,
+    pub sc: f64,
+    pub distance: f64,
+    pub area: f64,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct AtomRadius {
     pub residue: String,
     pub atom: String,
-    pub radius: ScValue,
+    pub radius: f64,
 }

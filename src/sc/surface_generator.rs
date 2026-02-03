@@ -8,7 +8,7 @@ use std::fmt;
 use super::atomic_radii::{embedded_atomic_radii, wildcard_match};
 use super::settings::Settings;
 use super::types::*;
-use super::vector3::{ScValue, Vec3};
+use super::vector3::Vec3;
 use rayon::prelude::*;
 
 /// Error type for surface calculation operations.
@@ -68,7 +68,7 @@ pub(crate) struct RunState {
     pub dots: [Vec<Dot>; 2],
     pub trimmed_dots: [Vec<usize>; 2],
     pub results: Results,
-    pub radmax: ScValue,
+    pub radmax: f64,
 }
 
 impl Default for SurfaceGenerator {
@@ -534,7 +534,7 @@ impl SurfaceGenerator {
         atom2_index: usize,
         unit_axis: Vec3,
         midplane_center: Vec3,
-        ring_radius: ScValue,
+        ring_radius: f64,
     ) -> Result<(), SurfaceCalculatorError> {
         let neighbor_indices = self.run.atoms[atom1_index].neighbor_indices.clone();
         let expanded_radius_i = self.run.atoms[atom1_index].radius + self.settings.rp;
@@ -629,7 +629,7 @@ impl SurfaceGenerator {
         atom2_index: usize,
         unit_axis: Vec3,
         midplane_center: Vec3,
-        ring_radius: ScValue,
+        ring_radius: f64,
         has_point_cusp: bool,
     ) -> Result<(), SurfaceCalculatorError> {
         let neighbors = self.run.atoms[atom1_index].neighbor_indices.clone();
@@ -959,7 +959,7 @@ impl SurfaceGenerator {
         molecule: usize,
         kind: DotKind,
         coor: Vec3,
-        area: ScValue,
+        area: f64,
         pcen: Vec3,
         atom_index: usize,
     ) {
@@ -993,7 +993,7 @@ impl SurfaceGenerator {
         self.run.dots[molecule].push(dot);
     }
 
-    fn distance_point_to_line(&self, cen: Vec3, axis: Vec3, pnt: Vec3) -> ScValue {
+    fn distance_point_to_line(&self, cen: Vec3, axis: Vec3, pnt: Vec3) -> f64 {
         let vec = pnt - cen;
         let dt = vec.dot(axis);
         let mut d2 = vec.magnitude_squared() - dt * dt;
@@ -1007,13 +1007,13 @@ impl SurfaceGenerator {
     fn sample_arc(
         &self,
         cen: Vec3,
-        rad: ScValue,
+        rad: f64,
         axis: Vec3,
-        density: ScValue,
+        density: f64,
         x: Vec3,
         v: Vec3,
         points: &mut Vec<Vec3>,
-    ) -> Result<ScValue, SurfaceCalculatorError> {
+    ) -> Result<f64, SurfaceCalculatorError> {
         let y = axis.cross(x);
         let dt1 = v.dot(x);
         let dt2 = v.dot(y);
@@ -1027,11 +1027,11 @@ impl SurfaceGenerator {
     fn sample_circle(
         &self,
         cen: Vec3,
-        rad: ScValue,
+        rad: f64,
         axis: Vec3,
-        density: ScValue,
+        density: f64,
         points: &mut Vec<Vec3>,
-    ) -> Result<ScValue, SurfaceCalculatorError> {
+    ) -> Result<f64, SurfaceCalculatorError> {
         let mut v1 = Vec3::new(
             axis.y * axis.y + axis.z * axis.z,
             axis.x * axis.x + axis.z * axis.z,
@@ -1054,13 +1054,13 @@ impl SurfaceGenerator {
     fn sample_arc_segment(
         &self,
         cen: Vec3,
-        rad: ScValue,
+        rad: f64,
         x: Vec3,
         y: Vec3,
-        angle: ScValue,
-        density: ScValue,
+        angle: f64,
+        density: f64,
         points: &mut Vec<Vec3>,
-    ) -> Result<ScValue, SurfaceCalculatorError> {
+    ) -> Result<f64, SurfaceCalculatorError> {
         if rad <= 0.0 {
             points.clear();
             return Ok(0.0);
@@ -1092,13 +1092,13 @@ impl SurfaceGenerator {
 // Pure geometry helpers for use in parallel closures
 fn geom_sample_arc_segment(
     cen: Vec3,
-    rad: ScValue,
+    rad: f64,
     x: Vec3,
     y: Vec3,
-    angle: ScValue,
-    density: ScValue,
+    angle: f64,
+    density: f64,
     points: &mut Vec<Vec3>,
-) -> Result<ScValue, SurfaceCalculatorError> {
+) -> Result<f64, SurfaceCalculatorError> {
     if rad <= 0.0 {
         points.clear();
         return Ok(0.0);
@@ -1128,13 +1128,13 @@ fn geom_sample_arc_segment(
 
 fn geom_sample_arc(
     cen: Vec3,
-    rad: ScValue,
+    rad: f64,
     axis: Vec3,
-    density: ScValue,
+    density: f64,
     x: Vec3,
     v: Vec3,
     points: &mut Vec<Vec3>,
-) -> Result<ScValue, SurfaceCalculatorError> {
+) -> Result<f64, SurfaceCalculatorError> {
     let y = axis.cross(x);
     let dt1 = v.dot(x);
     let dt2 = v.dot(y);
@@ -1147,11 +1147,11 @@ fn geom_sample_arc(
 
 fn geom_sample_circle(
     cen: Vec3,
-    rad: ScValue,
+    rad: f64,
     axis: Vec3,
-    density: ScValue,
+    density: f64,
     points: &mut Vec<Vec3>,
-) -> Result<ScValue, SurfaceCalculatorError> {
+) -> Result<f64, SurfaceCalculatorError> {
     let mut v1 = Vec3::new(
         axis.y * axis.y + axis.z * axis.z,
         axis.x * axis.x + axis.z * axis.z,

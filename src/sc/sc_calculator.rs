@@ -3,7 +3,6 @@
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
-use super::vector3::ScValue;
 use rayon::prelude::*;
 
 /// Large initial distance squared for neighbor search
@@ -111,7 +110,7 @@ impl ScCalculator {
         Ok(self.base.run.results.clone())
     }
 
-    fn trim_peripheral_band(&mut self, i: usize) -> Result<ScValue, SurfaceCalculatorError> {
+    fn trim_peripheral_band(&mut self, i: usize) -> Result<f64, SurfaceCalculatorError> {
         let (indices, area) = if self.base.settings.enable_parallel {
             let sdots = &self.base.run.dots[i];
             self.base.run_parallel(|| {

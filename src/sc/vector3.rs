@@ -2,8 +2,6 @@
 
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
-pub type ScValue = f64;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec3 {
     pub x: f64,
