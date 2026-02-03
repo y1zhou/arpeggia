@@ -3,6 +3,7 @@
 
 use std::cmp::Ordering;
 use std::f64::consts::PI;
+use std::fmt;
 
 use super::atomic_radii::{embedded_atomic_radii, wildcard_match};
 use super::settings::Settings;
@@ -10,16 +11,43 @@ use super::types::*;
 use super::vector3::{ScValue, Vec3};
 use rayon::prelude::*;
 
-#[derive(thiserror::Error, Debug)]
+/// Error type for surface calculation operations.
+#[derive(Debug)]
 pub enum SurfaceCalculatorError {
-    #[error("No atoms defined")]
+    /// No atoms defined
     NoAtoms,
-    #[error("Failed to read radii: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("Overlapping atoms detected: {0}")]
+    /// Failed to read radii
+    Io(std::io::Error),
+    /// Overlapping atoms detected
     Coincident(String),
-    #[error("Sampling limit exceeded")]
+    /// Sampling limit exceeded
     TooManySubdivisions,
+}
+
+impl fmt::Display for SurfaceCalculatorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SurfaceCalculatorError::NoAtoms => write!(f, "No atoms defined"),
+            SurfaceCalculatorError::Io(e) => write!(f, "Failed to read radii: {}", e),
+            SurfaceCalculatorError::Coincident(msg) => write!(f, "Overlapping atoms detected: {}", msg),
+            SurfaceCalculatorError::TooManySubdivisions => write!(f, "Sampling limit exceeded"),
+        }
+    }
+}
+
+impl std::error::Error for SurfaceCalculatorError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            SurfaceCalculatorError::Io(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for SurfaceCalculatorError {
+    fn from(err: std::io::Error) -> Self {
+        SurfaceCalculatorError::Io(err)
+    }
 }
 
 /// Type alias for parallel neighbor computation results
@@ -88,6 +116,7 @@ impl SurfaceGenerator {
     }
 
     fn assign_atom_radius(&self, atom: &mut Atom) -> Result<(), SurfaceCalculatorError> {
+        // First try the embedded radii table
         for radius in &self.radii {
             if !wildcard_match(&atom.residue, &radius.residue) {
                 continue;
@@ -98,7 +127,7 @@ impl SurfaceGenerator {
             atom.radius = radius.radius;
             return Ok(());
         }
-        // Element fallback
+        // Element fallback from embedded table
         let elem = atom
             .atom
             .chars()
@@ -118,10 +147,32 @@ impl SurfaceGenerator {
                 return Ok(());
             }
         }
+        // Fallback to pdbtbx element VdW radius
+        if let Some(ref pdbtbx_atom) = atom.pdbtbx_atom {
+            if let Some(element) = pdbtbx_atom.element() {
+                if let Some(vdw_radius) = element.atomic_radius().van_der_waals {
+                    atom.radius = vdw_radius;
+                    return Ok(());
+                }
+            }
+        }
         Err(SurfaceCalculatorError::Io(std::io::Error::other(format!(
             "No radius for {}:{}",
             atom.residue, atom.atom
         ))))
+    }
+
+    /// Get a thread pool respecting the configured thread limit.
+    pub fn get_thread_pool(&self) -> rayon::ThreadPool {
+        let num_threads = if self.settings.threads == 0 {
+            rayon::current_num_threads()
+        } else {
+            self.settings.threads
+        };
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build()
+            .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().build().unwrap())
     }
 
     pub fn assign_attention_numbers(&mut self) {

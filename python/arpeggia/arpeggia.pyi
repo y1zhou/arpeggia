@@ -179,6 +179,7 @@ def sc(
     input_file: str,
     groups: str,
     model_num: int = 0,
+    threads: int = 0,
 ) -> float:
     """Calculate Shape Complementarity (SC) between two chain groups.
 
@@ -192,6 +193,7 @@ def sc(
         groups: Chain groups specification, e.g., "H,L/A" for chains H,L vs chain A.
             Both groups must be specified separated by "/".
         model_num: Model number to analyze (0 for first model). Defaults to 0.
+        threads: Number of threads for parallel calculations (0 for auto). Defaults to 0.
 
     Returns:
         The shape complementarity score (0-1), or -1.0 if calculation fails.

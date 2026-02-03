@@ -29,6 +29,13 @@ impl ScCalculator {
         }
     }
 
+    /// Set the number of threads for parallel calculations.
+    /// 0 means automatic (use all available cores).
+    pub fn set_threads(&mut self, threads: usize) {
+        self.base.settings.threads = threads;
+        self.base.settings.enable_parallel = threads != 1;
+    }
+
     pub fn calc(&mut self) -> Result<Results, SurfaceCalculatorError> {
         self.base.init()?;
         self.base.run.results.valid = 0;
@@ -107,22 +114,24 @@ impl ScCalculator {
     fn trim_peripheral_band(&mut self, i: usize) -> Result<ScValue, SurfaceCalculatorError> {
         let (indices, area) = if self.base.settings.enable_parallel {
             let sdots = &self.base.run.dots[i];
-            let indices: Vec<usize> = (0..sdots.len())
-                .into_par_iter()
-                .filter(|&idx| sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots))
-                .collect();
-            let area: f64 = indices.par_iter().map(|&idx| sdots[idx].area).sum();
-            (indices, area)
+            let pool = self.base.get_thread_pool();
+            pool.install(|| {
+                let indices: Vec<usize> = (0..sdots.len())
+                    .into_par_iter()
+                    .filter(|&idx| sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots))
+                    .collect();
+                let area: f64 = indices.par_iter().map(|&idx| sdots[idx].area).sum();
+                (indices, area)
+            })
         } else {
             let sdots = &self.base.run.dots[i];
-            let mut indices: Vec<usize> = Vec::new();
-            let mut area = 0.0;
-            for (idx, dot) in sdots.iter().enumerate() {
-                if dot.buried && self.trim_peripheral_band_check_dot(idx, sdots) {
-                    indices.push(idx);
-                    area += dot.area;
-                }
-            }
+            let indices: Vec<usize> = sdots
+                .iter()
+                .enumerate()
+                .filter(|(idx, dot)| dot.buried && self.trim_peripheral_band_check_dot(*idx, sdots))
+                .map(|(idx, _)| idx)
+                .collect();
+            let area: f64 = indices.iter().map(|&idx| sdots[idx].area).sum();
             (indices, area)
         };
 
@@ -134,46 +143,77 @@ impl ScCalculator {
     fn trim_peripheral_band_check_dot(&self, dot_index: usize, sdots: &[Dot]) -> bool {
         let r2 = self.base.settings.peripheral_band * self.base.settings.peripheral_band;
         let dot = &sdots[dot_index];
-        for (i, dot2) in sdots.iter().enumerate() {
-            if i == dot_index {
-                continue;
-            }
-            if dot2.buried {
-                continue;
-            }
-            if dot.coor.distance_squared(dot2.coor) <= r2 {
-                return false;
-            }
-        }
-        true
+        !sdots.iter().enumerate().any(|(i, dot2)| {
+            i != dot_index && !dot2.buried && dot.coor.distance_squared(dot2.coor) <= r2
+        })
     }
 
     fn calc_neighbor_distance(&mut self, my: usize, their: usize) {
+        let my_dots = &self.base.run.trimmed_dots[my];
+        let their_dots = &self.base.run.trimmed_dots[their];
+        if my_dots.is_empty() || their_dots.is_empty() {
+            return;
+        }
+
         let (distances, scores, distmin_sum, score_sum) = if self.base.settings.enable_parallel {
-            let my_dots = &self.base.run.trimmed_dots[my];
-            let their_dots = &self.base.run.trimmed_dots[their];
-            if my_dots.is_empty() || their_dots.is_empty() {
-                return;
-            }
             let gaussian_w = self.base.settings.gaussian_w;
             let run_ref = &self.base.run;
+            let pool = self.base.get_thread_pool();
+            pool.install(|| {
+                let pairs: Vec<(f64, f64)> = my_dots
+                    .par_iter()
+                    .filter_map(|&pd| {
+                        let dot1 = &run_ref.dots[my][pd];
+                        let (distmin2, neighbor) = their_dots.iter().fold(
+                            (MAX_DISTANCE_SQUARED, None),
+                            |(min_d2, min_n), &pd2| {
+                                let dot2 = &run_ref.dots[their][pd2];
+                                if !dot2.buried {
+                                    return (min_d2, min_n);
+                                }
+                                let d2 = dot2.coor.distance_squared(dot1.coor);
+                                if d2 <= min_d2 {
+                                    (d2, Some(dot2))
+                                } else {
+                                    (min_d2, min_n)
+                                }
+                            },
+                        );
+                        neighbor.map(|n| {
+                            let distmin = distmin2.sqrt();
+                            let mut r = dot1.outnml.dot(n.outnml);
+                            r *= (-(distmin * distmin) * gaussian_w).exp();
+                            r = r.clamp(DOT_PRODUCT_CLAMP_MIN, DOT_PRODUCT_CLAMP_MAX);
+                            (distmin, -r)
+                        })
+                    })
+                    .collect();
+                let (distances, scores): (Vec<f64>, Vec<f64>) = pairs.into_iter().unzip();
+                let distmin_sum: f64 = distances.par_iter().sum();
+                let score_sum: f64 = scores.par_iter().map(|v| -v).sum();
+                (distances, scores, distmin_sum, score_sum)
+            })
+        } else {
+            let gaussian_w = self.base.settings.gaussian_w;
             let pairs: Vec<(f64, f64)> = my_dots
-                .par_iter()
+                .iter()
                 .filter_map(|&pd| {
-                    let dot1 = &run_ref.dots[my][pd];
-                    let mut distmin2: f64 = MAX_DISTANCE_SQUARED;
-                    let mut neighbor: Option<&Dot> = None;
-                    for &pd2 in their_dots {
-                        let dot2 = &run_ref.dots[their][pd2];
-                        if !dot2.buried {
-                            continue;
-                        }
-                        let d2 = dot2.coor.distance_squared(dot1.coor);
-                        if d2 <= distmin2 {
-                            distmin2 = d2;
-                            neighbor = Some(dot2);
-                        }
-                    }
+                    let dot1 = &self.base.run.dots[my][pd];
+                    let (distmin2, neighbor) = their_dots.iter().fold(
+                        (MAX_DISTANCE_SQUARED, None),
+                        |(min_d2, min_n), &pd2| {
+                            let dot2 = &self.base.run.dots[their][pd2];
+                            if !dot2.buried {
+                                return (min_d2, min_n);
+                            }
+                            let d2 = dot2.coor.distance_squared(dot1.coor);
+                            if d2 <= min_d2 {
+                                (d2, Some(dot2))
+                            } else {
+                                (min_d2, min_n)
+                            }
+                        },
+                    );
                     neighbor.map(|n| {
                         let distmin = distmin2.sqrt();
                         let mut r = dot1.outnml.dot(n.outnml);
@@ -183,46 +223,9 @@ impl ScCalculator {
                     })
                 })
                 .collect();
-            let (distances, scores): (Vec<f64>, Vec<f64>) = pairs.iter().cloned().unzip();
-            let distmin_sum: f64 = distances.par_iter().sum();
-            let score_sum: f64 = scores.par_iter().map(|v| -v).sum();
-            (distances, scores, distmin_sum, score_sum)
-        } else {
-            let my_dots = &self.base.run.trimmed_dots[my];
-            let their_dots = &self.base.run.trimmed_dots[their];
-            if my_dots.is_empty() || their_dots.is_empty() {
-                return;
-            }
-            let mut distances: Vec<f64> = Vec::with_capacity(my_dots.len());
-            let mut scores: Vec<f64> = Vec::with_capacity(my_dots.len());
-            let mut distmin_sum = 0.0;
-            let mut score_sum = 0.0;
-            for &pd in my_dots {
-                let dot1 = &self.base.run.dots[my][pd];
-                let mut neighbor: Option<&Dot> = None;
-                let mut distmin2: f64 = MAX_DISTANCE_SQUARED;
-                for &pd2 in their_dots {
-                    let dot2 = &self.base.run.dots[their][pd2];
-                    if !dot2.buried {
-                        continue;
-                    }
-                    let d2 = dot2.coor.distance_squared(dot1.coor);
-                    if d2 <= distmin2 {
-                        distmin2 = d2;
-                        neighbor = Some(dot2);
-                    }
-                }
-                if let Some(n) = neighbor {
-                    let distmin = distmin2.sqrt();
-                    distmin_sum += distmin;
-                    distances.push(distmin);
-                    let mut r = dot1.outnml.dot(n.outnml);
-                    r *= (-(distmin * distmin) * self.base.settings.gaussian_w).exp();
-                    r = r.clamp(DOT_PRODUCT_CLAMP_MIN, DOT_PRODUCT_CLAMP_MAX);
-                    score_sum += r;
-                    scores.push(-r);
-                }
-            }
+            let (distances, scores): (Vec<f64>, Vec<f64>) = pairs.into_iter().unzip();
+            let distmin_sum: f64 = distances.iter().sum();
+            let score_sum: f64 = scores.iter().map(|v| -v).sum();
             (distances, scores, distmin_sum, score_sum)
         };
 

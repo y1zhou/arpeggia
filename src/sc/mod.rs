@@ -12,6 +12,7 @@ pub mod surface_generator;
 pub mod types;
 pub mod vector3;
 
+use crate::sasa::{filter_pdb_by_model, prepare_pdb_for_sasa};
 use crate::utils::parse_groups;
 use pdbtbx::{ContainsAtomConformer, ContainsAtomConformerResidue, ContainsAtomConformerResidueChain, PDB};
 use sc_calculator::ScCalculator;
@@ -33,6 +34,8 @@ pub use surface_generator::SurfaceCalculatorError;
 ///
 /// * `pdb` - Reference to a PDB structure
 /// * `groups` - Chain groups specification (e.g., "H,L/A" or "A/B")
+/// * `model_num` - Model number to analyze (0 for first model)
+/// * `threads` - Number of threads for parallel calculations (0 for auto)
 ///
 /// # Returns
 ///
@@ -45,59 +48,76 @@ pub use surface_generator::SurfaceCalculatorError;
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sc_score = get_sc(&pdb, "H,L/A").unwrap();
+/// let sc_score = get_sc(&pdb, "H,L/A", 0, 0).unwrap();
 /// println!("Shape complementarity: {:.3}", sc_score);
 /// ```
-pub fn get_sc(pdb: &PDB, groups: &str) -> Result<f64, SurfaceCalculatorError> {
+pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize, threads: usize) -> Result<f64, SurfaceCalculatorError> {
     // Get all chains in the PDB
     let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
 
     // Parse groups
     let (group1_chains, group2_chains) = parse_groups(&all_chains, groups);
 
-    // Create a filtered copy of PDB with only the selected chains
-    let mut pdb_filtered = pdb.clone();
-    pdb_filtered.remove_chains_by(|c| {
-        let cid = c.id().to_string();
-        !(group1_chains.contains(&cid) || group2_chains.contains(&cid))
-    });
+    // Combine all chains from both groups for filtering
+    let all_selected_chains: String = group1_chains
+        .iter()
+        .chain(group2_chains.iter())
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(",");
 
-    // Initialize the calculator
+    // Prepare PDB: remove hydrogens, solvent, and ions; filter to selected chains
+    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true, &all_selected_chains);
+
+    // Filter to specified model
+    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
+
+    // Initialize the calculator with thread settings
     let mut calc = ScCalculator::new();
+    calc.set_threads(threads);
 
-    // Load atoms from PDB into the calculator
-    for hier in pdb_filtered.atoms_with_hierarchy() {
-        let chain_id = hier.chain().id().to_string();
+    // Load atoms from PDB into the calculator using filter_map/collect pattern
+    let atoms: Vec<(i32, Atom)> = pdb_filtered
+        .atoms_with_hierarchy()
+        .filter_map(|hier| {
+            let chain_id = hier.chain().id().to_string();
 
-        // Determine which molecule (0 or 1) based on chain group
-        let molecule = if group1_chains.contains(&chain_id) {
-            0
-        } else if group2_chains.contains(&chain_id) {
-            1
-        } else {
-            continue; // Skip atoms not in either group
-        };
+            // Determine which molecule (0 or 1) based on chain group
+            let molecule = if group1_chains.contains(&chain_id) {
+                0
+            } else if group2_chains.contains(&chain_id) {
+                1
+            } else {
+                return None; // Skip atoms not in either group
+            };
 
-        let atom = hier.atom();
-        let residue = hier.residue();
+            let atom = hier.atom();
+            let residue = hier.residue();
+            let pos = atom.pos();
 
-        // Create SC Atom from pdbtbx atom
-        let pos = atom.pos();
-        let sc_atom = Atom {
-            natom: 0, // Will be assigned by add_atom
-            molecule: 0,
-            radius: 0.0, // Will be assigned from radii table
-            density: 0.0,
-            attention: types::Attention::Buried,
-            accessible: false,
-            atom: atom.name().to_string(),
-            residue: residue.name().unwrap_or("UNK").to_string(),
-            coor: Vec3::new(pos.0, pos.1, pos.2),
-            neighbor_indices: Vec::new(),
-            buried_by_indices: Vec::new(),
-        };
+            Some((
+                molecule,
+                Atom {
+                    natom: 0, // Will be assigned by add_atom
+                    molecule: 0,
+                    radius: 0.0, // Will be assigned from radii table
+                    density: 0.0,
+                    attention: types::Attention::Buried,
+                    accessible: false,
+                    atom: atom.name().to_string(),
+                    residue: residue.name().unwrap_or("UNK").to_string(),
+                    coor: Vec3::new(pos.0, pos.1, pos.2),
+                    neighbor_indices: Vec::new(),
+                    buried_by_indices: Vec::new(),
+                    pdbtbx_atom: Some(atom.clone()),
+                },
+            ))
+        })
+        .collect();
 
-        calc.add_atom(molecule, sc_atom)?;
+    // Add atoms to calculator
+    for (molecule, atom) in atoms {
+        calc.add_atom(molecule, atom)?;
     }
 
     // Calculate SC

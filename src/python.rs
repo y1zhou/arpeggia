@@ -339,6 +339,7 @@ fn sap_score(
 ///     groups (str): Chain groups specification, e.g., "H,L/A" for chains H,L vs chain A.
 ///         Both groups must be specified separated by "/".
 ///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     threads (int, optional): Number of threads for parallel calculations (0 for auto). Defaults to 0.
 ///
 /// Returns:
 ///     float: The shape complementarity score (0-1), or -1.0 if calculation fails.
@@ -348,18 +349,18 @@ fn sap_score(
 ///     >>> sc = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
 ///     >>> print(f"SC Score: {sc:.3f}")
 #[pyfunction]
-#[pyo3(signature = (input_file, groups, model_num=0))]
+#[pyo3(signature = (input_file, groups, model_num=0, threads=0))]
 fn sc(
     input_file: String,
     groups: &str,
-    #[allow(unused_variables)]
-    model_num: usize, // Kept for API compatibility; SC calculation uses all models
+    model_num: usize,
+    threads: usize,
 ) -> PyResult<f64> {
-    // Load the PDB file
+    // Load the PDB file and normalize using prepare_pdb_for_sasa
     let (pdb, _warnings) = crate::load_model(&input_file);
 
     // Calculate SC
-    crate::get_sc(&pdb, groups)
+    crate::get_sc(&pdb, groups, model_num, threads)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("SC calculation failed: {}", e)))
 }
 

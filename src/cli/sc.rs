@@ -19,6 +19,10 @@ pub(crate) struct Args {
     /// Model number to analyze (default: 0, the first model)
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
+
+    /// Number of threads to use for parallel calculations (default: 0 for auto)
+    #[arg(short = 't', long = "threads", default_value_t = 0)]
+    threads: usize,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -51,7 +55,7 @@ pub(crate) fn run(args: &Args) {
     }
 
     // Calculate SC
-    let sc = arpeggia::get_sc(&pdb, &args.groups);
+    let sc = arpeggia::get_sc(&pdb, &args.groups, args.model_num, args.threads);
 
     match sc {
         Ok(score) => {

@@ -21,6 +21,8 @@ pub struct Settings {
     pub gaussian_w: f64,
     /// Enable parallel processing
     pub enable_parallel: bool,
+    /// Number of threads for parallel processing (0 = auto)
+    pub threads: usize,
 }
 
 impl Default for Settings {
@@ -32,6 +34,7 @@ impl Default for Settings {
             separation_cutoff: 8.0,
             gaussian_w: GAUSSIAN_W,
             enable_parallel: true,
+            threads: 0, // 0 means use all available cores
         }
     }
 }

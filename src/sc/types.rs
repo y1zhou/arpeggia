@@ -35,6 +35,8 @@ pub struct Atom {
     pub neighbor_indices: Vec<usize>,
     /// Neighbor indices on opposite molecule that bury this atom
     pub buried_by_indices: Vec<usize>,
+    /// Reference to pdbtbx atom for fallback radius lookup
+    pub pdbtbx_atom: Option<pdbtbx::Atom>,
 }
 
 impl Atom {
