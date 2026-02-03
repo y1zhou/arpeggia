@@ -353,7 +353,7 @@ fn sc(
     input_file: String,
     groups: &str,
     #[allow(unused_variables)]
-    model_num: usize,
+    model_num: usize, // Kept for API compatibility; SC calculation uses all models
 ) -> PyResult<f64> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);

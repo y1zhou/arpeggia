@@ -7,6 +7,12 @@ use super::types::*;
 use super::vector3::ScValue;
 use rayon::prelude::*;
 
+/// Large initial distance squared for neighbor search
+const MAX_DISTANCE_SQUARED: f64 = 9.0e20;
+/// Clamp bounds for dot product to avoid numerical issues at extremes
+const DOT_PRODUCT_CLAMP_MIN: f64 = -0.999;
+const DOT_PRODUCT_CLAMP_MAX: f64 = 0.999;
+
 pub struct ScCalculator {
     pub base: SurfaceGenerator,
 }
@@ -168,7 +174,7 @@ impl ScCalculator {
                 .par_iter()
                 .filter_map(|&pd| {
                     let dot1 = &run_ref.dots[my][pd];
-                    let mut distmin2: f64 = 9.0e20f64;
+                    let mut distmin2: f64 = MAX_DISTANCE_SQUARED;
                     let mut neighbor: Option<&Dot> = None;
                     for &pd2 in their_dots {
                         let dot2 = &run_ref.dots[their][pd2];
@@ -185,7 +191,7 @@ impl ScCalculator {
                         let distmin = distmin2.sqrt();
                         let mut r = dot1.outnml.dot(n.outnml);
                         r *= (-(distmin * distmin) * gaussian_w).exp();
-                        r = r.clamp(-0.999, 0.999);
+                        r = r.clamp(DOT_PRODUCT_CLAMP_MIN, DOT_PRODUCT_CLAMP_MAX);
                         (distmin, -r)
                     })
                 })
@@ -207,7 +213,7 @@ impl ScCalculator {
             for &pd in my_dots {
                 let dot1 = &self.base.run.dots[my][pd];
                 let mut neighbor: Option<&Dot> = None;
-                let mut distmin2: f64 = 9.0e20f64;
+                let mut distmin2: f64 = MAX_DISTANCE_SQUARED;
                 for &pd2 in their_dots {
                     let dot2 = &self.base.run.dots[their][pd2];
                     if !dot2.buried {
@@ -225,7 +231,7 @@ impl ScCalculator {
                     distances.push(distmin);
                     let mut r = dot1.outnml.dot(n.outnml);
                     r *= (-(distmin * distmin) * self.base.settings.gaussian_w).exp();
-                    r = r.clamp(-0.999, 0.999);
+                    r = r.clamp(DOT_PRODUCT_CLAMP_MIN, DOT_PRODUCT_CLAMP_MAX);
                     score_sum += r;
                     scores.push(-r);
                 }
