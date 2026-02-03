@@ -55,7 +55,15 @@ Example:
 
 from importlib.metadata import version
 
-from arpeggia.arpeggia import contacts, dsasa, pdb2seq, relative_sasa, sap_score, sasa, sc
+from arpeggia.arpeggia import (
+    contacts,
+    dsasa,
+    pdb2seq,
+    relative_sasa,
+    sap_score,
+    sasa,
+    sc,
+)
 
 __version__ = version("arpeggia")
 __all__ = ["contacts", "sasa", "relative_sasa", "sap_score", "dsasa", "sc", "pdb2seq"]

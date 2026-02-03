@@ -14,7 +14,9 @@ pub mod vector3;
 
 use crate::sasa::{filter_pdb_by_model, prepare_pdb_for_sasa};
 use crate::utils::parse_groups;
-use pdbtbx::{ContainsAtomConformer, ContainsAtomConformerResidue, ContainsAtomConformerResidueChain, PDB};
+use pdbtbx::{
+    ContainsAtomConformer, ContainsAtomConformerResidue, ContainsAtomConformerResidueChain, PDB,
+};
 use sc_calculator::ScCalculator;
 use std::collections::HashSet;
 use types::Atom;
@@ -51,7 +53,12 @@ pub use surface_generator::SurfaceCalculatorError;
 /// let sc_score = get_sc(&pdb, "H,L/A", 0, 0).unwrap();
 /// println!("Shape complementarity: {:.3}", sc_score);
 /// ```
-pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize, threads: usize) -> Result<f64, SurfaceCalculatorError> {
+pub fn get_sc(
+    pdb: &PDB,
+    groups: &str,
+    model_num: usize,
+    threads: usize,
+) -> Result<f64, SurfaceCalculatorError> {
     // Get all chains in the PDB
     let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
 

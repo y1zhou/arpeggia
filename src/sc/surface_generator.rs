@@ -29,7 +29,9 @@ impl fmt::Display for SurfaceCalculatorError {
         match self {
             SurfaceCalculatorError::NoAtoms => write!(f, "No atoms defined"),
             SurfaceCalculatorError::Io(e) => write!(f, "Failed to read radii: {}", e),
-            SurfaceCalculatorError::Coincident(msg) => write!(f, "Overlapping atoms detected: {}", msg),
+            SurfaceCalculatorError::Coincident(msg) => {
+                write!(f, "Overlapping atoms detected: {}", msg)
+            }
             SurfaceCalculatorError::TooManySubdivisions => write!(f, "Sampling limit exceeded"),
         }
     }
@@ -91,7 +93,11 @@ impl SurfaceGenerator {
         Ok(())
     }
 
-    pub fn add_atom(&mut self, molecule: i32, mut atom: Atom) -> Result<(), SurfaceCalculatorError> {
+    pub fn add_atom(
+        &mut self,
+        molecule: i32,
+        mut atom: Atom,
+    ) -> Result<(), SurfaceCalculatorError> {
         if self.radii.is_empty() {
             self.init()?;
         }
@@ -155,7 +161,9 @@ impl SurfaceGenerator {
                 .build()
                 .unwrap_or_else(|_| {
                     // Fallback to global pool if creation fails
-                    rayon::ThreadPoolBuilder::new().build().expect("Failed to create thread pool")
+                    rayon::ThreadPoolBuilder::new()
+                        .build()
+                        .expect("Failed to create thread pool")
                 });
             pool.install(f)
         }
@@ -241,56 +249,56 @@ impl SurfaceGenerator {
         let results: NeighborResult = (0..len)
             .into_par_iter()
             .map(|i| {
-                    let atom1 = &atoms[i];
-                    let mut neighbor_indices: Vec<usize> = Vec::new();
-                    let mut buried_by_indices: Vec<usize> = Vec::new();
-                    for (j, atom2) in atoms.iter().enumerate() {
-                        if j == i {
-                            continue;
+                let atom1 = &atoms[i];
+                let mut neighbor_indices: Vec<usize> = Vec::new();
+                let mut buried_by_indices: Vec<usize> = Vec::new();
+                for (j, atom2) in atoms.iter().enumerate() {
+                    if j == i {
+                        continue;
+                    }
+                    if atom1.natom == atom2.natom {
+                        continue;
+                    }
+                    let d2 = atom1.distance_squared(atom2);
+                    if atom1.molecule == atom2.molecule {
+                        if d2 <= 0.0001 {
+                            return Err(SurfaceCalculatorError::Coincident(format!(
+                                "{}:{}:{} == {}:{}:{}",
+                                atom1.natom,
+                                atom1.residue,
+                                atom1.atom,
+                                atom2.natom,
+                                atom2.residue,
+                                atom2.atom
+                            )));
                         }
-                        if atom1.natom == atom2.natom {
-                            continue;
+                        let bridge = atom1.radius + atom2.radius + 2.0 * rp;
+                        if d2 < bridge * bridge {
+                            neighbor_indices.push(j);
                         }
-                        let d2 = atom1.distance_squared(atom2);
-                        if atom1.molecule == atom2.molecule {
-                            if d2 <= 0.0001 {
-                                return Err(SurfaceCalculatorError::Coincident(format!(
-                                    "{}:{}:{} == {}:{}:{}",
-                                    atom1.natom,
-                                    atom1.residue,
-                                    atom1.atom,
-                                    atom2.natom,
-                                    atom2.residue,
-                                    atom2.atom
-                                )));
-                            }
-                            let bridge = atom1.radius + atom2.radius + 2.0 * rp;
-                            if d2 < bridge * bridge {
-                                neighbor_indices.push(j);
-                            }
-                        } else {
-                            let bridge = atom1.radius + atom2.radius + 2.0 * rp;
-                            if d2 < bridge * bridge {
-                                buried_by_indices.push(j);
-                            }
+                    } else {
+                        let bridge = atom1.radius + atom2.radius + 2.0 * rp;
+                        if d2 < bridge * bridge {
+                            buried_by_indices.push(j);
                         }
                     }
-                    let center = atom1.coor;
-                    neighbor_indices.sort_unstable_by(|&a1, &a2| {
-                        let d1 = atoms[a1].coor.distance_squared(center);
-                        let d2 = atoms[a2].coor.distance_squared(center);
-                        if d1 < d2 {
-                            Ordering::Less
-                        } else if d1 > d2 {
-                            Ordering::Greater
-                        } else {
-                            Ordering::Equal
-                        }
-                    });
-                    let accessible = neighbor_indices.is_empty();
-                    Ok((neighbor_indices, buried_by_indices, accessible))
-                })
-                .collect();
+                }
+                let center = atom1.coor;
+                neighbor_indices.sort_unstable_by(|&a1, &a2| {
+                    let d1 = atoms[a1].coor.distance_squared(center);
+                    let d2 = atoms[a2].coor.distance_squared(center);
+                    if d1 < d2 {
+                        Ordering::Less
+                    } else if d1 > d2 {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Equal
+                    }
+                });
+                let accessible = neighbor_indices.is_empty();
+                Ok((neighbor_indices, buried_by_indices, accessible))
+            })
+            .collect();
         let outs = results?;
         for (i, (neighbors, buried_by, accessible)) in outs.into_iter().enumerate() {
             let a1 = &mut self.run.atoms[i];
@@ -358,8 +366,7 @@ impl SurfaceGenerator {
                         return None;
                     }
                     far_term = far_term.sqrt();
-                    let mut contain_term =
-                        dij * dij - (radius_i - radius_neighbor).powi(2);
+                    let mut contain_term = dij * dij - (radius_i - radius_neighbor).powi(2);
                     if contain_term <= 0.0 {
                         return None;
                     }
@@ -405,8 +412,7 @@ impl SurfaceGenerator {
                     }
                     let area = ps * cs;
                     for &point in points.iter() {
-                        let pcen = a_i.coor
-                            + ((point - a_i.coor) * (expanded_radius_i / radius_i));
+                        let pcen = a_i.coor + ((point - a_i.coor) * (expanded_radius_i / radius_i));
                         // collision with same-molecule neighbors (skip first neighbor)
                         let mut coll = false;
                         for &idx in neighbors.iter().skip(1) {
@@ -491,8 +497,8 @@ impl SurfaceGenerator {
                 continue;
             }
             far_term = far_term.sqrt();
-            let mut contain_term = dist_ij * dist_ij
-                - (self.run.atoms[atom_index].radius - atom2.radius).powi(2);
+            let mut contain_term =
+                dist_ij * dist_ij - (self.run.atoms[atom_index].radius - atom2.radius).powi(2);
             if contain_term <= 0.0 {
                 continue;
             }
@@ -643,7 +649,13 @@ impl SurfaceGenerator {
         let eccentricity = mean_radius / ring_radius;
         let effective_density = eccentricity * eccentricity * density;
         let mut subs: Vec<Vec3> = Vec::new();
-        let ts = self.sample_circle(midplane_center, ring_radius, unit_axis, effective_density, &mut subs)?;
+        let ts = self.sample_circle(
+            midplane_center,
+            ring_radius,
+            unit_axis,
+            effective_density,
+            &mut subs,
+        )?;
         if subs.is_empty() {
             return Ok(());
         }
@@ -703,12 +715,19 @@ impl SurfaceGenerator {
                     &mut points,
                 )?;
                 for &point in points.iter() {
-                    let area = ps * ts
-                        * self.distance_point_to_line(midplane_center, unit_axis, point)
-                        / ring_radius;
+                    let area =
+                        ps * ts * self.distance_point_to_line(midplane_center, unit_axis, point)
+                            / ring_radius;
                     self.run.results.dots.toroidal += 1;
                     let molecule = self.run.atoms[atom1_index].molecule;
-                    self.add_dot(molecule, DotKind::Reentrant, point, area, ring_point, atom1_index);
+                    self.add_dot(
+                        molecule,
+                        DotKind::Reentrant,
+                        point,
+                        area,
+                        ring_point,
+                        atom1_index,
+                    );
                 }
             }
             let atom2_attention = self.run.atoms[atom2_index].attention;
@@ -724,12 +743,19 @@ impl SurfaceGenerator {
                     &mut points,
                 )?;
                 for &point in points.iter() {
-                    let area = ps * ts
-                        * self.distance_point_to_line(midplane_center, unit_axis, point)
-                        / ring_radius;
+                    let area =
+                        ps * ts * self.distance_point_to_line(midplane_center, unit_axis, point)
+                            / ring_radius;
                     self.run.results.dots.toroidal += 1;
                     let molecule2 = self.run.atoms[atom2_index].molecule;
-                    self.add_dot(molecule2, DotKind::Reentrant, point, area, ring_point, atom2_index);
+                    self.add_dot(
+                        molecule2,
+                        DotKind::Reentrant,
+                        point,
+                        area,
+                        ring_point,
+                        atom2_index,
+                    );
                 }
             }
         }
@@ -823,8 +849,8 @@ impl SurfaceGenerator {
                 arc_axis.normalize();
                 let mut lats: Vec<Vec3> = Vec::new();
                 let o = Vec3::zero();
-                let cs = geom_sample_arc(o, rp, arc_axis, density, vp[mm], south_dir, &mut lats)
-                    .ok()?;
+                let cs =
+                    geom_sample_arc(o, rp, arc_axis, density, vp[mm], south_dir, &mut lats).ok()?;
                 if lats.is_empty() {
                     return None;
                 }
@@ -917,11 +943,7 @@ impl SurfaceGenerator {
                     }
                 }
                 let n = d0.len() + d1.len();
-                if n == 0 {
-                    None
-                } else {
-                    Some((d0, d1, n))
-                }
+                if n == 0 { None } else { Some((d0, d1, n)) }
             })
             .collect();
         for (mut d0, mut d1, n) in results.into_iter() {

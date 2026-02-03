@@ -174,7 +174,6 @@ def pdb2seq(input_file: str) -> dict[str, str]:
     """
     ...
 
-
 def sc(
     input_file: str,
     groups: str,

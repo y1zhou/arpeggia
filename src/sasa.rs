@@ -125,9 +125,7 @@ pub(crate) fn prepare_pdb_for_sasa(
 
     // Remove hydrogens
     if remove_hydrogens {
-        pdb_prepared.remove_atoms_by(|atom| {
-            atom.element() == Some(&Element::H)
-        });
+        pdb_prepared.remove_atoms_by(|atom| atom.element() == Some(&Element::H));
     }
 
     // Remove entire residues that are solvent or ions
@@ -439,7 +437,14 @@ pub fn get_dsasa(
     let mut pdb_group1 = pdb.clone();
     pdb_group1.remove_chains_by(|chain| !group1_chains.contains(chain.id()));
 
-    let group1_sasa = get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, num_threads, "");
+    let group1_sasa = get_chain_sasa(
+        &pdb_group1,
+        probe_radius,
+        n_points,
+        model_num,
+        num_threads,
+        "",
+    );
 
     let group1_total = sum_float_col(&group1_sasa, "sasa");
 
@@ -447,7 +452,14 @@ pub fn get_dsasa(
     let mut pdb_group2 = pdb.clone();
     pdb_group2.remove_chains_by(|chain| !group2_chains.contains(chain.id()));
 
-    let group2_sasa = get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, num_threads, "");
+    let group2_sasa = get_chain_sasa(
+        &pdb_group2,
+        probe_radius,
+        n_points,
+        model_num,
+        num_threads,
+        "",
+    );
 
     let group2_total = sum_float_col(&group2_sasa, "sasa");
 
@@ -534,7 +546,8 @@ pub fn get_relative_sasa(
     chains: &str,
 ) -> DataFrame {
     // Get residue-level SASA
-    let residue_sasa = get_residue_sasa(pdb, probe_radius, n_points, model_num, num_threads, chains);
+    let residue_sasa =
+        get_residue_sasa(pdb, probe_radius, n_points, model_num, num_threads, chains);
 
     // Calculate max_sasa and relative_sasa for each residue
     let resn_col = residue_sasa.column("resn").unwrap();
@@ -994,7 +1007,11 @@ mod tests {
         // Filter to only chain A
         let df_a = get_chain_sasa(&pdb, 1.4, 100, 0, 1, "A");
 
-        assert_eq!(df_a.height(), 1, "Should have only one chain when filtering to A");
+        assert_eq!(
+            df_a.height(),
+            1,
+            "Should have only one chain when filtering to A"
+        );
 
         // Check that the chain is A
         let chain_col = df_a.column("chain").unwrap();

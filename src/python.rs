@@ -109,8 +109,18 @@ fn sasa(
 
     // Get SASA based on level
     let df = match level.to_lowercase().as_str() {
-        "atom" => crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num, threads, true, chains),
-        "residue" => crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, threads, chains),
+        "atom" => crate::get_atom_sasa(
+            &pdb,
+            probe_radius,
+            n_points,
+            model_num,
+            threads,
+            true,
+            chains,
+        ),
+        "residue" => {
+            crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, threads, chains)
+        }
         "chain" => crate::get_chain_sasa(&pdb, probe_radius, n_points, model_num, threads, chains),
         _ => {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
@@ -313,8 +323,24 @@ fn sap_score(
 
     // Get SAP scores based on level
     let df = match level.to_lowercase().as_str() {
-        "atom" => crate::get_per_atom_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads, chains),
-        "residue" => crate::get_per_residue_sap_score(&pdb, probe_radius, n_points, model_num, sap_radius, threads, chains),
+        "atom" => crate::get_per_atom_sap_score(
+            &pdb,
+            probe_radius,
+            n_points,
+            model_num,
+            sap_radius,
+            threads,
+            chains,
+        ),
+        "residue" => crate::get_per_residue_sap_score(
+            &pdb,
+            probe_radius,
+            n_points,
+            model_num,
+            sap_radius,
+            threads,
+            chains,
+        ),
         _ => {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Invalid level '{}'. Must be one of: 'atom', 'residue'",
@@ -350,18 +376,14 @@ fn sap_score(
 ///     >>> print(f"SC Score: {sc:.3f}")
 #[pyfunction]
 #[pyo3(signature = (input_file, groups, model_num=0, threads=0))]
-fn sc(
-    input_file: String,
-    groups: &str,
-    model_num: usize,
-    threads: usize,
-) -> PyResult<f64> {
+fn sc(input_file: String, groups: &str, model_num: usize, threads: usize) -> PyResult<f64> {
     // Load the PDB file and normalize using prepare_pdb_for_sasa
     let (pdb, _warnings) = crate::load_model(&input_file);
 
     // Calculate SC
-    crate::get_sc(&pdb, groups, model_num, threads)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("SC calculation failed: {}", e)))
+    crate::get_sc(&pdb, groups, model_num, threads).map_err(|e| {
+        pyo3::exceptions::PyRuntimeError::new_err(format!("SC calculation failed: {}", e))
+    })
 }
 
 /// Python module for protein structure analysis.

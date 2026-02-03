@@ -86,8 +86,8 @@ impl ScCalculator {
         self.base.run.results.combined.s_median = (self.base.run.results.surfaces[0].s_median
             + self.base.run.results.surfaces[1].s_median)
             / 2.0;
-        self.base.run.results.combined.n_atoms = self.base.run.results.surfaces[0].n_atoms
-            + self.base.run.results.surfaces[1].n_atoms;
+        self.base.run.results.combined.n_atoms =
+            self.base.run.results.surfaces[0].n_atoms + self.base.run.results.surfaces[1].n_atoms;
         self.base.run.results.combined.n_buried_atoms = self.base.run.results.surfaces[0]
             .n_buried_atoms
             + self.base.run.results.surfaces[1].n_buried_atoms;
@@ -117,7 +117,9 @@ impl ScCalculator {
             self.base.run_parallel(|| {
                 let indices: Vec<usize> = (0..sdots.len())
                     .into_par_iter()
-                    .filter(|&idx| sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots))
+                    .filter(|&idx| {
+                        sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots)
+                    })
                     .collect();
                 let area: f64 = indices.par_iter().map(|&idx| sdots[idx].area).sum();
                 (indices, area)
