@@ -41,26 +41,25 @@ use std::collections::HashMap;
 fn get_hydrophobicity(resn: &str) -> Option<f32> {
     // Black & Mould values minus Glycine (0.501)
     match resn.to_uppercase().as_str() {
-        "ALA" => Some(0.616 - 0.501), // 0.115
-        "ARG" => Some(0.000 - 0.501), // -0.501
-        "ASN" => Some(0.236 - 0.501), // -0.265
-        "ASP" => Some(0.028 - 0.501), // -0.473
-        "CYS" => Some(0.680 - 0.501), // 0.179
-        "GLU" => Some(0.043 - 0.501), // -0.458
-        "GLN" => Some(0.251 - 0.501), // -0.250
-        "GLY" => Some(0.000),         // 0.0 (reference)
-        "HIS" => Some(0.165 - 0.501), // -0.336
-        "ILE" => Some(0.943 - 0.501), // 0.442
-        "LEU" => Some(0.943 - 0.501), // 0.442
-        "LYS" => Some(0.283 - 0.501), // -0.218
-        "MET" => Some(0.738 - 0.501), // 0.237
-        "PHE" => Some(1.000 - 0.501), // 0.499
-        "PRO" => Some(0.711 - 0.501), // 0.210
-        "SER" => Some(0.359 - 0.501), // -0.142
-        "THR" => Some(0.450 - 0.501), // -0.051
-        "TRP" => Some(0.878 - 0.501), // 0.377
-        "TYR" => Some(0.880 - 0.501), // 0.379
-        "VAL" => Some(0.825 - 0.501), // 0.324
+        "ALA" => Some(0.616 - 0.501),         // 0.115
+        "ARG" => Some(0.000 - 0.501),         // -0.501
+        "ASN" => Some(0.236 - 0.501),         // -0.265
+        "ASP" => Some(0.028 - 0.501),         // -0.473
+        "CYS" => Some(0.680 - 0.501),         // 0.179
+        "GLU" => Some(0.043 - 0.501),         // -0.458
+        "GLN" => Some(0.251 - 0.501),         // -0.250
+        "GLY" => Some(0.000),                 // 0.0 (reference)
+        "HIS" => Some(0.165 - 0.501),         // -0.336
+        "ILE" | "LEU" => Some(0.943 - 0.501), // 0.442
+        "LYS" => Some(0.283 - 0.501),         // -0.218
+        "MET" => Some(0.738 - 0.501),         // 0.237
+        "PHE" => Some(1.000 - 0.501),         // 0.499
+        "PRO" => Some(0.711 - 0.501),         // 0.210
+        "SER" => Some(0.359 - 0.501),         // -0.142
+        "THR" => Some(0.450 - 0.501),         // -0.051
+        "TRP" => Some(0.878 - 0.501),         // 0.377
+        "TYR" => Some(0.880 - 0.501),         // 0.379
+        "VAL" => Some(0.825 - 0.501),         // 0.324
         _ => None,
     }
 }
@@ -118,8 +117,8 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, atomn, atomi, sasa, sap_score
+/// A Polars `DataFrame` with columns:
+/// - `chain`, `resn`, `resi`, `insertion`, `atomn`, `atomi`, `sasa`, `sap_score`
 ///
 /// # Example
 ///
@@ -192,7 +191,7 @@ pub fn get_per_atom_sap_score(
     // Use pdbtbx's R-tree for spatial indexing (similar to InteractionComplex::get_atomic_contacts)
     let pdb_no_hydrogens = prepare_pdb_for_sasa(pdb, true, true, chains);
     let tree = pdb_no_hydrogens.create_hierarchy_rtree();
-    let sap_radius_sq = (sap_radius * sap_radius) as f64;
+    let sap_radius_sq = f64::from(sap_radius * sap_radius);
 
     // Calculate SAP score for each atom in the DataFrame
     let sap_scores_map: HashMap<usize, f32> = pdb_no_hydrogens
@@ -286,8 +285,8 @@ pub fn get_per_atom_sap_score(
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, sc_sasa, sap_score
+/// A Polars `DataFrame` with columns:
+/// - `chain`, `resn`, `resi`, `insertion`, `sc_sasa`, `sap_score`
 ///
 /// # Example
 ///
@@ -385,11 +384,11 @@ mod tests {
 
         // Phenylalanine should be most hydrophobic (positive)
         let phe = get_hydrophobicity("PHE").unwrap();
-        assert!(phe > 0.4, "PHE hydrophobicity should be high: {}", phe);
+        assert!(phe > 0.4, "PHE hydrophobicity should be high: {phe}");
 
         // Arginine should be most hydrophilic (negative)
         let arg = get_hydrophobicity("ARG").unwrap();
-        assert!(arg < -0.4, "ARG hydrophobicity should be low: {}", arg);
+        assert!(arg < -0.4, "ARG hydrophobicity should be low: {arg}");
 
         // Unknown residues should return None
         assert!(get_hydrophobicity("XXX").is_none());
@@ -403,13 +402,12 @@ mod tests {
             "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
         ];
 
-        for aa in amino_acids.iter() {
+        for aa in &amino_acids {
             let max_sasa = get_sc_max_asa(aa);
-            assert!(max_sasa.is_some(), "Should have max SASA for {}", aa);
+            assert!(max_sasa.is_some(), "Should have max SASA for {aa}");
             assert!(
                 max_sasa.unwrap() > 0.0,
-                "Max SASA for {} should be positive",
-                aa
+                "Max SASA for {aa} should be positive"
             );
         }
 
@@ -502,8 +500,7 @@ mod tests {
         let chain_count = df.column("chain").unwrap().unique().unwrap().len();
         assert!(
             chain_count > 1,
-            "Should have multiple chains: {}",
-            chain_count
+            "Should have multiple chains: {chain_count}"
         );
     }
 }

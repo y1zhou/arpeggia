@@ -48,10 +48,13 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
             d if d <= 60.0 => Some(Interaction::PiTiltedStacking),
             d if d <= 90.0 => match theta {
                 t if (30.0..60.0).contains(&t) => Some(Interaction::PiLStacking), // oe
-                _ => match dist <= PI_T_DIST_THREHOLD {
-                    true => Some(Interaction::PiTStacking), // fe and ef
-                    false => None,
-                },
+                _ => {
+                    if dist <= PI_T_DIST_THREHOLD {
+                        Some(Interaction::PiTStacking)
+                    } else {
+                        None
+                    }
+                }
             },
             _ => None,
         }

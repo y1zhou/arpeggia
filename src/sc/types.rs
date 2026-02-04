@@ -28,8 +28,8 @@ pub struct Atom {
     pub attention: Attention,
     /// Is atom accessible to solvent/contact surface
     pub accessible: bool,
-    pub atom: String,
-    pub residue: String,
+    pub atomn: String,
+    pub resn: String,
     pub coor: Vec3,
     /// Neighbor indices on same molecule
     pub neighbor_indices: Vec<usize>,

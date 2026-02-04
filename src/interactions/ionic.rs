@@ -84,15 +84,8 @@ fn is_same_charge_pair<'a>(
 pub fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
     matches!(
         (res_name, atom_name),
-        ("ARG", "NE")
-            | ("ARG", "CZ")
-            | ("ARG", "NH1")
-            | ("ARG", "NH2")
-            | ("HIS", "CG")
-            | ("HIS", "ND1")
-            | ("HIS", "CE1")
-            | ("HIS", "NE2")
-            | ("HIS", "CD2")
+        ("ARG", "NE" | "CZ" | "NH1" | "NH2")
+            | ("HIS", "CG" | "ND1" | "CE1" | "NE2" | "CD2")
             | ("LYS", "NZ")
     )
 }
@@ -101,6 +94,6 @@ pub fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
 fn is_neg_ionizable(res_name: &str, atom_name: &str) -> bool {
     matches!(
         (res_name, atom_name),
-        ("ASP", "OD1") | ("ASP", "OD2") | ("GLU", "OE1") | ("GLU", "OE2")
+        ("ASP", "OD1" | "OD2") | ("GLU", "OE1" | "OE2")
     )
 }

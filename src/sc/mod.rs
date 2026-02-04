@@ -3,7 +3,7 @@
 //! Implements the algorithm from Lawrence & Colman (1993) for calculating
 //! shape complementarity between protein interfaces.
 //!
-//! Based on https://github.com/cytokineking/sc-rs
+//! Based on <https://github.com/cytokineking/sc-rs>
 
 pub mod atomic_radii;
 pub mod sc_calculator;
@@ -110,8 +110,8 @@ pub fn get_sc(
                 density: 0.0,
                 attention: types::Attention::Buried,
                 accessible: false,
-                atom: atom.name().to_string(),
-                residue: residue.name().unwrap_or("UNK").to_string(),
+                atomn: atom.name().to_string(),
+                resn: residue.name().unwrap_or("UNK").to_string(),
                 coor: Vec3::new(pos.0, pos.1, pos.2),
                 neighbor_indices: Vec::new(),
                 buried_by_indices: Vec::new(),

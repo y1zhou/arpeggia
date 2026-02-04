@@ -7,8 +7,8 @@
 //! in PDB and mmCIF files. It can identify various types of interactions including
 //! hydrogen bonds, ionic interactions, aromatic interactions, and more.
 //!
-//! The library returns results as Polars DataFrames, which can be easily converted
-//! to various output formats or used directly in Python via PyO3 bindings.
+//! The library returns results as Polars `DataFrames`, which can be easily converted
+//! to various output formats or used directly in Python via `PyO3` bindings.
 
 mod chains;
 mod contacts;

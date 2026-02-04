@@ -13,7 +13,7 @@ use std::collections::HashSet;
 /// Filter a PDB structure to keep only the specified model.
 ///
 /// Creates a clone of the PDB and removes all models except the one at the specified index.
-/// If model_num is 0, the first model is used. Otherwise, the model with the matching
+/// If `model_num` is 0, the first model is used. Otherwise, the model with the matching
 /// serial number is kept.
 ///
 /// # Arguments
@@ -50,7 +50,7 @@ const ION_RESIDUES: &[&str] = &[
     "ACE", "NH2",
 ];
 
-/// Parse a comma-separated chain string into a HashSet of chain IDs.
+/// Parse a comma-separated chain string into a `HashSet` of chain IDs.
 ///
 /// # Arguments
 ///
@@ -58,7 +58,7 @@ const ION_RESIDUES: &[&str] = &[
 ///
 /// # Returns
 ///
-/// A HashSet of chain IDs. If the input is empty, returns an empty HashSet (meaning all chains).
+/// A `HashSet` of chain IDs. If the input is empty, returns an empty `HashSet` (meaning all chains).
 ///
 /// # Example
 ///
@@ -85,9 +85,9 @@ fn parse_chain_string(chains: &str) -> HashSet<String> {
 ///
 /// This function creates a clone of the PDB and removes:
 /// - Chains not in the specified list (if chains is not empty)
-/// - All hydrogen atoms (if remove_hydrogens is true)
-/// - Solvent molecules (HOH, H2O, WAT, etc.) (if remove_solvent_and_ions is true)
-/// - Common ions (NA, CL, CA, MG, ZN, etc.) (if remove_solvent_and_ions is true)
+/// - All hydrogen atoms (if `remove_hydrogens` is true)
+/// - Solvent molecules (HOH, H2O, WAT, etc.) (if `remove_solvent_and_ions` is true)
+/// - Common ions (NA, CL, CA, MG, ZN, etc.) (if `remove_solvent_and_ions` is true)
 ///
 /// # Arguments
 ///
@@ -153,9 +153,9 @@ pub(crate) fn prepare_pdb_for_sasa(
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - atomi, sasa
-/// - chain, resn, resi, insertion, altloc, atomn
+/// A Polars `DataFrame` with columns:
+/// - `atomi`, `sasa`
+/// - `chain`, `resn`, `resi`, `insertion`, `altloc`, `atomn`
 ///
 /// # Example
 ///
@@ -218,12 +218,12 @@ pub fn get_atom_sasa(
         .map(|x| InteractingEntity::from_hier(&x))
         .collect::<Vec<InteractingEntity>>();
     let atom_annot_df = df!(
-        "chain" => atom_annotations.iter().map(|x| x.chain.to_owned()).collect::<Vec<String>>(),
-        "resn" => atom_annotations.iter().map(|x| x.resn.to_owned()).collect::<Vec<String>>(),
+        "chain" => atom_annotations.iter().map(|x| x.chain.clone()).collect::<Vec<String>>(),
+        "resn" => atom_annotations.iter().map(|x| x.resn.clone()).collect::<Vec<String>>(),
         "resi" => atom_annotations.iter().map(|x| x.resi as i32).collect::<Vec<i32>>(),
-        "insertion" => atom_annotations.iter().map(|x| x.insertion.to_owned()).collect::<Vec<String>>(),
-        "altloc" => atom_annotations.iter().map(|x| x.altloc.to_owned()).collect::<Vec<String>>(),
-        "atomn" => atom_annotations.iter().map(|x| x.atomn.to_owned()).collect::<Vec<String>>(),
+        "insertion" => atom_annotations.iter().map(|x| x.insertion.clone()).collect::<Vec<String>>(),
+        "altloc" => atom_annotations.iter().map(|x| x.altloc.clone()).collect::<Vec<String>>(),
+        "atomn" => atom_annotations.iter().map(|x| x.atomn.clone()).collect::<Vec<String>>(),
         "atomi" => atom_annotations.iter().map(|x| x.atomi as i32).collect::<Vec<i32>>(),
     )
     .unwrap();
@@ -247,7 +247,7 @@ pub fn get_atom_sasa(
 
 /// Calculate solvent accessible surface area (SASA) aggregated by residue.
 ///
-/// Uses the rust-sasa SASAOptions API to compute SASA at the residue level.
+/// Uses the rust-sasa `SASAOptions` API to compute SASA at the residue level.
 /// Note there when there are multiple altlocs, only the first is considered.
 ///
 /// # Arguments
@@ -261,8 +261,8 @@ pub fn get_atom_sasa(
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, sasa, is_polar
+/// A Polars `DataFrame` with columns:
+/// - `chain`, `resn`, `resi`, `insertion`, `sasa`, `is_polar`
 ///
 /// # Example
 ///
@@ -318,7 +318,7 @@ pub fn get_residue_sasa(
 
 /// Calculate solvent accessible surface area (SASA) aggregated by chain.
 ///
-/// Uses the rust-sasa SASAOptions API to compute SASA at the chain level.
+/// Uses the rust-sasa `SASAOptions` API to compute SASA at the chain level.
 ///
 /// # Arguments
 ///
@@ -331,8 +331,8 @@ pub fn get_residue_sasa(
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - chain, sasa
+/// A Polars `DataFrame` with columns:
+/// - `chain`, `sasa`
 ///
 /// # Example
 ///
@@ -468,13 +468,13 @@ pub fn get_dsasa(
     group1_total + group2_total - combined_total
 }
 
-/// Maximum solvent accessible surface area (MaxASA) values for amino acids.
+/// Maximum solvent accessible surface area (`MaxASA`) values for amino acids.
 ///
 /// Values are from Tien et al. (2013) "Maximum Allowed Solvent Accessibilities of Residues in Proteins"
 /// PLOS ONE. These theoretical values represent the maximum possible SASA for each amino acid
 /// in a Gly-X-Gly tripeptide.
 ///
-/// Returns the MaxASA value in Å² for a given 3-letter amino acid code, or None if unknown.
+/// Returns the `MaxASA` value in Å² for a given 3-letter amino acid code, or None if unknown.
 pub fn get_max_asa(resn: &str) -> Option<f32> {
     match resn.to_uppercase().as_str() {
         "ALA" => Some(129.0),
@@ -485,11 +485,10 @@ pub fn get_max_asa(resn: &str) -> Option<f32> {
         "GLU" => Some(223.0),
         "GLN" => Some(225.0),
         "GLY" => Some(104.0),
-        "HIS" => Some(224.0),
+        "HIS" | "MET" => Some(224.0),
         "ILE" => Some(197.0),
         "LEU" => Some(201.0),
         "LYS" => Some(236.0),
-        "MET" => Some(224.0),
         "PHE" => Some(240.0),
         "PRO" => Some(159.0),
         "SER" => Some(155.0),
@@ -517,10 +516,10 @@ pub fn get_max_asa(resn: &str) -> Option<f32> {
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, altloc, sasa, is_polar, max_sasa, relative_sasa
+/// A Polars `DataFrame` with columns:
+/// - chain, resn, resi, insertion, altloc, sasa, `is_polar`, `max_sasa`, `relative_sasa`
 ///
-/// The relative_sasa column contains values between 0 and ~1 (can slightly exceed 1 due to
+/// The `relative_sasa` column contains values between 0 and ~1 (can slightly exceed 1 due to
 /// structural context), or null for non-standard amino acids.
 ///
 /// # Example
@@ -723,10 +722,7 @@ mod tests {
         let ratio = residue_total / atom_total;
         assert!(
             ratio > 0.9 && ratio < 1.1,
-            "Total SASA should be similar: atom={}, residue={}, ratio={}",
-            atom_total,
-            residue_total,
-            ratio
+            "Total SASA should be similar: atom={atom_total}, residue={residue_total}, ratio={ratio}"
         );
     }
 
@@ -811,9 +807,7 @@ mod tests {
 
         assert!(
             small_sasa > large_sasa,
-            "Smaller probe radius should give larger SASA: {} vs {}",
-            small_sasa,
-            large_sasa
+            "Smaller probe radius should give larger SASA: {small_sasa} vs {large_sasa}"
         );
     }
 
@@ -832,9 +826,7 @@ mod tests {
 
         assert!(
             (total_sasa - expected_sasa).abs() < tolerance,
-            "Ubiquitin total SASA should be around {} Å², got {} Å²",
-            expected_sasa,
-            total_sasa
+            "Ubiquitin total SASA should be around {expected_sasa} Å², got {total_sasa} Å²"
         );
     }
 
@@ -847,7 +839,7 @@ mod tests {
         let dsasa = get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0, 1);
 
         // dSASA should be positive for an interface
-        assert!(dsasa > 0.0, "dSASA should be positive, got {}", dsasa);
+        assert!(dsasa > 0.0, "dSASA should be positive, got {dsasa}");
     }
 
     #[test]
@@ -865,9 +857,7 @@ mod tests {
 
         assert!(
             (dsasa - expected_dsasa).abs() < tolerance,
-            "6bft dSASA should be around {} Å², got {} Å²",
-            expected_dsasa,
-            dsasa
+            "6bft dSASA should be around {expected_dsasa} Å², got {dsasa} Å²"
         );
     }
 
@@ -882,9 +872,7 @@ mod tests {
         let diff = (dsasa1 - dsasa2).abs();
         assert!(
             diff < 1.0,
-            "dSASA should be symmetric: {} vs {}",
-            dsasa1,
-            dsasa2
+            "dSASA should be symmetric: {dsasa1} vs {dsasa2}"
         );
     }
 
@@ -953,8 +941,7 @@ mod tests {
         let ratio = below_threshold as f64 / rsa_values.len() as f64;
         assert!(
             ratio > 0.95,
-            "Most relative_sasa values should be <= 1.5: ratio={}",
-            ratio
+            "Most relative_sasa values should be <= 1.5: ratio={ratio}"
         );
     }
 
@@ -966,14 +953,10 @@ mod tests {
             "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
         ];
 
-        for aa in amino_acids.iter() {
+        for aa in &amino_acids {
             let max_asa = get_max_asa(aa);
-            assert!(max_asa.is_some(), "Should have MaxASA value for {}", aa);
-            assert!(
-                max_asa.unwrap() > 0.0,
-                "MaxASA for {} should be positive",
-                aa
-            );
+            assert!(max_asa.is_some(), "Should have MaxASA value for {aa}");
+            assert!(max_asa.unwrap() > 0.0, "MaxASA for {aa} should be positive");
         }
     }
 
@@ -995,8 +978,7 @@ mod tests {
 
         assert!(
             chain_count_all > 1,
-            "Multi-chain structure should have multiple chains: {}",
-            chain_count_all
+            "Multi-chain structure should have multiple chains: {chain_count_all}"
         );
     }
 
@@ -1040,8 +1022,7 @@ mod tests {
         for chain_id in &chain_ids {
             assert!(
                 *chain_id == "A" || *chain_id == "B",
-                "Only A and B chains should be present, got: {}",
-                chain_id
+                "Only A and B chains should be present, got: {chain_id}"
             );
         }
     }

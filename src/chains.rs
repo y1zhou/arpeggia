@@ -30,15 +30,12 @@ mod tests {
             "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG";
         assert!(
             seq.starts_with(ubiquitin),
-            "Expected: {}\nFound: {}",
-            ubiquitin,
-            seq
+            "Expected: {ubiquitin}\nFound: {seq}"
         );
-        let all_waters = seq.matches("O").count();
+        let all_waters = seq.matches('O').count();
         assert_eq!(
             all_waters, 58,
-            "Found {} waters in the model instead of 58",
-            all_waters
+            "Found {all_waters} waters in the model instead of 58"
         );
     }
 }

@@ -40,7 +40,7 @@ impl<'a> InteractionComplex<'a> {
         groups: &'a str,
         vdw_comp_factor: f64,
         interacting_threshold: f64,
-    ) -> Result<(Self, Vec<String>), Vec<String>> {
+    ) -> (Self, Vec<String>) {
         // Parse all chains and input chain groups
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
@@ -54,7 +54,7 @@ impl<'a> InteractionComplex<'a> {
         // Similarly, build a mapping of side chain planes
         let sc_planes = build_sc_plane_positions(model);
 
-        Ok((
+        (
             Self {
                 model,
                 ligand,
@@ -66,7 +66,7 @@ impl<'a> InteractionComplex<'a> {
                 sc_planes,
             },
             ring_err,
-        ))
+        )
     }
 
     /// Determine if two entities need to be checked for interactions or not.
@@ -471,10 +471,8 @@ fn build_ring_positions(model: &'_ PDB) -> RingPositionResult<'_> {
                             ring_positions.insert(res_id, ring);
                         }
                         None => {
-                            errors.push(format!(
-                                "Failed to calculate ring position for {:?}",
-                                res_id
-                            ));
+                            errors
+                                .push(format!("Failed to calculate ring position for {res_id:?}"));
                         }
                     }
                 }

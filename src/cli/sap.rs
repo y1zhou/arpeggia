@@ -87,11 +87,13 @@ pub(crate) fn run(args: &Args) {
     // Load file as complex structure
     let (pdb, pdb_warnings) = load_model(&input_file);
     if !pdb_warnings.is_empty() {
-        pdb_warnings.iter().for_each(|e| match e.level() {
-            pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-            pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-            _ => warn!("{e}"),
-        });
+        for e in &pdb_warnings {
+            match e.level() {
+                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
+                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
+                _ => warn!("{e}"),
+            }
+        }
     }
 
     // Convert thread count to isize for rust-sasa
@@ -129,9 +131,10 @@ pub(crate) fn run(args: &Args) {
     // Prepare output directory
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
-    let output_file = match output_path.is_dir() {
-        true => output_path.join(args.filename.clone()),
-        false => output_path,
+    let output_file = if output_path.is_dir() {
+        output_path.join(args.filename.clone())
+    } else {
+        output_path
     }
     .with_extension(args.output_format.to_string());
 

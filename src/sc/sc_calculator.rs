@@ -1,5 +1,5 @@
-//! SC Calculator wrapping SurfaceGenerator with trimming and SC score calculation.
-//! Ported from https://github.com/cytokineking/sc-rs
+//! SC Calculator wrapping `SurfaceGenerator` with trimming and SC score calculation.
+//! Ported from <https://github.com/cytokineking/sc-rs>
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
@@ -36,7 +36,7 @@ impl ScCalculator {
     }
 
     pub fn calc(&mut self) -> Result<Results, SurfaceCalculatorError> {
-        self.base.init()?;
+        self.base.init();
         self.base.run.results.valid = 0;
 
         if self.base.run.atoms.is_empty() {
@@ -63,7 +63,7 @@ impl ScCalculator {
         }
 
         for i in 0..2 {
-            let area = self.trim_peripheral_band(i)?;
+            let area = self.trim_peripheral_band(i);
             self.base.run.results.surfaces[i].trimmed_area = area;
             self.base.run.results.surfaces[i].n_trimmed_dots = self.base.run.trimmed_dots[i].len();
             self.base.run.results.surfaces[i].n_all_dots = self.base.run.dots[i].len();
@@ -73,18 +73,22 @@ impl ScCalculator {
         self.calc_neighbor_distance(1, 0);
 
         // Combine results from both surfaces
-        self.base.run.results.combined.d_mean = (self.base.run.results.surfaces[0].d_mean
-            + self.base.run.results.surfaces[1].d_mean)
-            / 2.0;
-        self.base.run.results.combined.d_median = (self.base.run.results.surfaces[0].d_median
-            + self.base.run.results.surfaces[1].d_median)
-            / 2.0;
-        self.base.run.results.combined.s_mean = (self.base.run.results.surfaces[0].s_mean
-            + self.base.run.results.surfaces[1].s_mean)
-            / 2.0;
-        self.base.run.results.combined.s_median = (self.base.run.results.surfaces[0].s_median
-            + self.base.run.results.surfaces[1].s_median)
-            / 2.0;
+        self.base.run.results.combined.d_mean = f64::midpoint(
+            self.base.run.results.surfaces[0].d_mean,
+            self.base.run.results.surfaces[1].d_mean,
+        );
+        self.base.run.results.combined.d_median = f64::midpoint(
+            self.base.run.results.surfaces[0].d_median,
+            self.base.run.results.surfaces[1].d_median,
+        );
+        self.base.run.results.combined.s_mean = f64::midpoint(
+            self.base.run.results.surfaces[0].s_mean,
+            self.base.run.results.surfaces[1].s_mean,
+        );
+        self.base.run.results.combined.s_median = f64::midpoint(
+            self.base.run.results.surfaces[0].s_median,
+            self.base.run.results.surfaces[1].s_median,
+        );
         self.base.run.results.combined.n_atoms =
             self.base.run.results.surfaces[0].n_atoms + self.base.run.results.surfaces[1].n_atoms;
         self.base.run.results.combined.n_buried_atoms = self.base.run.results.surfaces[0]
@@ -110,7 +114,7 @@ impl ScCalculator {
         Ok(self.base.run.results.clone())
     }
 
-    fn trim_peripheral_band(&mut self, i: usize) -> Result<f64, SurfaceCalculatorError> {
+    fn trim_peripheral_band(&mut self, i: usize) -> f64 {
         let (indices, area) = if self.base.settings.enable_parallel {
             let sdots = &self.base.run.dots[i];
             self.base.run_parallel(|| {
@@ -137,7 +141,7 @@ impl ScCalculator {
 
         self.base.run.trimmed_dots[i].clear();
         self.base.run.trimmed_dots[i] = indices;
-        Ok(area)
+        area
     }
 
     fn trim_peripheral_band_check_dot(&self, dot_index: usize, sdots: &[Dot]) -> bool {

@@ -29,11 +29,11 @@ pub fn get_num_threads(num_threads: usize) -> isize {
     }
 }
 
-/// Sum the SASA column of a DataFrame.
+/// Sum the SASA column of a `DataFrame`.
 ///
 /// # Arguments
 ///
-/// * `df` - DataFrame containing a "sasa" column
+/// * `df` - `DataFrame` containing a "sasa" column
 ///
 /// # Returns
 ///
@@ -65,15 +65,19 @@ pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
 /// Parse the chain groups from the input string.
 /// Only checks the first two fields separated by `/`.
 /// If one of the groups is unspecified, all remaining chains from `all_chains` are used.
+///
+/// # Panics
+/// This function will panic if the input format is invalid or if one of the groups ends up empty.
 pub fn parse_groups(
     all_chains: &HashSet<String>,
     groups: &str,
 ) -> (HashSet<String>, HashSet<String>) {
     // Parse the first two fields in groups
     let sel_vec: Vec<&str> = groups.split('/').collect();
-    if sel_vec.len() < 2 {
-        panic!("Invalid chain groups format! Use '/' for all-to-all comparisons.")
-    }
+    assert!(
+        (sel_vec.len() >= 2),
+        "Invalid chain groups format! Use '/' for all-to-all comparisons."
+    );
     let ligand_chains = sel_vec.first().unwrap_or(&"");
     let receptor_chains = sel_vec.get(1).unwrap_or(&"");
 
@@ -102,14 +106,18 @@ pub fn parse_groups(
     }
 
     // Panic if there are no chains in one of the groups
-    if ligand.is_empty() || receptor.is_empty() {
-        panic!("Empty chain groups!")
-    }
+    assert!(
+        !(ligand.is_empty() || receptor.is_empty()),
+        "Empty chain groups!"
+    );
 
     (ligand, receptor)
 }
 
-/// Write a DataFrame to a CSV file
+/// Write a `DataFrame` to a CSV file
+///
+/// # Panics
+/// This function will panic if the file cannot be created or written to.
 pub fn write_df_to_file(df: &mut DataFrame, file_path: &Path, file_type: DataFrameFileType) {
     let file_suffix = file_type.to_string();
     let mut file = std::fs::File::create(file_path.with_extension(file_suffix)).unwrap();
@@ -135,7 +143,7 @@ pub fn write_df_to_file(df: &mut DataFrame, file_path: &Path, file_type: DataFra
     }
 }
 
-/// File format for writing DataFrames.
+/// File format for writing `DataFrames`.
 #[derive(clap::ValueEnum, Clone, Debug, Copy)]
 pub enum DataFrameFileType {
     /// Comma-separated values

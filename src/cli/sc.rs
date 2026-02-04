@@ -47,11 +47,13 @@ pub(crate) fn run(args: &Args) {
     // Load file as complex structure
     let (pdb, pdb_warnings) = load_model(&input_file);
     if !pdb_warnings.is_empty() {
-        pdb_warnings.iter().for_each(|e| match e.level() {
-            pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-            pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-            _ => warn!("{e}"),
-        });
+        for e in &pdb_warnings {
+            match e.level() {
+                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
+                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
+                _ => warn!("{e}"),
+            }
+        }
     }
 
     // Calculate SC

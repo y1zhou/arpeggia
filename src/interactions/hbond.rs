@@ -143,13 +143,10 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
         (res_name, atom_name),
         ("ASN", "OD1")
             // | ("ASN", "ND2")
-            | ("ASP", "OD1")
-            | ("ASP", "OD2")
+            | ("ASP", "OD1" | "OD2")
             | ("GLN", "OE1")
-            | ("GLU", "OE1")
-            | ("GLU", "OE2")
-            | ("HIS", "ND1")
-            | ("HIS", "NE2")
+            | ("GLU", "OE1" | "OE2")
+            | ("HIS", "ND1" | "NE2")
             | ("SER", "OG")
             | ("THR", "OG1")
             | ("TYR", "OH")
@@ -166,13 +163,10 @@ fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     }
     matches!(
         (res_name, atom_name),
-        ("ARG", "NE")
-            | ("ARG", "NH1")
-            | ("ARG", "NH2")
+        ("ARG", "NE" | "NH1" | "NH2")
             | ("ASN", "ND2")
             | ("GLN", "NE2")
-            | ("HIS", "ND1")
-            | ("HIS", "NE2")
+            | ("HIS", "ND1" | "NE2")
             | ("LYS", "NZ")
             | ("SER", "OG")
             | ("THR", "OG1")

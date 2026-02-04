@@ -1,5 +1,5 @@
 //! Connolly molecular surface generator for SC calculations.
-//! Ported from https://github.com/cytokineking/sc-rs
+//! Ported from <https://github.com/cytokineking/sc-rs>
 
 use std::cmp::Ordering;
 use std::f64::consts::PI;
@@ -28,9 +28,9 @@ impl fmt::Display for SurfaceCalculatorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SurfaceCalculatorError::NoAtoms => write!(f, "No atoms defined"),
-            SurfaceCalculatorError::Io(e) => write!(f, "Failed to read radii: {}", e),
+            SurfaceCalculatorError::Io(e) => write!(f, "Failed to read radii: {e}"),
             SurfaceCalculatorError::Coincident(msg) => {
-                write!(f, "Overlapping atoms detected: {}", msg)
+                write!(f, "Overlapping atoms detected: {msg}")
             }
             SurfaceCalculatorError::TooManySubdivisions => write!(f, "Sampling limit exceeded"),
         }
@@ -86,16 +86,15 @@ impl SurfaceGenerator {
         }
     }
 
-    pub fn init(&mut self) -> Result<(), SurfaceCalculatorError> {
+    pub fn init(&mut self) {
         if self.radii.is_empty() {
             self.radii = embedded_atomic_radii();
         }
-        Ok(())
     }
 
     pub fn add_atom(&mut self, mut atom: Atom) -> Result<(), SurfaceCalculatorError> {
         if self.radii.is_empty() {
-            self.init()?;
+            self.init();
         }
         if atom.radius <= 0.0 {
             self.assign_atom_radius(&mut atom)?;
@@ -119,10 +118,10 @@ impl SurfaceGenerator {
     fn assign_atom_radius(&self, atom: &mut Atom) -> Result<(), SurfaceCalculatorError> {
         // First try the embedded radii table
         for radius in &self.radii {
-            if !wildcard_match(&atom.residue, &radius.residue) {
+            if !wildcard_match(&atom.resn, &radius.residue) {
                 continue;
             }
-            if !wildcard_match(&atom.atom, &radius.atom) {
+            if !wildcard_match(&atom.atomn, &radius.atom) {
                 continue;
             }
             atom.radius = radius.radius;
@@ -135,7 +134,7 @@ impl SurfaceGenerator {
         }
         Err(SurfaceCalculatorError::Io(std::io::Error::other(format!(
             "No radius for {}:{}",
-            atom.residue, atom.atom
+            atom.resn, atom.atomn
         ))))
     }
 
@@ -260,11 +259,11 @@ impl SurfaceGenerator {
                             return Err(SurfaceCalculatorError::Coincident(format!(
                                 "{}:{}:{} == {}:{}:{}",
                                 atom1.natom,
-                                atom1.residue,
-                                atom1.atom,
+                                atom1.resn,
+                                atom1.atomn,
                                 atom2.natom,
-                                atom2.residue,
-                                atom2.atom
+                                atom2.resn,
+                                atom2.atomn
                             )));
                         }
                         let bridge = atom1.radius + atom2.radius + 2.0 * rp;
@@ -391,7 +390,7 @@ impl SurfaceGenerator {
                 }
                 let mut dots: Vec<Dot> = Vec::new();
                 let mut points: Vec<Vec3> = Vec::new();
-                for ilat in lats.iter() {
+                for ilat in &lats {
                     let dt = ilat.dot(north_dir);
                     let cen = a_i.coor + (north_dir * dt);
                     let mut rad = radius_i * radius_i - dt * dt;
@@ -406,7 +405,7 @@ impl SurfaceGenerator {
                         continue;
                     }
                     let area = ps * cs;
-                    for &point in points.iter() {
+                    for &point in &points {
                         let pcen = a_i.coor + ((point - a_i.coor) * (expanded_radius_i / radius_i));
                         // collision with same-molecule neighbors (skip first neighbor)
                         let mut coll = false;
@@ -421,9 +420,9 @@ impl SurfaceGenerator {
                             continue;
                         }
                         // burial check against opposite molecule
-                        let other_mol = if a_i.molecule == 0 { 1 } else { 0 };
+                        let other_mol = usize::from(a_i.molecule == 0);
                         let mut buried = false;
-                        for b in atoms.iter() {
+                        for b in atoms {
                             if b.molecule != other_mol {
                                 continue;
                             }
@@ -457,7 +456,7 @@ impl SurfaceGenerator {
                 }
             })
             .collect();
-        for (mol, mut dots, n) in results.into_iter() {
+        for (mol, mut dots, n) in results {
             self.run.results.dots.convex += n;
             self.run.dots[mol].append(&mut dots);
         }
@@ -593,7 +592,7 @@ impl SurfaceGenerator {
             height = height.sqrt();
             for is0 in 1..=2 {
                 let sign_choice = 3 - 2 * is0;
-                let probe_center = torus_center + axis_normal * (height * (sign_choice as f64));
+                let probe_center = torus_center + axis_normal * (height * f64::from(sign_choice));
                 if self.check_atom_collision2_idx(probe_center, atom2_index, k, &neighbor_indices) {
                     continue;
                 }
@@ -601,7 +600,7 @@ impl SurfaceGenerator {
                     atom_indices: [0; 3],
                     height,
                     point: probe_center,
-                    alt: axis_normal * (sign_choice as f64),
+                    alt: axis_normal * f64::from(sign_choice),
                 };
                 if sign_choice > 0 {
                     probe.atom_indices = [atom1_index, atom2_index, k];
@@ -628,8 +627,10 @@ impl SurfaceGenerator {
         has_point_cusp: bool,
     ) -> Result<(), SurfaceCalculatorError> {
         let neighbors = self.run.atoms[atom1_index].neighbor_indices.clone();
-        let density =
-            (self.run.atoms[atom1_index].density + self.run.atoms[atom2_index].density) / 2.0;
+        let density = f64::midpoint(
+            self.run.atoms[atom1_index].density,
+            self.run.atoms[atom2_index].density,
+        );
         let expanded_radius_i = self.run.atoms[atom1_index].radius + self.settings.rp;
         let expanded_radius_j = self.run.atoms[atom2_index].radius + self.settings.rp;
         let roll_circle_radius_i =
@@ -655,7 +656,7 @@ impl SurfaceGenerator {
             return Ok(());
         }
         let atom2_natom = self.run.atoms[atom2_index].natom;
-        for sub in subs.into_iter() {
+        for sub in subs {
             let mut tooclose = false;
             for &ni in &neighbors {
                 let neighbor = &self.run.atoms[ni];
@@ -709,10 +710,9 @@ impl SurfaceGenerator {
                     arc_end_i,
                     &mut points,
                 )?;
-                for &point in points.iter() {
-                    let area =
-                        ps * ts * self.distance_point_to_line(midplane_center, unit_axis, point)
-                            / ring_radius;
+                for &point in &points {
+                    let area = ps * ts * distance_point_to_line(midplane_center, unit_axis, point)
+                        / ring_radius;
                     self.run.results.dots.toroidal += 1;
                     let molecule = self.run.atoms[atom1_index].molecule;
                     self.add_dot(
@@ -737,10 +737,9 @@ impl SurfaceGenerator {
                     vec_pj,
                     &mut points,
                 )?;
-                for &point in points.iter() {
-                    let area =
-                        ps * ts * self.distance_point_to_line(midplane_center, unit_axis, point)
-                            / ring_radius;
+                for &point in &points {
+                    let area = ps * ts * distance_point_to_line(midplane_center, unit_axis, point)
+                        / ring_radius;
                     self.run.results.dots.toroidal += 1;
                     let molecule2 = self.run.atoms[atom2_index].molecule;
                     self.add_dot(
@@ -852,7 +851,7 @@ impl SurfaceGenerator {
                 let mut d0: Vec<Dot> = Vec::new();
                 let mut d1: Vec<Dot> = Vec::new();
                 let mut points: Vec<Vec3> = Vec::new();
-                for ilat in lats.iter() {
+                for ilat in &lats {
                     let dt = ilat.dot(south_dir);
                     let cen = south_dir * dt;
                     let mut rad = rp2 - dt * dt;
@@ -866,9 +865,9 @@ impl SurfaceGenerator {
                         continue;
                     }
                     let area = ps * cs;
-                    for &point in points.iter() {
+                    for &point in &points {
                         let mut bail = false;
-                        for v in vectors.iter() {
+                        for v in &vectors {
                             let dt2 = point.dot(*v);
                             if dt2 >= 0.0 {
                                 bail = true;
@@ -909,9 +908,9 @@ impl SurfaceGenerator {
                         } else {
                             (pcen - point) / rp
                         };
-                        let other_mol = if molecule == 0 { 1 } else { 0 };
+                        let other_mol = usize::from(molecule == 0);
                         let mut buried = false;
-                        for b in atoms.iter() {
+                        for b in atoms {
                             if b.molecule != other_mol {
                                 continue;
                             }
@@ -941,7 +940,7 @@ impl SurfaceGenerator {
                 if n == 0 { None } else { Some((d0, d1, n)) }
             })
             .collect();
-        for (mut d0, mut d1, n) in results.into_iter() {
+        for (mut d0, mut d1, n) in results {
             self.run.results.dots.concave += n;
             self.run.dots[0].append(&mut d0);
             self.run.dots[1].append(&mut d1);
@@ -965,8 +964,8 @@ impl SurfaceGenerator {
             (pcen - coor) / self.settings.rp
         };
         let mut buried = false;
-        let other_mol = if molecule == 0 { 1 } else { 0 };
-        for b in self.run.atoms.iter() {
+        let other_mol = usize::from(molecule == 0);
+        for b in &self.run.atoms {
             if b.molecule != other_mol {
                 continue;
             }
@@ -988,16 +987,6 @@ impl SurfaceGenerator {
         self.run.dots[molecule].push(dot);
     }
 
-    fn distance_point_to_line(&self, cen: Vec3, axis: Vec3, pnt: Vec3) -> f64 {
-        let vec = pnt - cen;
-        let dt = vec.dot(axis);
-        let mut d2 = vec.magnitude_squared() - dt * dt;
-        if d2 < 0.0 {
-            d2 = 0.0;
-        }
-        d2.sqrt()
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn sample_arc(
         &self,
@@ -1016,7 +1005,7 @@ impl SurfaceGenerator {
         if angle < 0.0 {
             angle += 2.0 * PI;
         }
-        self.sample_arc_segment(cen, rad, x, y, angle, density, points)
+        sample_arc_segment(cen, rad, x, y, angle, density, points)
     }
 
     fn sample_circle(
@@ -1042,46 +1031,18 @@ impl SurfaceGenerator {
         let mut x = axis.cross(v2);
         x.normalize();
         let y = axis.cross(x);
-        self.sample_arc_segment(cen, rad, x, y, 2.0 * PI, density, points)
+        sample_arc_segment(cen, rad, x, y, 2.0 * PI, density, points)
     }
+}
 
-    #[allow(clippy::too_many_arguments)]
-    fn sample_arc_segment(
-        &self,
-        cen: Vec3,
-        rad: f64,
-        x: Vec3,
-        y: Vec3,
-        angle: f64,
-        density: f64,
-        points: &mut Vec<Vec3>,
-    ) -> Result<f64, SurfaceCalculatorError> {
-        if rad <= 0.0 {
-            points.clear();
-            return Ok(0.0);
-        }
-        let delta = 1.0 / (density.sqrt() * rad);
-        let mut a = -delta / 2.0;
-        points.clear();
-        for _ in 0..100000 {
-            a += delta;
-            if a > angle {
-                break;
-            }
-            let c = rad * a.cos();
-            let s = rad * a.sin();
-            points.push(cen + x * c + y * s);
-        }
-        if a + delta < angle {
-            return Err(SurfaceCalculatorError::TooManySubdivisions);
-        }
-        let ps = if !points.is_empty() {
-            rad * angle / (points.len() as f64)
-        } else {
-            0.0
-        };
-        Ok(ps)
+fn distance_point_to_line(cen: Vec3, axis: Vec3, pnt: Vec3) -> f64 {
+    let vec = pnt - cen;
+    let dt = vec.dot(axis);
+    let mut d2 = vec.magnitude_squared() - dt * dt;
+    if d2 < 0.0 {
+        d2 = 0.0;
     }
+    d2.sqrt()
 }
 
 // Pure geometry helpers for use in parallel closures
@@ -1113,10 +1074,10 @@ fn geom_sample_arc_segment(
     if a + delta < angle {
         return Err(SurfaceCalculatorError::TooManySubdivisions);
     }
-    let ps = if !points.is_empty() {
-        rad * angle / (points.len() as f64)
-    } else {
+    let ps = if points.is_empty() {
         0.0
+    } else {
+        rad * angle / (points.len() as f64)
     };
     Ok(ps)
 }
@@ -1163,4 +1124,41 @@ fn geom_sample_circle(
     x.normalize();
     let y = axis.cross(x);
     geom_sample_arc_segment(cen, rad, x, y, 2.0 * PI, density, points)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sample_arc_segment(
+    cen: Vec3,
+    rad: f64,
+    x: Vec3,
+    y: Vec3,
+    angle: f64,
+    density: f64,
+    points: &mut Vec<Vec3>,
+) -> Result<f64, SurfaceCalculatorError> {
+    if rad <= 0.0 {
+        points.clear();
+        return Ok(0.0);
+    }
+    let delta = 1.0 / (density.sqrt() * rad);
+    let mut a = -delta / 2.0;
+    points.clear();
+    for _ in 0..100000 {
+        a += delta;
+        if a > angle {
+            break;
+        }
+        let c = rad * a.cos();
+        let s = rad * a.sin();
+        points.push(cen + x * c + y * s);
+    }
+    if a + delta < angle {
+        return Err(SurfaceCalculatorError::TooManySubdivisions);
+    }
+    let ps = if points.is_empty() {
+        0.0
+    } else {
+        rad * angle / (points.len() as f64)
+    };
+    Ok(ps)
 }

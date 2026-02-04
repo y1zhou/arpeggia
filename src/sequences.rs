@@ -15,7 +15,7 @@ use std::collections::HashMap;
 ///
 /// # Returns
 ///
-/// A HashMap mapping chain IDs to their sequences as strings.
+/// A `HashMap` mapping chain IDs to their sequences as strings.
 ///
 /// # Example
 ///

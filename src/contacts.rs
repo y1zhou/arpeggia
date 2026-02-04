@@ -21,11 +21,15 @@ use tracing::{debug, warn};
 ///
 /// # Returns
 ///
-/// A Polars DataFrame containing all identified contacts with columns:
+/// A Polars `DataFrame` containing all identified contacts with columns:
 /// - model, interaction, distance
-/// - from_chain, from_resn, from_resi, from_insertion, from_altloc, from_atomn, from_atomi
-/// - to_chain, to_resn, to_resi, to_insertion, to_altloc, to_atomn, to_atomi
-/// - sc_centroid_dist, sc_dihedral, sc_centroid_angle
+/// - `from_chain`, `from_resn`, `from_resi`, `from_insertion`, `from_alt_loc`, `from_atomn`, `from_atomi`
+/// - `to_chain`, `to_resn`, `to_resi`, `to_insertion`, `to_altloc`, `to_atomn`, `to_atomi`
+/// - `sc_centroid_dist`, `sc_dihedral`, `sc_centroid_angle`
+///
+/// # Panics
+///
+/// This function will panic if the `InteractionComplex` cannot be created from the provided PDB structure.
 ///
 /// # Example
 ///
@@ -38,11 +42,12 @@ use tracing::{debug, warn};
 /// println!("Found {} contacts", contacts_df.height());
 /// ```
 pub fn get_contacts(pdb: &PDB, groups: &str, vdw_comp: f64, dist_cutoff: f64) -> DataFrame {
-    let (i_complex, build_ring_err) =
-        InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff).unwrap();
+    let (i_complex, build_ring_err) = InteractionComplex::new(pdb, groups, vdw_comp, dist_cutoff);
 
     if !build_ring_err.is_empty() {
-        build_ring_err.iter().for_each(|e| warn!("{e}"));
+        for e in &build_ring_err {
+            warn!("{e}");
+        }
     }
 
     // Information on the sequence of the chains in the model
@@ -108,48 +113,80 @@ pub fn get_contacts(pdb: &PDB, groups: &str, vdw_comp: f64, dist_cutoff: f64) ->
                 "to_atomi",
                 "interaction",
             ],
-            Default::default(),
+            SortMultipleOptions::default(),
         )
         .collect()
         .unwrap()
 }
 
-/// Convert a slice of ResultEntry into a Polars DataFrame.
+/// Convert a slice of `ResultEntry` into a Polars `DataFrame`.
 pub(crate) fn results_to_df(res: &[ResultEntry]) -> DataFrame {
     df!(
-        "model" => res.iter().map(|x| x.model as u32).collect::<Vec<u32>>(),
+        "model" => res.iter().map(|x| {
+            if let Ok(v) = u32::try_from(x.model) {v} else {
+                panic!("Model number {} exceeds u32 limits", x.model);
+            }
+        }).collect::<Vec<u32>>(),
         "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
         "distance" => res.iter().map(|x| x.distance as f32).collect::<Vec<f32>>(),
-        "from_chain" => res.iter().map(|x| x.ligand.chain.to_owned()).collect::<Vec<String>>(),
-        "from_resn" => res.iter().map(|x| x.ligand.resn.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.iter().map(|x| x.ligand.resi as i32).collect::<Vec<i32>>(),
-        "from_insertion" => res.iter().map(|x| x.ligand.insertion.to_owned()).collect::<Vec<String>>(),
-        "from_altloc" => res.iter().map(|x| x.ligand.altloc.to_owned()).collect::<Vec<String>>(),
-        "from_atomn" => res.iter().map(|x| x.ligand.atomn.to_owned()).collect::<Vec<String>>(),
-        "from_atomi" => res.iter().map(|x| x.ligand.atomi as i32).collect::<Vec<i32>>(),
-        "to_chain" => res.iter().map(|x| x.receptor.chain.to_owned()).collect::<Vec<String>>(),
-        "to_resn" => res.iter().map(|x| x.receptor.resn.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.iter().map(|x| x.receptor.resi as i32).collect::<Vec<i32>>(),
-        "to_insertion" => res.iter().map(|x| x.receptor.insertion.to_owned()).collect::<Vec<String>>(),
-        "to_altloc" => res.iter().map(|x| x.receptor.altloc.to_owned()).collect::<Vec<String>>(),
-        "to_atomn" => res.iter().map(|x| x.receptor.atomn.to_owned()).collect::<Vec<String>>(),
-        "to_atomi" => res.iter().map(|x| x.receptor.atomi as i32).collect::<Vec<i32>>(),
+        "from_chain" => res.iter().map(|x| x.ligand.chain.clone()).collect::<Vec<String>>(),
+        "from_resn" => res.iter().map(|x| x.ligand.resn.clone()).collect::<Vec<String>>(),
+        "from_resi" => res.iter().map(|x| {
+            if let Ok(v) = i32::try_from(x.ligand.resi) {v} else {
+                panic!("Residue index {} exceeds i32 limits", x.ligand.resi);
+            }
+        }).collect::<Vec<i32>>(),
+        "from_insertion" => res.iter().map(|x| x.ligand.insertion.clone()).collect::<Vec<String>>(),
+        "from_altloc" => res.iter().map(|x| x.ligand.altloc.clone()).collect::<Vec<String>>(),
+        "from_atomn" => res.iter().map(|x| x.ligand.atomn.clone()).collect::<Vec<String>>(),
+        "from_atomi" => res.iter().map(|x| {
+            if let Ok(v) = i32::try_from(x.ligand.atomi) {v} else {
+                panic!("Atom index {} exceeds i32 limits", x.ligand.atomi);
+            }
+        }).collect::<Vec<i32>>(),
+        "to_chain" => res.iter().map(|x| x.receptor.chain.clone()).collect::<Vec<String>>(),
+        "to_resn" => res.iter().map(|x| x.receptor.resn.clone()).collect::<Vec<String>>(),
+        "to_resi" => res.iter().map(|x| {
+            if let Ok(v) = i32::try_from(x.receptor.resi) {v} else {
+                panic!("Residue index {} exceeds i32 limits", x.receptor.resi);
+            }
+        }).collect::<Vec<i32>>(),
+        "to_insertion" => res.iter().map(|x| x.receptor.insertion.clone()).collect::<Vec<String>>(),
+        "to_altloc" => res.iter().map(|x| x.receptor.altloc.clone()).collect::<Vec<String>>(),
+        "to_atomn" => res.iter().map(|x| x.receptor.atomn.clone()).collect::<Vec<String>>(),
+        "to_atomi" => res.iter().map(|x| {
+            if let Ok(v) = i32::try_from(x.receptor.atomi) {v} else {
+                panic!("Atom index {} exceeds i32 limits", x.receptor.atomi);
+            }
+        }).collect::<Vec<i32>>(),
     )
     .unwrap()
 }
 
-/// Convert sidechain statistics into a Polars DataFrame.
+/// Convert sidechain statistics into a Polars `DataFrame`.
 pub(crate) fn sc_results_to_df(
     res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>,
 ) -> DataFrame {
     df!(
-        "model" => res.keys().map(|k| k.0.model as u32).collect::<Vec<u32>>(),
+        "model" => res.keys().map(|k| {
+            if let Ok(v) = u32::try_from(k.0.model) {v} else {
+                panic!("Model number {} exceeds u32 limits", k.0.model);
+            }
+        }).collect::<Vec<u32>>(),
         "from_chain" => res.keys().map(|k| k.0.chain.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.keys().map(|k| k.0.resi as i32).collect::<Vec<i32>>(),
+        "from_resi" => res.keys().map(|k| {
+            if let Ok(v) = i32::try_from(k.0.resi) {v} else {
+                panic!("Residue index {} exceeds i32 limits", k.0.resi);
+            }
+        }).collect::<Vec<i32>>(),
         "from_insertion" => res.keys().map(|k| k.0.insertion.to_owned()).collect::<Vec<String>>(),
         "from_altloc" => res.keys().map(|k| k.0.altloc.to_owned()).collect::<Vec<String>>(),
         "to_chain" => res.keys().map(|k| k.1.chain.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.keys().map(|k| k.1.resi as i32).collect::<Vec<i32>>(),
+        "to_resi" => res.keys().map(|k| {
+            if let Ok(v) = i32::try_from(k.1.resi) {v} else {
+                panic!("Residue index {} exceeds i32 limits", k.1.resi);
+            }
+        }).collect::<Vec<i32>>(),
         "to_insertion" => res.keys().map(|k| k.1.insertion.to_owned()).collect::<Vec<String>>(),
         "to_altloc" => res.keys().map(|k| k.1.altloc.to_owned()).collect::<Vec<String>>(),
         "sc_centroid_dist" => res.values().map(|v| v.0 as f32).collect::<Vec<f32>>(),
