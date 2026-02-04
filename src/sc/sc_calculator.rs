@@ -1,8 +1,12 @@
 //! SC Calculator wrapping `SurfaceGenerator` with trimming and SC score calculation.
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
+use std::collections::HashSet;
+
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
+use super::vector3::Vec3;
+use pdbtbx::*;
 use rayon::prelude::*;
 
 /// Large initial distance squared for neighbor search
@@ -15,12 +19,6 @@ pub struct ScCalculator {
     pub base: SurfaceGenerator,
 }
 
-impl Default for ScCalculator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ScCalculator {
     pub fn new() -> Self {
         Self {
@@ -28,11 +26,70 @@ impl ScCalculator {
         }
     }
 
-    /// Set the number of threads for parallel calculations.
-    /// 0 means automatic (use all available cores).
-    pub fn set_threads(&mut self, threads: usize) {
-        self.base.settings.threads = threads;
-        self.base.settings.enable_parallel = threads != 1;
+    pub fn add_atoms(
+        &mut self,
+        pdb: &PDB,
+        group1_chains: &HashSet<String>,
+        group2_chains: &HashSet<String>,
+    ) -> Result<(), SurfaceCalculatorError> {
+        self.base.init();
+        let atoms: Vec<ScAtom> = pdb
+            .atoms_with_hierarchy()
+            .filter_map(|hier| {
+                let chain_id = hier.chain().id().to_string();
+
+                // Determine which molecule (0 or 1) based on chain group
+                let molecule = if group1_chains.contains(&chain_id) {
+                    0
+                } else if group2_chains.contains(&chain_id) {
+                    1
+                } else {
+                    return None; // Skip atoms not in either group
+                };
+
+                let atom = hier.atom();
+                let residue = hier.residue();
+                let pos = atom.pos();
+
+                let atom_radius = match self
+                    .base
+                    .get_atom_radius(residue.name().unwrap(), atom.name())
+                {
+                    Ok(r) => r,
+                    // Fallback to pdbtbx element VdW radius
+                    Err(_e) => {
+                        match atom.element().unwrap().atomic_radius().van_der_waals {
+                            Some(r) => r,
+                            None => return None, // Skip if no radius info
+                        }
+                    }
+                };
+
+                Some(ScAtom {
+                    atomi: atom.serial_number(), // TODO: compat check
+                    molecule,
+                    radius: atom_radius,
+                    density: self.base.settings.dot_density,
+                    attention: Attention::Buried,
+                    accessible: false,
+                    atomn: atom.name().to_string(),
+                    resn: residue.name().unwrap_or("UNK").to_string(),
+                    coor: Vec3::new(pos.0, pos.1, pos.2),
+                    neighbor_indices: Vec::new(),
+                    buried_by_indices: Vec::new(),
+                })
+            })
+            .collect();
+
+        // Add atoms to calculator
+        self.base.run.results.n_atoms = atoms.len();
+        for mol in 0..1 {
+            self.base.run.results.surfaces[mol].n_atoms =
+                atoms.par_iter().filter(|atom| atom.molecule == mol).count();
+        }
+        self.base.run.atoms.clear();
+        self.base.run.atoms = atoms;
+        Ok(())
     }
 
     pub fn calc(&mut self) -> Result<Results, SurfaceCalculatorError> {
@@ -42,21 +99,19 @@ impl ScCalculator {
         if self.base.run.atoms.is_empty() {
             return Err(SurfaceCalculatorError::NoAtoms);
         }
-        if self.base.run.results.surfaces[0].n_atoms == 0 {
-            return Err(SurfaceCalculatorError::Io(std::io::Error::other(
-                "No atoms for molecule 1",
-            )));
-        }
-        if self.base.run.results.surfaces[1].n_atoms == 0 {
-            return Err(SurfaceCalculatorError::Io(std::io::Error::other(
-                "No atoms for molecule 2",
-            )));
+        for i in 0..1 {
+            if self.base.run.results.surfaces[i].n_atoms == 0 {
+                return Err(SurfaceCalculatorError::Io(std::io::Error::other(format!(
+                    "No atoms for chain group {}",
+                    i + 1
+                ))));
+            }
         }
 
         self.base.assign_attention_numbers();
         self.base.generate_molecular_surfaces()?;
 
-        if self.base.run.dots[0].is_empty() || self.base.run.dots[1].is_empty() {
+        if self.base.run.dots.iter().any(|x| x.is_empty()) {
             return Err(SurfaceCalculatorError::Io(std::io::Error::other(
                 "No molecular dots generated",
             )));
@@ -115,29 +170,12 @@ impl ScCalculator {
     }
 
     fn trim_peripheral_band(&mut self, i: usize) -> f64 {
-        let (indices, area) = if self.base.settings.enable_parallel {
-            let sdots = &self.base.run.dots[i];
-            self.base.run_parallel(|| {
-                let indices: Vec<usize> = (0..sdots.len())
-                    .into_par_iter()
-                    .filter(|&idx| {
-                        sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots)
-                    })
-                    .collect();
-                let area: f64 = indices.par_iter().map(|&idx| sdots[idx].area).sum();
-                (indices, area)
-            })
-        } else {
-            let sdots = &self.base.run.dots[i];
-            let indices: Vec<usize> = sdots
-                .iter()
-                .enumerate()
-                .filter(|(idx, dot)| dot.buried && self.trim_peripheral_band_check_dot(*idx, sdots))
-                .map(|(idx, _)| idx)
-                .collect();
-            let area: f64 = indices.iter().map(|&idx| sdots[idx].area).sum();
-            (indices, area)
-        };
+        let sdots = &self.base.run.dots[i];
+        let indices: Vec<usize> = (0..sdots.len())
+            .into_par_iter()
+            .filter(|&idx| sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots))
+            .collect();
+        let area: f64 = indices.par_iter().map(|&idx| sdots[idx].area).sum();
 
         self.base.run.trimmed_dots[i].clear();
         self.base.run.trimmed_dots[i] = indices;
@@ -159,53 +197,17 @@ impl ScCalculator {
             return;
         }
 
-        let (distances, scores, distmin_sum, score_sum) = if self.base.settings.enable_parallel {
+        let (distances, scores, distmin_sum, score_sum) = {
             let gaussian_w = self.base.settings.gaussian_w;
             let run_ref = &self.base.run;
-            self.base.run_parallel(|| {
-                let pairs: Vec<(f64, f64)> = my_dots
-                    .par_iter()
-                    .filter_map(|&pd| {
-                        let dot1 = &run_ref.dots[my][pd];
-                        let (distmin2, neighbor) = their_dots.iter().fold(
-                            (MAX_DISTANCE_SQUARED, None),
-                            |(min_d2, min_n), &pd2| {
-                                let dot2 = &run_ref.dots[their][pd2];
-                                if !dot2.buried {
-                                    return (min_d2, min_n);
-                                }
-                                let d2 = dot2.coor.distance_squared(dot1.coor);
-                                if d2 <= min_d2 {
-                                    (d2, Some(dot2))
-                                } else {
-                                    (min_d2, min_n)
-                                }
-                            },
-                        );
-                        neighbor.map(|n| {
-                            let distmin = distmin2.sqrt();
-                            let mut r = dot1.outnml.dot(n.outnml);
-                            r *= (-(distmin * distmin) * gaussian_w).exp();
-                            r = r.clamp(DOT_PRODUCT_CLAMP_MIN, DOT_PRODUCT_CLAMP_MAX);
-                            (distmin, -r)
-                        })
-                    })
-                    .collect();
-                let (distances, scores): (Vec<f64>, Vec<f64>) = pairs.into_iter().unzip();
-                let distmin_sum: f64 = distances.par_iter().sum();
-                let score_sum: f64 = scores.par_iter().map(|v| -v).sum();
-                (distances, scores, distmin_sum, score_sum)
-            })
-        } else {
-            let gaussian_w = self.base.settings.gaussian_w;
             let pairs: Vec<(f64, f64)> = my_dots
-                .iter()
+                .par_iter()
                 .filter_map(|&pd| {
-                    let dot1 = &self.base.run.dots[my][pd];
+                    let dot1 = &run_ref.dots[my][pd];
                     let (distmin2, neighbor) = their_dots.iter().fold(
                         (MAX_DISTANCE_SQUARED, None),
                         |(min_d2, min_n), &pd2| {
-                            let dot2 = &self.base.run.dots[their][pd2];
+                            let dot2 = &run_ref.dots[their][pd2];
                             if !dot2.buried {
                                 return (min_d2, min_n);
                             }
@@ -227,8 +229,8 @@ impl ScCalculator {
                 })
                 .collect();
             let (distances, scores): (Vec<f64>, Vec<f64>) = pairs.into_iter().unzip();
-            let distmin_sum: f64 = distances.iter().sum();
-            let score_sum: f64 = scores.iter().map(|v| -v).sum();
+            let distmin_sum: f64 = distances.par_iter().sum();
+            let score_sum: f64 = scores.par_iter().map(|v| -v).sum();
             (distances, scores, distmin_sum, score_sum)
         };
 
@@ -262,9 +264,5 @@ impl ScCalculator {
         self.base.run.results.surfaces[my].d_median = d_median_val;
         self.base.run.results.surfaces[my].s_mean = -(score_sum / s_len);
         self.base.run.results.surfaces[my].s_median = s_median_val;
-    }
-
-    pub fn add_atom(&mut self, atom: Atom) -> Result<(), SurfaceCalculatorError> {
-        self.base.add_atom(atom)
     }
 }

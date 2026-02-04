@@ -14,13 +14,9 @@ pub mod vector3;
 
 use crate::sasa::{filter_pdb_by_model, prepare_pdb_for_sasa};
 use crate::utils::parse_groups;
-use pdbtbx::{
-    ContainsAtomConformer, ContainsAtomConformerResidue, ContainsAtomConformerResidueChain, PDB,
-};
+use pdbtbx::PDB;
 use sc_calculator::ScCalculator;
 use std::collections::HashSet;
-use types::Atom;
-use vector3::Vec3;
 
 pub use surface_generator::SurfaceCalculatorError;
 
@@ -37,7 +33,6 @@ pub use surface_generator::SurfaceCalculatorError;
 /// * `pdb` - Reference to a PDB structure
 /// * `groups` - Chain groups specification (e.g., "H,L/A" or "A/B")
 /// * `model_num` - Model number to analyze (0 for first model)
-/// * `threads` - Number of threads for parallel calculations (0 for auto)
 ///
 /// # Returns
 ///
@@ -50,15 +45,10 @@ pub use surface_generator::SurfaceCalculatorError;
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let (pdb, _errors) = load_model(&input_file);
-/// let sc_score = get_sc(&pdb, "H,L/A", 0, 0).unwrap();
+/// let sc_score = get_sc(&pdb, "H,L/A", 0).unwrap();
 /// println!("Shape complementarity: {:.3}", sc_score);
 /// ```
-pub fn get_sc(
-    pdb: &PDB,
-    groups: &str,
-    model_num: usize,
-    threads: usize,
-) -> Result<f64, SurfaceCalculatorError> {
+pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> Result<f64, SurfaceCalculatorError> {
     // Get all chains in the PDB
     let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
 
@@ -81,52 +71,83 @@ pub fn get_sc(
 
     // Initialize the calculator with thread settings
     let mut calc = ScCalculator::new();
-    calc.set_threads(threads);
 
-    // Load atoms from PDB into the calculator using filter_map/collect pattern
-    // Each entry is (molecule_id, Atom) where molecule_id is 0 for group1, 1 for group2
-    let atom_assignments: Vec<Atom> = pdb_filtered
-        .atoms_with_hierarchy()
-        .filter_map(|hier| {
-            let chain_id = hier.chain().id().to_string();
-
-            // Determine which molecule (0 or 1) based on chain group
-            let molecule = if group1_chains.contains(&chain_id) {
-                0
-            } else if group2_chains.contains(&chain_id) {
-                1
-            } else {
-                return None; // Skip atoms not in either group
-            };
-
-            let atom = hier.atom();
-            let residue = hier.residue();
-            let pos = atom.pos();
-
-            Some(Atom {
-                natom: 0, // Will be assigned by add_atom
-                molecule,
-                radius: 0.0, // Will be assigned from radii table
-                density: 0.0,
-                attention: types::Attention::Buried,
-                accessible: false,
-                atomn: atom.name().to_string(),
-                resn: residue.name().unwrap_or("UNK").to_string(),
-                coor: Vec3::new(pos.0, pos.1, pos.2),
-                neighbor_indices: Vec::new(),
-                buried_by_indices: Vec::new(),
-                elem_radius: atom.element().unwrap().atomic_radius().van_der_waals,
-            })
-        })
-        .collect();
-
-    // Add atoms to calculator
-    for atom in atom_assignments {
-        calc.add_atom(atom)?;
-    }
+    // Load atoms from PDB into the calculator
+    // Each contains a `molecule_id` that is 0 for group1, 1 for group2
+    calc.add_atoms(&pdb_filtered, &group1_chains, &group2_chains)?;
 
     // Calculate SC
     let results = calc.calc()?;
-
     Ok(results.sc)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::{load_model, run_with_threads};
+
+    fn load_multi_chain() -> PDB {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{}/{}", root, "test-data/6bft.pdb");
+        let (pdb, _) = load_model(&path);
+        pdb
+    }
+
+    #[test]
+    fn test_h_vs_l() {
+        let pdb = load_multi_chain();
+        let sc_value = match run_with_threads(4, || get_sc(&pdb, "H/L", 0)) {
+            Ok(value) => value,
+            Err(e) => panic!("Error calculating SC: {:?}", e),
+        };
+
+        // Check that the result matches our expections
+        let expected_sc = 0.714;
+        assert!(
+            (sc_value - expected_sc).abs() < 0.05,
+            "Expected SC around {expected_sc}, got {sc_value}",
+        );
+    }
+
+    #[test]
+    fn test_h_vs_c() {
+        let pdb = load_multi_chain();
+        let sc_value = match run_with_threads(4, || get_sc(&pdb, "H/C", 0)) {
+            Ok(value) => value,
+            Err(e) => panic!("Error calculating SC: {:?}", e),
+        };
+
+        // Check that the result matches our expections
+        let expected_sc = 0.785;
+        assert!(
+            (sc_value - expected_sc).abs() < 0.05,
+            "Expected SC around {expected_sc}, got {sc_value}",
+        );
+    }
+
+    #[test]
+    fn test_hl_vs_cg() {
+        let pdb = load_multi_chain();
+        let sc_value = match run_with_threads(4, || get_sc(&pdb, "H,L/C,G", 0)) {
+            Ok(value) => value,
+            Err(e) => panic!("Error calculating SC: {:?}", e),
+        };
+
+        // Check that the result matches our expections
+        let expected_sc = 0.745;
+        assert!(
+            (sc_value - expected_sc).abs() < 0.05,
+            "Expected SC around {expected_sc}, got {sc_value}",
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "No molecular dots generated")]
+    fn test_chains_without_interface() {
+        let pdb = load_multi_chain();
+        let _ = match run_with_threads(1, || get_sc(&pdb, "H/B", 0)) {
+            Ok(value) => value,
+            Err(e) => panic!("Error calculating SC: {:?}", e),
+        };
+    }
 }

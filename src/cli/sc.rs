@@ -1,7 +1,7 @@
-use arpeggia::load_model;
+use arpeggia::{load_model, run_with_threads};
 use clap::Parser;
 use std::path::{Path, PathBuf};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
@@ -20,9 +20,9 @@ pub(crate) struct Args {
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Number of threads to use for parallel calculations (default: 0 for auto)
-    #[arg(short = 't', long = "threads", default_value_t = 0)]
-    threads: usize,
+    /// Number of threads to use for parallel processing
+    #[arg(short = 'j', long = "num-threads", default_value_t = 0)]
+    num_threads: usize,
 }
 
 pub(crate) fn run(args: &Args) {
@@ -57,7 +57,10 @@ pub(crate) fn run(args: &Args) {
     }
 
     // Calculate SC
-    let sc = arpeggia::get_sc(&pdb, &args.groups, args.model_num, args.threads);
+    let sc = run_with_threads(args.num_threads as isize, || {
+        debug!("Using {} thread(s)", rayon::current_num_threads());
+        arpeggia::get_sc(&pdb, &args.groups, args.model_num)
+    });
 
     match sc {
         Ok(score) => {

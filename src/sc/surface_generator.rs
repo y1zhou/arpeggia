@@ -92,75 +92,20 @@ impl SurfaceGenerator {
         }
     }
 
-    pub fn add_atom(&mut self, mut atom: Atom) -> Result<(), SurfaceCalculatorError> {
-        if self.radii.is_empty() {
-            self.init();
-        }
-        if atom.radius <= 0.0 {
-            self.assign_atom_radius(&mut atom)?;
-        }
-        if atom.radius > 0.0 {
-            let mol = atom.molecule;
-            atom.density = self.settings.dot_density;
-            atom.natom = (self.run.results.n_atoms + 1) as i32;
-            atom.accessible = false;
-            self.run.atoms.push(atom);
-            self.run.results.surfaces[mol].n_atoms += 1;
-            self.run.results.n_atoms += 1;
-            Ok(())
-        } else {
-            Err(SurfaceCalculatorError::Io(std::io::Error::other(
-                "Failed to assign atom radius",
-            )))
-        }
-    }
-
-    fn assign_atom_radius(&self, atom: &mut Atom) -> Result<(), SurfaceCalculatorError> {
+    pub fn get_atom_radius(&self, resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
         // First try the embedded radii table
         for radius in &self.radii {
-            if !wildcard_match(&atom.resn, &radius.residue) {
+            if !wildcard_match(resn, &radius.residue) {
                 continue;
             }
-            if !wildcard_match(&atom.atomn, &radius.atom) {
+            if !wildcard_match(atomn, &radius.atom) {
                 continue;
             }
-            atom.radius = radius.radius;
-            return Ok(());
-        }
-        // Fallback to pdbtbx element VdW radius
-        if let Some(elem_radius) = atom.elem_radius {
-            atom.radius = elem_radius;
-            return Ok(());
+            return Ok(radius.radius);
         }
         Err(SurfaceCalculatorError::Io(std::io::Error::other(format!(
-            "No radius for {}:{}",
-            atom.resn, atom.atomn
+            "No radius for {resn}:{atomn}"
         ))))
-    }
-
-    /// Execute a parallel operation with the configured thread limit.
-    /// Uses rayon's thread pool with the specified number of threads.
-    pub fn run_parallel<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce() -> T + Send,
-        T: Send,
-    {
-        if self.settings.threads == 0 || self.settings.threads >= rayon::current_num_threads() {
-            // Use global pool directly when auto or enough threads
-            f()
-        } else {
-            // Create a scoped pool with limited threads
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(self.settings.threads)
-                .build()
-                .unwrap_or_else(|_| {
-                    // Fallback to global pool if creation fails
-                    rayon::ThreadPoolBuilder::new()
-                        .build()
-                        .expect("Failed to create thread pool")
-                });
-            pool.install(f)
-        }
     }
 
     pub fn assign_attention_numbers(&mut self) {
