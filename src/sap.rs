@@ -112,7 +112,6 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)
-/// * `num_threads` - Number of threads for parallel processing
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
@@ -129,11 +128,11 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
 /// let (pdb, _errors) = load_model(&input_file);
 ///
 /// // Calculate SAP for all chains
-/// let sap_df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+/// let sap_df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, "");
 /// println!("Calculated SAP score for {} atoms", sap_df.height());
 ///
 /// // Calculate SAP for only chains H and L (antibody heavy and light chain)
-/// let sap_hl = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "H,L");
+/// let sap_hl = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, "H,L");
 /// ```
 pub fn get_per_atom_sap_score(
     pdb: &PDB,
@@ -141,20 +140,11 @@ pub fn get_per_atom_sap_score(
     n_points: usize,
     model_num: usize,
     sap_radius: f32,
-    num_threads: isize,
     chains: &str,
 ) -> DataFrame {
     // Use get_atom_sasa from sasa.rs for SASA calculation
     // Note: This already handles hydrogen stripping and solvent/ion removal
-    let atom_sasa_df = get_atom_sasa(
-        pdb,
-        probe_radius,
-        n_points,
-        model_num,
-        num_threads,
-        true,
-        chains,
-    );
+    let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, true, chains);
 
     // Create a lookup map from atom serial number to SASA value
     let atomi_col = atom_sasa_df
@@ -280,7 +270,6 @@ pub fn get_per_atom_sap_score(
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)
-/// * `num_threads` - Number of threads for parallel processing
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
@@ -297,11 +286,11 @@ pub fn get_per_atom_sap_score(
 /// let (pdb, _errors) = load_model(&input_file);
 ///
 /// // Calculate SAP for all chains
-/// let sap_df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+/// let sap_df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, "");
 /// println!("Calculated SAP score for {} residues", sap_df.height());
 ///
 /// // Calculate SAP for only chain A
-/// let sap_a = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "A");
+/// let sap_a = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, "A");
 /// ```
 pub fn get_per_residue_sap_score(
     pdb: &PDB,
@@ -309,19 +298,11 @@ pub fn get_per_residue_sap_score(
     n_points: usize,
     model_num: usize,
     sap_radius: f32,
-    num_threads: isize,
     chains: &str,
 ) -> DataFrame {
     // Get per-atom SAP scores
-    let atom_sap = get_per_atom_sap_score(
-        pdb,
-        probe_radius,
-        n_points,
-        model_num,
-        sap_radius,
-        num_threads,
-        chains,
-    );
+    let atom_sap =
+        get_per_atom_sap_score(pdb, probe_radius, n_points, model_num, sap_radius, chains);
 
     // Aggregate by residue
     let residue_sap = atom_sap
@@ -361,7 +342,7 @@ pub fn get_per_residue_sap_score(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::load_model;
+    use crate::utils::{load_model, run_with_threads};
 
     fn load_ubiquitin() -> PDB {
         let root = env!("CARGO_MANIFEST_DIR");
@@ -423,7 +404,7 @@ mod tests {
     #[test]
     fn test_per_atom_sap_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Check that we get results
         assert!(!df.is_empty(), "SAP DataFrame should not be empty");
@@ -446,7 +427,7 @@ mod tests {
     #[test]
     fn test_per_atom_sap_values_reasonable() {
         let pdb = load_ubiquitin();
-        let df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Get SAP scores
         let sap_values: Vec<f32> = df
@@ -470,7 +451,7 @@ mod tests {
     #[test]
     fn test_per_residue_sap_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Check that we get results
         assert!(!df.is_empty(), "Residue SAP DataFrame should not be empty");
@@ -491,7 +472,7 @@ mod tests {
     #[test]
     fn test_sap_multi_chain() {
         let pdb = load_multi_chain();
-        let df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Should have results
         assert!(!df.is_empty(), "Multi-chain SAP should not be empty");

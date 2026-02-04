@@ -1,4 +1,4 @@
-use arpeggia::{DataFrameFileType, load_model, write_df_to_file};
+use arpeggia::{DataFrameFileType, load_model, run_with_threads, write_df_to_file};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -54,13 +54,6 @@ pub(crate) struct Args {
 pub(crate) fn run(args: &Args) {
     trace!("{args:?}");
 
-    // Create Rayon thread pool
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(args.num_threads)
-        .build_global()
-        .unwrap();
-    debug!("Using {} thread(s)", rayon::current_num_threads());
-
     // Make sure `input` exists
     let input_path = match Path::new(&args.input).canonicalize() {
         Ok(path) => path,
@@ -108,8 +101,10 @@ pub(crate) fn run(args: &Args) {
     }
 
     // Use the library function
-    let mut df_contacts =
-        arpeggia::get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff);
+    let mut df_contacts = run_with_threads(args.num_threads as isize, || {
+        debug!("Using {} thread(s)", rayon::current_num_threads());
+        arpeggia::get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff)
+    });
 
     // Prepare output directory
     let _ = std::fs::create_dir_all(output_path.clone());

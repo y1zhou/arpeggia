@@ -3,29 +3,29 @@ use pdbtbx::*;
 use polars::prelude::*;
 use std::{collections::HashSet, path::Path};
 
-/// Convert thread count from usize to isize for rust-sasa.
-///
-/// The rust-sasa library uses isize for thread count where:
-/// - -1 means use all available cores
-/// - 1 means single-threaded
-/// - n > 1 means use n threads
-///
-/// This function converts from the user-facing usize convention where:
-/// - 0 means use all available cores
-/// - n > 0 means use n threads
-///
-/// # Arguments
-///
-/// * `num_threads` - Number of threads (0 for all cores)
-///
-/// # Returns
-///
-/// Thread count as isize suitable for rust-sasa
-pub fn get_num_threads(num_threads: usize) -> isize {
-    if num_threads == 0 {
-        -1
+/// Execute a parallel operation with the configured thread limit.
+/// Uses rayon's thread pool with the specified number of threads.
+pub fn run_with_threads<F, T>(num_threads: isize, f: F) -> T
+where
+    F: FnOnce() -> T + Send,
+    T: Send,
+{
+    let n_threads = num_threads.max(0) as usize;
+    if n_threads == 0 || n_threads >= rayon::current_num_threads() {
+        // Use global pool directly when auto or enough threads
+        f()
     } else {
-        num_threads as isize
+        // Create a scoped pool with limited threads
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(n_threads)
+            .build()
+            .unwrap_or_else(|_| {
+                // Fallback to global pool if creation fails
+                rayon::ThreadPoolBuilder::new()
+                    .build()
+                    .expect("Failed to create thread pool")
+            });
+        pool.install(f)
     }
 }
 

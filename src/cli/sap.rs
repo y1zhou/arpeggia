@@ -1,4 +1,4 @@
-use arpeggia::{DataFrameFileType, get_num_threads, load_model, write_df_to_file};
+use arpeggia::{DataFrameFileType, load_model, run_with_threads, write_df_to_file};
 use clap::{Parser, ValueEnum};
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
@@ -73,13 +73,6 @@ pub(crate) struct Args {
 pub(crate) fn run(args: &Args) {
     trace!("{args:?}");
 
-    // Create Rayon thread pool
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(args.num_threads)
-        .build_global()
-        .unwrap();
-    debug!("Using {} thread(s)", rayon::current_num_threads());
-
     // Make sure `input` exists
     let input_path = Path::new(&args.input).canonicalize().unwrap();
     let input_file: String = input_path.to_str().unwrap().parse().unwrap();
@@ -96,30 +89,28 @@ pub(crate) fn run(args: &Args) {
         }
     }
 
-    // Convert thread count to isize for rust-sasa
-    let num_threads = get_num_threads(args.num_threads);
-
     // Calculate SAP score based on the specified level
-    let mut df_sap = match args.level {
-        SapLevel::Atom => arpeggia::get_per_atom_sap_score(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
-            args.sap_radius,
-            num_threads,
-            &args.chains,
-        ),
-        SapLevel::Residue => arpeggia::get_per_residue_sap_score(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
-            args.sap_radius,
-            num_threads,
-            &args.chains,
-        ),
-    };
+    let mut df_sap = run_with_threads(args.num_threads as isize, || {
+        debug!("Using {} thread(s)", rayon::current_num_threads());
+        match args.level {
+            SapLevel::Atom => arpeggia::get_per_atom_sap_score(
+                &pdb,
+                args.probe_radius,
+                args.n_points,
+                args.model_num,
+                args.sap_radius,
+                &args.chains,
+            ),
+            SapLevel::Residue => arpeggia::get_per_residue_sap_score(
+                &pdb,
+                args.probe_radius,
+                args.n_points,
+                args.model_num,
+                args.sap_radius,
+                &args.chains,
+            ),
+        }
+    });
 
     if df_sap.is_empty() {
         error!(
