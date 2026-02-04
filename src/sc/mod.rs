@@ -85,7 +85,7 @@ pub fn get_sc(
 
     // Load atoms from PDB into the calculator using filter_map/collect pattern
     // Each entry is (molecule_id, Atom) where molecule_id is 0 for group1, 1 for group2
-    let atom_assignments: Vec<(i32, Atom)> = pdb_filtered
+    let atom_assignments: Vec<Atom> = pdb_filtered
         .atoms_with_hierarchy()
         .filter_map(|hier| {
             let chain_id = hier.chain().id().to_string();
@@ -103,29 +103,26 @@ pub fn get_sc(
             let residue = hier.residue();
             let pos = atom.pos();
 
-            Some((
+            Some(Atom {
+                natom: 0, // Will be assigned by add_atom
                 molecule,
-                Atom {
-                    natom: 0, // Will be assigned by add_atom
-                    molecule: 0,
-                    radius: 0.0, // Will be assigned from radii table
-                    density: 0.0,
-                    attention: types::Attention::Buried,
-                    accessible: false,
-                    atom: atom.name().to_string(),
-                    residue: residue.name().unwrap_or("UNK").to_string(),
-                    coor: Vec3::new(pos.0, pos.1, pos.2),
-                    neighbor_indices: Vec::new(),
-                    buried_by_indices: Vec::new(),
-                    elem_radius: atom.element().unwrap().atomic_radius().van_der_waals,
-                },
-            ))
+                radius: 0.0, // Will be assigned from radii table
+                density: 0.0,
+                attention: types::Attention::Buried,
+                accessible: false,
+                atom: atom.name().to_string(),
+                residue: residue.name().unwrap_or("UNK").to_string(),
+                coor: Vec3::new(pos.0, pos.1, pos.2),
+                neighbor_indices: Vec::new(),
+                buried_by_indices: Vec::new(),
+                elem_radius: atom.element().unwrap().atomic_radius().van_der_waals,
+            })
         })
         .collect();
 
     // Add atoms to calculator
-    for (molecule, atom) in atom_assignments {
-        calc.add_atom(molecule, atom)?;
+    for atom in atom_assignments {
+        calc.add_atom(atom)?;
     }
 
     // Calculate SC

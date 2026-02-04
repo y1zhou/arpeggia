@@ -93,11 +93,7 @@ impl SurfaceGenerator {
         Ok(())
     }
 
-    pub fn add_atom(
-        &mut self,
-        molecule: i32,
-        mut atom: Atom,
-    ) -> Result<(), SurfaceCalculatorError> {
+    pub fn add_atom(&mut self, mut atom: Atom) -> Result<(), SurfaceCalculatorError> {
         if self.radii.is_empty() {
             self.init()?;
         }
@@ -105,9 +101,8 @@ impl SurfaceGenerator {
             self.assign_atom_radius(&mut atom)?;
         }
         if atom.radius > 0.0 {
-            let mol = if molecule == 1 { 1 } else { 0 };
+            let mol = atom.molecule;
             atom.density = self.settings.dot_density;
-            atom.molecule = mol;
             atom.natom = (self.run.results.n_atoms + 1) as i32;
             atom.accessible = false;
             self.run.atoms.push(atom);

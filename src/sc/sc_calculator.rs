@@ -260,7 +260,7 @@ impl ScCalculator {
         self.base.run.results.surfaces[my].s_median = s_median_val;
     }
 
-    pub fn add_atom(&mut self, molecule: i32, atom: Atom) -> Result<(), SurfaceCalculatorError> {
-        self.base.add_atom(molecule, atom)
+    pub fn add_atom(&mut self, atom: Atom) -> Result<(), SurfaceCalculatorError> {
+        self.base.add_atom(atom)
     }
 }
