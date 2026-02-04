@@ -1,4 +1,4 @@
-use crate::residues::ResidueExt;
+use crate::contacts::residues::ResidueExt;
 use pdbtbx::*;
 use polars::prelude::*;
 use std::{collections::HashSet, path::Path};

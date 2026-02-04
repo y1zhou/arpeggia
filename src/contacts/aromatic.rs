@@ -1,6 +1,6 @@
 use super::ionic::is_pos_ionizable;
+use super::residues::Plane;
 use super::structs::Interaction;
-use crate::residues::Plane;
 
 use nalgebra as na;
 use pdbtbx::*;
@@ -66,7 +66,8 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{residues::ResidueExt, utils::load_model};
+    use crate::contacts::residues::ResidueExt;
+    use crate::utils::load_model;
 
     #[test]
     fn test_good_cation_pi() {

@@ -1,4 +1,4 @@
-use crate::residues::ResidueExt;
+use super::residues::ResidueExt;
 use pdbtbx::*;
 use rayon::prelude::*;
 

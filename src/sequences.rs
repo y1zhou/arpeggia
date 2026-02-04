@@ -3,7 +3,7 @@
 //! This module provides functions for extracting amino acid sequences
 //! from PDB structures.
 
-use crate::chains::ChainExt;
+use crate::contacts::chains::ChainExt;
 use pdbtbx::*;
 use std::collections::HashMap;
 

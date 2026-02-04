@@ -4,7 +4,7 @@
 //! of granularity (atom, residue, chain) and related metrics like dSASA
 //! (buried surface area) and relative SASA.
 
-use crate::interactions::InteractingEntity;
+use crate::contacts::InteractingEntity;
 use crate::utils::{parse_groups, sum_float_col};
 use pdbtbx::*;
 use polars::prelude::*;

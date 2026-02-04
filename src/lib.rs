@@ -10,10 +10,7 @@
 //! The library returns results as Polars `DataFrames`, which can be easily converted
 //! to various output formats or used directly in Python via `PyO3` bindings.
 
-mod chains;
 mod contacts;
-mod interactions;
-mod residues;
 mod sap;
 mod sasa;
 mod sc;
@@ -21,8 +18,8 @@ mod sequences;
 mod utils;
 
 // Re-export key public types
-pub use interactions::{InteractingEntity, Interaction, Interactions, ResultEntry};
-pub use residues::{Plane, ResidueExt, ResidueId};
+pub use contacts::residues::{Plane, ResidueExt, ResidueId};
+pub use contacts::{InteractingEntity, Interaction, Interactions, ResultEntry};
 pub use utils::{
     DataFrameFileType, load_model, parse_groups, run_with_threads, sum_float_col, write_df_to_file,
 };

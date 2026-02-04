@@ -2,11 +2,9 @@ use super::{
     InteractingEntity, Interaction, ResultEntry, find_cation_pi, find_hydrogen_bond,
     find_hydrophobic_contact, find_ionic_bond, find_ionic_repulsion, find_pi_pi, find_vdw_contact,
     find_weak_hydrogen_bond,
-};
-use crate::{
     residues::{Plane, ResidueExt, ResidueId},
-    utils::parse_groups,
 };
+use crate::utils::parse_groups;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
