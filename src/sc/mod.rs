@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn test_h_vs_l() {
         let pdb = load_multi_chain();
-        let sc_value = match run_with_threads(4, || get_sc(&pdb, "H/L", 0)) {
+        let sc_value = match run_with_threads(0, || get_sc(&pdb, "H/L", 0)) {
             Ok(value) => value,
             Err(e) => panic!("Error calculating SC: {:?}", e),
         };

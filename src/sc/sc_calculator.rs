@@ -33,6 +33,11 @@ impl ScCalculator {
         group2_chains: &HashSet<String>,
     ) -> Result<(), SurfaceCalculatorError> {
         self.base.init();
+
+        let tree = pdb.create_atom_rtree();
+        let max_radius_sq =
+            4.0 * self.base.settings.separation_cutoff * self.base.settings.separation_cutoff;
+
         let atoms: Vec<ScAtom> = pdb
             .atoms_with_hierarchy()
             .filter_map(|hier| {
@@ -64,9 +69,13 @@ impl ScCalculator {
                         }
                     }
                 };
+                let neighbors: Vec<usize> = tree
+                    .locate_within_distance(pos, max_radius_sq)
+                    .map(|a| a.serial_number())
+                    .collect();
 
                 Some(ScAtom {
-                    atomi: atom.serial_number(), // TODO: compat check
+                    atomi: atom.serial_number(),
                     molecule,
                     radius: atom_radius,
                     density: self.base.settings.dot_density,
@@ -75,6 +84,7 @@ impl ScCalculator {
                     atomn: atom.name().to_string(),
                     resn: residue.name().unwrap_or("UNK").to_string(),
                     coor: Vec3::new(pos.0, pos.1, pos.2),
+                    all_neighbors_atomi: neighbors,
                     neighbor_indices: Vec::new(),
                     buried_by_indices: Vec::new(),
                 })
@@ -169,6 +179,7 @@ impl ScCalculator {
         Ok(self.base.run.results.clone())
     }
 
+    // TODO: slow
     fn trim_peripheral_band(&mut self, i: usize) -> f64 {
         let sdots = &self.base.run.dots[i];
         let indices: Vec<usize> = (0..sdots.len())
@@ -190,6 +201,7 @@ impl ScCalculator {
         })
     }
 
+    // TODO: slow
     fn calc_neighbor_distance(&mut self, my: usize, their: usize) {
         let my_dots = &self.base.run.trimmed_dots[my];
         let their_dots = &self.base.run.trimmed_dots[their];

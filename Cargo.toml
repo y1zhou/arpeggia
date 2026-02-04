@@ -42,3 +42,8 @@ tracing-subscriber = "0.3.19"
 [features]
 default = []
 python = ["pyo3", "pyo3-polars"]
+
+# cargo build --profile profiling to use with samply
+[profile.profiling]
+inherits = "release"
+debug = true

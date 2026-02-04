@@ -117,6 +117,7 @@ impl SurfaceGenerator {
         let sep2 = self.settings.separation_cutoff * self.settings.separation_cutoff;
         let atoms_len = self.run.atoms.len();
         let snapshot: Vec<(usize, usize, f64)> = (0..atoms_len)
+            .into_par_iter()
             .map(|i| {
                 let a1 = &self.run.atoms[i];
                 let mut dist_min2 = f64::INFINITY;
@@ -182,20 +183,33 @@ impl SurfaceGenerator {
     }
 
     fn compute_neighbors_all_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
-        let len = self.run.atoms.len();
         let rp = self.settings.rp;
         let atoms: &Vec<ScAtom> = &self.run.atoms;
-        let results: NeighborResult = (0..len)
-            .into_par_iter()
-            .map(|i| {
-                let atom1 = &atoms[i];
+        let atomi_table = atoms
+            .iter()
+            .enumerate()
+            .map(|(i, a)| (a.atomi, i))
+            .collect::<std::collections::HashMap<usize, usize>>();
+        let results: NeighborResult = atoms
+            .par_iter()
+            .enumerate()
+            .map(|(i, atom1)| {
                 let mut neighbor_indices: Vec<usize> = Vec::new();
                 let mut buried_by_indices: Vec<usize> = Vec::new();
-                for (j, atom2) in atoms.iter().enumerate() {
-                    if j == i {
-                        continue;
-                    }
-                    if atom1.atomi == atom2.atomi {
+                // for (j, atom2) in atoms.iter().enumerate() {
+                if i == 1 {
+                    println!(
+                        "Atom {i} atomi{} checking neighbors {:?}",
+                        atom1.atomi, atom1.all_neighbors_atomi
+                    );
+                }
+                for (j, atom2_idx) in atom1.all_neighbors_atomi.iter().enumerate() {
+                    // if j == i {
+                    //     continue;
+                    // }
+                    // let atom2_idx = &atom2.atomi;
+                    let atom2 = &atoms[*atomi_table.get(atom2_idx).unwrap()];
+                    if &atom1.atomi == atom2_idx {
                         continue;
                     }
                     let d2 = atom1.distance_squared(atom2);
@@ -212,6 +226,14 @@ impl SurfaceGenerator {
                             )));
                         }
                         let bridge = atom1.radius + atom2.radius + 2.0 * rp;
+                        if i == 1 {
+                            println!(
+                                "atom2 atomi{}: d2={:.3}, bridge2={:.3}",
+                                atom2.atomi,
+                                d2,
+                                bridge * bridge
+                            );
+                        }
                         if d2 < bridge * bridge {
                             neighbor_indices.push(j);
                         }

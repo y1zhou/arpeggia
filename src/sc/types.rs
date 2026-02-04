@@ -31,6 +31,8 @@ pub struct ScAtom {
     pub atomn: String,
     pub resn: String,
     pub coor: Vec3,
+    /// Indices of all neighbors to limit search space
+    pub all_neighbors_atomi: Vec<usize>,
     /// Neighbor indices on same molecule
     pub neighbor_indices: Vec<usize>,
     /// Neighbor indices on opposite molecule that bury this atom
