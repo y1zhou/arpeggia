@@ -48,7 +48,7 @@ Example:
     >>> print(f"Shape complementarity: {sc:.3f}")
     >>>
     >>> # Extract sequences
-    >>> sequences = arpeggia.pdb2seq("structure.pdb")
+    >>> sequences = arpeggia.seq("structure.pdb")
     >>> for chain_id, seq in sequences.items():
     ...     print(f"Chain {chain_id}: {seq}")
 """
@@ -58,12 +58,12 @@ from importlib.metadata import version
 from arpeggia.arpeggia import (
     contacts,
     dsasa,
-    pdb2seq,
     relative_sasa,
     sap_score,
     sasa,
     sc,
+    seq,
 )
 
 __version__ = version("arpeggia")
-__all__ = ["contacts", "sasa", "relative_sasa", "sap_score", "dsasa", "sc", "pdb2seq"]
+__all__ = ["contacts", "sasa", "relative_sasa", "sap_score", "dsasa", "sc", "seq"]
