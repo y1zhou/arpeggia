@@ -19,8 +19,8 @@ pub enum Attention {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Atom {
-    pub natom: i32,
+pub struct ScAtom {
+    pub atomi: usize,
     pub molecule: usize,
     pub radius: f64,
     /// Per-atom sampling density (~15 dots/Å²)
@@ -35,12 +35,10 @@ pub struct Atom {
     pub neighbor_indices: Vec<usize>,
     /// Neighbor indices on opposite molecule that bury this atom
     pub buried_by_indices: Vec<usize>,
-    /// Reference to pdbtbx atom radius as a fallback
-    pub elem_radius: Option<f64>,
 }
 
-impl Atom {
-    pub fn distance_squared(&self, other: &Atom) -> f64 {
+impl ScAtom {
+    pub fn distance_squared(&self, other: &ScAtom) -> f64 {
         self.coor.distance_squared(other.coor)
     }
 }

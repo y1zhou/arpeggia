@@ -63,7 +63,7 @@ pub struct SurfaceGenerator {
 
 #[derive(Clone, Default)]
 pub(crate) struct RunState {
-    pub atoms: Vec<Atom>,
+    pub atoms: Vec<ScAtom>,
     pub probes: Vec<Probe>,
     pub dots: [Vec<Dot>; 2],
     pub trimmed_dots: [Vec<usize>; 2],
@@ -239,7 +239,7 @@ impl SurfaceGenerator {
     fn compute_neighbors_all_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
         let len = self.run.atoms.len();
         let rp = self.settings.rp;
-        let atoms: &Vec<Atom> = &self.run.atoms;
+        let atoms: &Vec<ScAtom> = &self.run.atoms;
         let results: NeighborResult = (0..len)
             .into_par_iter()
             .map(|i| {
@@ -250,7 +250,7 @@ impl SurfaceGenerator {
                     if j == i {
                         continue;
                     }
-                    if atom1.natom == atom2.natom {
+                    if atom1.atomi == atom2.atomi {
                         continue;
                     }
                     let d2 = atom1.distance_squared(atom2);
@@ -258,10 +258,10 @@ impl SurfaceGenerator {
                         if d2 <= 0.0001 {
                             return Err(SurfaceCalculatorError::Coincident(format!(
                                 "{}:{}:{} == {}:{}:{}",
-                                atom1.natom,
+                                atom1.atomi,
                                 atom1.resn,
                                 atom1.atomn,
-                                atom2.natom,
+                                atom2.atomi,
                                 atom2.resn,
                                 atom2.atomn
                             )));
@@ -307,7 +307,7 @@ impl SurfaceGenerator {
 
     fn generate_contact_surface_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
         let rp = self.settings.rp;
-        let atoms: &Vec<Atom> = &self.run.atoms;
+        let atoms: &Vec<ScAtom> = &self.run.atoms;
         let results: Vec<(usize, Vec<Dot>, usize)> = (0..atoms.len())
             .into_par_iter()
             .filter_map(|i| {
@@ -473,7 +473,7 @@ impl SurfaceGenerator {
         }
         for &j in &neighbor_indices {
             let atom2 = &self.run.atoms[j];
-            if atom2.natom <= self.run.atoms[atom_index].natom {
+            if atom2.atomi <= self.run.atoms[atom_index].atomi {
                 continue;
             }
             let expanded_radius_j = atom2.radius + self.settings.rp;
@@ -534,13 +534,13 @@ impl SurfaceGenerator {
         let expanded_radius_i = self.run.atoms[atom1_index].radius + self.settings.rp;
         let atom2 = &self.run.atoms[atom2_index];
         let expanded_radius_j = atom2.radius + self.settings.rp;
-        let atom2_natom = atom2.natom;
+        let atom2_natom = atom2.atomi;
         let atom2_coor = atom2.coor;
         let atom2_att = atom2.attention;
         let mut made_probe = false;
         for &k in &neighbor_indices {
             let atom3 = &self.run.atoms[k];
-            if atom3.natom <= atom2_natom {
+            if atom3.atomi <= atom2_natom {
                 continue;
             }
             let expanded_radius_k = atom3.radius + self.settings.rp;
@@ -655,12 +655,12 @@ impl SurfaceGenerator {
         if subs.is_empty() {
             return Ok(());
         }
-        let atom2_natom = self.run.atoms[atom2_index].natom;
+        let atom2_natom = self.run.atoms[atom2_index].atomi;
         for sub in subs {
             let mut tooclose = false;
             for &ni in &neighbors {
                 let neighbor = &self.run.atoms[ni];
-                if neighbor.natom == atom2_natom {
+                if neighbor.atomi == atom2_natom {
                     continue;
                 }
                 let expanded_neighbor_radius = neighbor.radius + self.settings.rp;
@@ -763,11 +763,11 @@ impl SurfaceGenerator {
         atom2_index: usize,
         neighbor_indices: &Vec<usize>,
     ) -> bool {
-        let atom1_natom = self.run.atoms[atom1_index].natom;
-        let atom2_natom = self.run.atoms[atom2_index].natom;
+        let atom1_natom = self.run.atoms[atom1_index].atomi;
+        let atom2_natom = self.run.atoms[atom2_index].atomi;
         for &ni in neighbor_indices {
             let neighbor = &self.run.atoms[ni];
-            if neighbor.natom == atom1_natom || neighbor.natom == atom2_natom {
+            if neighbor.atomi == atom1_natom || neighbor.atomi == atom2_natom {
                 continue;
             }
             if probe_center.distance_squared(neighbor.coor)
@@ -782,7 +782,7 @@ impl SurfaceGenerator {
     fn generate_concave_surface_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
         let rp = self.settings.rp;
         let rp2 = rp * rp;
-        let atoms: &Vec<Atom> = &self.run.atoms;
+        let atoms: &Vec<ScAtom> = &self.run.atoms;
         let probes: &Vec<Probe> = &self.run.probes;
         if probes.is_empty() {
             return Ok(());
