@@ -199,3 +199,13 @@ cargo test
 ## License
 
 MIT License - see LICENSE file for details.
+
+## Credit
+
+This project would not be possible without the following resources:
+
+- [Arpeggio](https://github.com/PDBeurope/arpeggio/): Original Python library for protein-protein interaction analysis.
+- [pdbtbx](https://github.com/douweschulte/pdbtbx/): The structural file parser doing all the heavy lifting.
+- [RustSASA](https://github.com/maxall41/RustSASA): Library for calculating solvent accessible surface area.
+- [sc-rs](https://github.com/cytokineking/sc-rs/): Library for calculating the Shape Complementarity by Lawrence & Colman (1993).
+- [Rosetta](https://github.com/RosettaCommons/rosetta): Where the Spatial Aggregation Propensity (SAP) score calculations are inspired from.
