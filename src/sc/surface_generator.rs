@@ -69,7 +69,6 @@ pub(crate) struct RunState {
     pub dots: [Vec<Dot>; 2],
     pub trimmed_dots: [Vec<usize>; 2],
     pub results: Results,
-    pub radmax: f64,
 }
 
 impl Default for SurfaceGenerator {
@@ -118,66 +117,9 @@ impl SurfaceGenerator {
             .collect::<std::collections::HashMap<usize, usize>>()
     }
 
-    pub fn assign_attention_numbers(&mut self) {
-        self.run.results.surfaces[0].n_buried_atoms = 0;
-        self.run.results.surfaces[0].n_blocked_atoms = 0;
-        self.run.results.surfaces[1].n_buried_atoms = 0;
-        self.run.results.surfaces[1].n_blocked_atoms = 0;
-
-        let sep2 = self.settings.separation_cutoff * self.settings.separation_cutoff;
-        let atomi_table = self.atomi_to_index();
-        let atoms = &self.run.atoms;
-        let atom_attentions: Vec<Attention> = atoms
-            .par_iter()
-            .map(|a1| {
-                let dist_min2 = a1
-                    .all_neighbors_atomi
-                    .iter()
-                    .map(|a2_atomi| {
-                        let a2_idx = atomi_table.get(a2_atomi).unwrap();
-                        let a2 = &atoms[*a2_idx];
-                        if a1.molecule == a2.molecule {
-                            return f64::INFINITY;
-                        }
-                        a1.distance_squared(a2)
-                    })
-                    .reduce(f64::min)
-                    .unwrap_or(f64::INFINITY);
-                if dist_min2 < sep2 {
-                    Attention::Buried
-                } else {
-                    Attention::Far
-                }
-            })
-            .collect();
-        for (a, attention) in self.run.atoms.iter_mut().zip(atom_attentions) {
-            a.attention = attention;
-            match attention {
-                Attention::Buried => {
-                    self.run.results.surfaces[a.molecule].n_buried_atoms += 1;
-                }
-                Attention::Consider => {}
-                Attention::Far => {
-                    self.run.results.surfaces[a.molecule].n_blocked_atoms += 1;
-                }
-            }
-        }
-    }
-
     pub(crate) fn generate_molecular_surfaces(&mut self) -> Result<(), SurfaceCalculatorError> {
         if self.run.atoms.is_empty() {
             return Err(SurfaceCalculatorError::NoAtoms);
-        }
-        self.calc_dots_for_all_atoms()?;
-        Ok(())
-    }
-
-    fn calc_dots_for_all_atoms(&mut self) -> Result<(), SurfaceCalculatorError> {
-        self.run.radmax = 0.0;
-        for a in &self.run.atoms {
-            if a.radius > self.run.radmax {
-                self.run.radmax = a.radius;
-            }
         }
         self.compute_neighbors_all_parallel()?;
         let len = self.run.atoms.len();

@@ -1,6 +1,7 @@
 //! SC Calculator wrapping `SurfaceGenerator` with trimming and SC score calculation.
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
+use core::f64;
 use std::collections::HashSet;
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
@@ -8,6 +9,7 @@ use super::types::*;
 use super::vector3::Vec3;
 use pdbtbx::*;
 use rayon::prelude::*;
+use rstar::PointDistance;
 
 /// Large initial distance squared for neighbor search
 const MAX_DISTANCE_SQUARED: f64 = 9.0e20;
@@ -34,7 +36,7 @@ impl ScCalculator {
     ) -> Result<(), SurfaceCalculatorError> {
         self.base.init();
 
-        let tree = pdb.create_atom_rtree();
+        let tree = pdb.create_hierarchy_rtree();
         let max_radius_sq =
             self.base.settings.separation_cutoff * self.base.settings.separation_cutoff;
 
@@ -69,22 +71,60 @@ impl ScCalculator {
                         }
                     }
                 };
-                let neighbors: Vec<usize> = tree
+
+                // Locate neighboring atoms within cutoff to assign attention
+                // The items are (molecule index, Atom)
+                let neighbors: Vec<(usize, &Atom)> = tree
                     .locate_within_distance(pos, max_radius_sq)
-                    .map(|a| a.serial_number())
+                    .map(|h| {
+                        let h_chain = h.chain().id();
+                        let h_mol = if group1_chains.contains(h_chain) {
+                            0
+                        } else if group2_chains.contains(h_chain) {
+                            1
+                        } else {
+                            2 // Outside both groups, ignored later
+                        };
+                        (h_mol, h.atom())
+                    })
                     .collect();
+
+                let attention = match neighbors
+                    .iter()
+                    .map(|(m, a)| {
+                        if (m == &2) | (&molecule == m) {
+                            f64::INFINITY
+                        } else {
+                            atom.distance_2(&a.pos())
+                        }
+                    })
+                    .reduce(f64::min)
+                    .unwrap()
+                {
+                    d if d < max_radius_sq => {
+                        self.base.run.results.surfaces[molecule].n_buried_atoms += 1;
+                        Attention::Buried
+                    }
+                    _ => {
+                        self.base.run.results.surfaces[molecule].n_blocked_atoms += 1;
+                        Attention::Far
+                    }
+                };
 
                 Some(ScAtom {
                     atomi: atom.serial_number(),
                     molecule,
                     radius: atom_radius,
                     density: self.base.settings.dot_density,
-                    attention: Attention::Far,
+                    attention,
                     accessible: false,
                     atomn: atom.name().to_string(),
                     resn: residue.name().unwrap_or("UNK").to_string(),
                     coor: Vec3::new(pos.0, pos.1, pos.2),
-                    all_neighbors_atomi: neighbors,
+                    all_neighbors_atomi: neighbors
+                        .into_iter()
+                        .map(|(_, atom)| atom.serial_number())
+                        .collect::<Vec<usize>>(),
                     neighbor_indices: Vec::new(),
                     buried_by_indices: Vec::new(),
                 })
@@ -118,7 +158,6 @@ impl ScCalculator {
             }
         }
 
-        self.base.assign_attention_numbers();
         self.base.generate_molecular_surfaces()?;
 
         if self.base.run.dots.iter().any(|x| x.is_empty()) {
