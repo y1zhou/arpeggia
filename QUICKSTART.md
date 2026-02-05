@@ -208,6 +208,25 @@ print("Top 10 aggregation hotspots:")
 print(hotspots)
 ```
 
+### Example 5: Shape Complementarity at Interface
+
+```python
+import arpeggia
+
+# Calculate Shape Complementarity between antibody and antigen
+sc_score = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
+print(f"Shape Complementarity: {sc_score:.3f}")
+
+# Typical SC values:
+# - Good fit: 0.65-0.80
+# - Average fit: 0.50-0.65
+# - Poor fit: < 0.50
+
+# SC between different chain groups
+sc_hl = arpeggia.sc("antibody.pdb", groups="H/L")
+print(f"VH-VL interface SC: {sc_hl:.3f}")
+```
+
 ## Troubleshooting
 
 ### Import Error
