@@ -6,13 +6,11 @@ use std::collections::{HashMap, HashSet};
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
-use super::vector3::Vec3;
+use super::vector3::{DotPoint, Vec3};
 use pdbtbx::*;
 use rayon::prelude::*;
-use rstar::PointDistance;
+use rstar::{PointDistance, RTree};
 
-/// Large initial distance squared for neighbor search
-const MAX_DISTANCE_SQUARED: f64 = 9.0e20;
 /// Clamp bounds for dot product to avoid numerical issues at extremes
 const DOT_PRODUCT_CLAMP_MIN: f64 = -0.999;
 const DOT_PRODUCT_CLAMP_MAX: f64 = 0.999;
@@ -218,13 +216,40 @@ impl ScCalculator {
         Ok(self.base.run.results.clone())
     }
 
-    // TODO: slow
+    /// Trims peripheral dots that are within distance of non-buried dots.
+    /// Uses RTree for O(n log n) instead of O(n²) complexity.
     fn trim_peripheral_band(&mut self, i: usize) -> f64 {
         let sdots = &self.base.run.dots[i];
+        let r2 = self.base.settings.peripheral_band * self.base.settings.peripheral_band;
+
+        // Build RTree of non-buried dots for efficient range queries
+        let non_buried_points: Vec<DotPoint> = sdots
+            .iter()
+            .enumerate()
+            .filter(|(_, dot)| !dot.buried)
+            .map(|(idx, dot)| DotPoint::new(idx, dot.coor))
+            .collect();
+
+        let non_buried_tree: RTree<DotPoint> = RTree::bulk_load(non_buried_points);
+
+        // Filter buried dots that are NOT within r of any non-buried dot
         let indices: Vec<usize> = (0..sdots.len())
             .into_par_iter()
-            .filter(|&idx| sdots[idx].buried && self.trim_peripheral_band_check_dot(idx, sdots))
+            .filter(|&idx| {
+                let dot = &sdots[idx];
+                if !dot.buried {
+                    return false;
+                }
+                let query_point = [dot.coor.x, dot.coor.y, dot.coor.z];
+                // Check if there's any non-buried dot within distance r
+                // Using locate_within_distance for efficient O(log n) lookup
+                non_buried_tree
+                    .locate_within_distance(query_point, r2)
+                    .next()
+                    .is_none()
+            })
             .collect();
+
         let area: f64 = indices.par_iter().map(|&idx| sdots[idx].area).sum();
 
         self.base.run.trimmed_dots[i].clear();
@@ -232,21 +257,33 @@ impl ScCalculator {
         area
     }
 
-    fn trim_peripheral_band_check_dot(&self, dot_index: usize, sdots: &[Dot]) -> bool {
-        let r2 = self.base.settings.peripheral_band * self.base.settings.peripheral_band;
-        let dot = &sdots[dot_index];
-        !sdots.iter().enumerate().any(|(i, dot2)| {
-            i != dot_index && !dot2.buried && dot.coor.distance_squared(dot2.coor) <= r2
-        })
-    }
-
-    // TODO: slow
+    /// Calculate distances and scores between trimmed dots from two surfaces.
+    /// Uses RTree for O(n log n) nearest neighbor search instead of O(n*m).
     fn calc_neighbor_distance(&mut self, my: usize, their: usize) {
         let my_dots = &self.base.run.trimmed_dots[my];
         let their_dots = &self.base.run.trimmed_dots[their];
         if my_dots.is_empty() || their_dots.is_empty() {
             return;
         }
+
+        // Build RTree for buried dots on the opposite surface
+        let their_buried_points: Vec<DotPoint> = their_dots
+            .iter()
+            .filter_map(|&idx| {
+                let dot = &self.base.run.dots[their][idx];
+                if dot.buried {
+                    Some(DotPoint::new(idx, dot.coor))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if their_buried_points.is_empty() {
+            return;
+        }
+
+        let their_tree: RTree<DotPoint> = RTree::bulk_load(their_buried_points);
 
         let (distances, scores, distmin_sum, score_sum) = {
             let gaussian_w = self.base.settings.gaussian_w;
@@ -255,28 +292,20 @@ impl ScCalculator {
                 .par_iter()
                 .filter_map(|&pd| {
                     let dot1 = &run_ref.dots[my][pd];
-                    let (distmin2, neighbor) = their_dots.iter().fold(
-                        (MAX_DISTANCE_SQUARED, None),
-                        |(min_d2, min_n), &pd2| {
-                            let dot2 = &run_ref.dots[their][pd2];
-                            if !dot2.buried {
-                                return (min_d2, min_n);
-                            }
-                            let d2 = dot2.coor.distance_squared(dot1.coor);
-                            if d2 <= min_d2 {
-                                (d2, Some(dot2))
-                            } else {
-                                (min_d2, min_n)
-                            }
-                        },
-                    );
-                    neighbor.map(|n| {
-                        let distmin = distmin2.sqrt();
-                        let mut r = dot1.outnml.dot(n.outnml);
-                        r *= (-(distmin * distmin) * gaussian_w).exp();
-                        r = r.clamp(DOT_PRODUCT_CLAMP_MIN, DOT_PRODUCT_CLAMP_MAX);
-                        (distmin, -r)
-                    })
+                    let query_point = [dot1.coor.x, dot1.coor.y, dot1.coor.z];
+
+                    // Use RTree nearest neighbor query for O(log n) lookup
+                    their_tree
+                        .nearest_neighbor(&query_point)
+                        .map(|nearest_point| {
+                            let neighbor = &run_ref.dots[their][nearest_point.index];
+                            let distmin2 = nearest_point.distance_2(&query_point);
+                            let distmin = distmin2.sqrt();
+                            let mut r = dot1.outnml.dot(neighbor.outnml);
+                            r *= (-distmin2 * gaussian_w).exp();
+                            r = r.clamp(DOT_PRODUCT_CLAMP_MIN, DOT_PRODUCT_CLAMP_MAX);
+                            (distmin, -r)
+                        })
                 })
                 .collect();
             let (distances, scores): (Vec<f64>, Vec<f64>) = pairs.into_iter().unzip();
