@@ -121,70 +121,65 @@ impl SurfaceGenerator {
         if self.run.atoms.is_empty() {
             return Err(SurfaceCalculatorError::NoAtoms);
         }
-        self.compute_neighbors_all_parallel()?;
+        self.categorize_molecule_neighbors()?;
         let len = self.run.atoms.len();
         for i in 0..len {
             let att = self.run.atoms[i].attention;
             if matches!(att, Attention::Far) {
                 continue;
             }
-            if matches!(self.run.atoms[i].attention, Attention::Consider)
-                && self.run.atoms[i].buried_by_indices.is_empty()
+            // This branch is dead because Attention::Consider is never assigned
+            if matches!(att, Attention::Consider) && self.run.atoms[i].buried_by_indices.is_empty()
             {
                 continue;
             }
             self.build_probes(i)?;
         }
-        self.generate_contact_surface_parallel()?;
+        self.generate_contact_surface()?;
         if self.settings.rp > 0.0 {
-            self.generate_concave_surface_parallel()?;
+            self.generate_concave_surface()?;
         }
         Ok(())
     }
 
-    fn compute_neighbors_all_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
+    fn categorize_molecule_neighbors(&mut self) -> Result<(), SurfaceCalculatorError> {
         let rp = self.settings.rp;
         let atoms: &Vec<ScAtom> = &self.run.atoms;
         let atomi_table = self.atomi_to_index();
-        let results: NeighborResult = atoms
+        let neighbors_info: NeighborResult = atoms
             .par_iter()
             .map(|atom1| {
-                let mut neighbor_indices: Vec<usize> = Vec::new();
+                let mut neighbor_indices_tmp: Vec<(usize, f64)> = Vec::new();
                 let mut buried_by_indices: Vec<usize> = Vec::new();
-                for atom2_atomi in atom1.all_neighbors_atomi.iter() {
+                for (atom2_atomi, atom2_dist2) in atom1.neighbors_atomi_dist2.iter() {
                     if &atom1.atomi == atom2_atomi {
                         continue;
                     }
                     let atom2_idx = atomi_table.get(atom2_atomi).unwrap();
                     let atom2 = &atoms[*atom2_idx];
-                    let d2 = atom1.distance_squared(atom2);
-                    if atom1.molecule == atom2.molecule {
-                        if d2 <= 0.0001 {
-                            return Err(SurfaceCalculatorError::Coincident(format!(
-                                "{}:{}:{} == {}:{}:{}",
-                                atom1.atomi,
-                                atom1.resn,
-                                atom1.atomn,
-                                atom2.atomi,
-                                atom2.resn,
-                                atom2.atomn
-                            )));
+                    let bridge = atom1.radius + atom2.radius + 2.0 * rp;
+                    let bridge2 = bridge * bridge;
+                    let same_mol = atom1.molecule == atom2.molecule;
+                    if same_mol && (atom2_dist2 <= &0.0001) {
+                        return Err(SurfaceCalculatorError::Coincident(format!(
+                            "{}:{}:{} == {}:{}:{}",
+                            atom1.atomi,
+                            atom1.resn,
+                            atom1.atomn,
+                            atom2.atomi,
+                            atom2.resn,
+                            atom2.atomn
+                        )));
+                    }
+                    if same_mol {
+                        if atom2_dist2 < &bridge2 {
+                            neighbor_indices_tmp.push((*atom2_idx, *atom2_dist2));
                         }
-                        let bridge = atom1.radius + atom2.radius + 2.0 * rp;
-                        if d2 < bridge * bridge {
-                            neighbor_indices.push(*atom2_idx);
-                        }
-                    } else {
-                        let bridge = atom1.radius + atom2.radius + 2.0 * rp;
-                        if d2 < bridge * bridge {
-                            buried_by_indices.push(*atom2_idx);
-                        }
+                    } else if atom2_dist2 < &bridge2 {
+                        buried_by_indices.push(*atom2_idx);
                     }
                 }
-                let center = atom1.coor;
-                neighbor_indices.sort_unstable_by(|&a1, &a2| {
-                    let d1 = atoms[a1].coor.distance_squared(center);
-                    let d2 = atoms[a2].coor.distance_squared(center);
+                neighbor_indices_tmp.sort_unstable_by(|&(_, d1), &(_, d2)| {
                     if d1 < d2 {
                         Ordering::Less
                     } else if d1 > d2 {
@@ -193,23 +188,32 @@ impl SurfaceGenerator {
                         Ordering::Equal
                     }
                 });
+
+                let neighbor_indices: Vec<usize> = neighbor_indices_tmp
+                    .into_iter()
+                    .map(|(idx, _)| idx)
+                    .collect();
                 let accessible = neighbor_indices.is_empty();
                 Ok((neighbor_indices, buried_by_indices, accessible))
             })
             .collect();
-        let outs = results?;
-        for (i, (neighbors, buried_by, accessible)) in outs.into_iter().enumerate() {
-            let a1 = &mut self.run.atoms[i];
-            a1.neighbor_indices = neighbors;
-            a1.buried_by_indices = buried_by;
-            if accessible {
-                a1.accessible = true;
+        match neighbors_info {
+            Err(e) => return Err(e),
+            Ok(r) => {
+                for (atom, (neighbors, buried_by, accessible)) in self.run.atoms.iter_mut().zip(r) {
+                    atom.neighbor_indices = neighbors;
+                    atom.buried_by_indices = buried_by;
+                    if accessible {
+                        atom.accessible = true;
+                    }
+                }
             }
         }
+
         Ok(())
     }
 
-    fn generate_contact_surface_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
+    fn generate_contact_surface(&mut self) -> Result<(), SurfaceCalculatorError> {
         let rp = self.settings.rp;
         let atoms: &Vec<ScAtom> = &self.run.atoms;
         let results: Vec<(usize, Vec<Dot>, usize)> = (0..atoms.len())
@@ -368,41 +372,49 @@ impl SurfaceGenerator {
     }
 
     fn build_probes(&mut self, atom_index: usize) -> Result<(), SurfaceCalculatorError> {
-        let expanded_radius_i;
+        let atom1_coor: Vec3;
+        let expanded_radius_i: f64;
         let neighbor_indices: Vec<usize>;
+        let ij_dist2_map: std::collections::HashMap<usize, f64>;
         {
             let atom1 = &self.run.atoms[atom_index];
+            atom1_coor = atom1.coor;
             expanded_radius_i = atom1.radius + self.settings.rp;
             neighbor_indices = atom1.neighbor_indices.clone();
+            ij_dist2_map = atom1.neighbors_atomi_dist2.clone();
         }
+        let num_neighbors = neighbor_indices.len();
+
         for &j in &neighbor_indices {
             let atom2 = &self.run.atoms[j];
             if atom2.atomi <= self.run.atoms[atom_index].atomi {
                 continue;
             }
             let expanded_radius_j = atom2.radius + self.settings.rp;
-            let dist_ij = self.run.atoms[atom_index].coor.distance(atom2.coor);
-            let unit_axis = (atom2.coor - self.run.atoms[atom_index].coor) / dist_ij;
+            let ij_dist2 = ij_dist2_map.get(&atom2.atomi).unwrap();
+            let dist_ij = ij_dist2.sqrt();
+
+            let unit_axis = (atom2.coor - atom1_coor) / dist_ij;
             let asymmetry_term = (expanded_radius_i * expanded_radius_i
                 - expanded_radius_j * expanded_radius_j)
                 / dist_ij;
-            let midplane_center = (self.run.atoms[atom_index].coor + atom2.coor) * 0.5
-                + (unit_axis * (asymmetry_term * 0.5));
+            let midplane_center =
+                (atom1_coor + atom2.coor) * 0.5 + (unit_axis * (asymmetry_term * 0.5));
             let mut far_term = (expanded_radius_i + expanded_radius_j)
                 * (expanded_radius_i + expanded_radius_j)
-                - dist_ij * dist_ij;
+                - ij_dist2;
             if far_term <= 0.0 {
                 continue;
             }
             far_term = far_term.sqrt();
             let mut contain_term =
-                dist_ij * dist_ij - (self.run.atoms[atom_index].radius - atom2.radius).powi(2);
+                ij_dist2 - (self.run.atoms[atom_index].radius - atom2.radius).powi(2);
             if contain_term <= 0.0 {
                 continue;
             }
             contain_term = contain_term.sqrt();
             let ring_radius = 0.5 * far_term * contain_term / dist_ij;
-            if neighbor_indices.len() <= 1 {
+            if num_neighbors <= 1 {
                 self.run.atoms[atom_index].accessible = true;
                 self.run.atoms[j].accessible = true;
                 break;
@@ -434,13 +446,17 @@ impl SurfaceGenerator {
         midplane_center: Vec3,
         ring_radius: f64,
     ) -> Result<(), SurfaceCalculatorError> {
+        let atom1_coor = self.run.atoms[atom1_index].coor;
         let neighbor_indices = self.run.atoms[atom1_index].neighbor_indices.clone();
         let expanded_radius_i = self.run.atoms[atom1_index].radius + self.settings.rp;
+        let atom1_dist2_map: &std::collections::HashMap<usize, f64> =
+            &self.run.atoms[atom1_index].neighbors_atomi_dist2;
+
         let atom2 = &self.run.atoms[atom2_index];
         let expanded_radius_j = atom2.radius + self.settings.rp;
         let atom2_natom = atom2.atomi;
-        let atom2_coor = atom2.coor;
         let atom2_att = atom2.attention;
+        let atom2_dist2_map: &std::collections::HashMap<usize, f64> = &atom2.neighbors_atomi_dist2;
         let mut made_probe = false;
         for &k in &neighbor_indices {
             let atom3 = &self.run.atoms[k];
@@ -448,11 +464,17 @@ impl SurfaceGenerator {
                 continue;
             }
             let expanded_radius_k = atom3.radius + self.settings.rp;
-            let dist_jk = atom2_coor.distance(atom3.coor);
-            if dist_jk >= expanded_radius_j + expanded_radius_k {
-                continue;
+
+            // atom1 neighbor atom3 is not necessarily atom2 neighbor
+            match atom2_dist2_map.get(&atom3.atomi) {
+                None => continue,
+                Some(dist_jk2) => {
+                    if dist_jk2.sqrt() >= expanded_radius_j + expanded_radius_k {
+                        continue;
+                    }
+                }
             }
-            let dist_ik = self.run.atoms[atom1_index].coor.distance(atom3.coor);
+            let dist_ik = atom1_dist2_map.get(&atom3.atomi).unwrap().sqrt();
             if dist_ik >= expanded_radius_i + expanded_radius_k {
                 continue;
             }
@@ -462,7 +484,7 @@ impl SurfaceGenerator {
             {
                 continue;
             }
-            let unit_axis_ik = (atom3.coor - self.run.atoms[atom1_index].coor) / dist_ik;
+            let unit_axis_ik = (atom3.coor - atom1_coor) / dist_ik;
             let wedge_angle = unit_axis.dot(unit_axis_ik).acos();
             let sin_wedge = wedge_angle.sin();
             if sin_wedge <= 0.0 {
@@ -478,8 +500,8 @@ impl SurfaceGenerator {
             let asymmetry_term_ik = (expanded_radius_i * expanded_radius_i
                 - expanded_radius_k * expanded_radius_k)
                 / dist_ik;
-            let midpoint_ik = (self.run.atoms[atom1_index].coor + atom3.coor) * 0.5
-                + unit_axis_ik * (asymmetry_term_ik * 0.5);
+            let midpoint_ik =
+                (atom1_coor + atom3.coor) * 0.5 + unit_axis_ik * (asymmetry_term_ik * 0.5);
             let mut componentwise = midpoint_ik - midplane_center;
             componentwise = Vec3::new(
                 unit_axis_ik.x * componentwise.x,
@@ -488,8 +510,8 @@ impl SurfaceGenerator {
             );
             let component_sum = componentwise.x + componentwise.y + componentwise.z;
             let torus_center = midplane_center + perp_tangent * (component_sum / sin_wedge);
-            let mut height = expanded_radius_i * expanded_radius_i
-                - torus_center.distance_squared(self.run.atoms[atom1_index].coor);
+            let mut height =
+                expanded_radius_i * expanded_radius_i - torus_center.distance_squared(atom1_coor);
             if height <= 0.0 {
                 continue;
             }
@@ -559,17 +581,17 @@ impl SurfaceGenerator {
         if subs.is_empty() {
             return Ok(());
         }
-        let atom2_natom = self.run.atoms[atom2_index].atomi;
+        let atom2_atomi = self.run.atoms[atom2_index].atomi;
         for sub in subs {
             let mut tooclose = false;
             for &ni in &neighbors {
                 let neighbor = &self.run.atoms[ni];
-                if neighbor.atomi == atom2_natom {
+                if neighbor.atomi == atom2_atomi {
                     continue;
                 }
-                let expanded_neighbor_radius = neighbor.radius + self.settings.rp;
+                let expanded_neighbor_radius = (neighbor.radius + self.settings.rp).powi(2);
                 let d2 = sub.distance_squared(neighbor.coor);
-                if d2 < expanded_neighbor_radius * expanded_neighbor_radius {
+                if d2 < expanded_neighbor_radius {
                     tooclose = true;
                     break;
                 }
@@ -683,7 +705,7 @@ impl SurfaceGenerator {
         false
     }
 
-    fn generate_concave_surface_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
+    fn generate_concave_surface(&mut self) -> Result<(), SurfaceCalculatorError> {
         let rp = self.settings.rp;
         let rp2 = rp * rp;
         let atoms: &Vec<ScAtom> = &self.run.atoms;

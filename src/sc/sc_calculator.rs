@@ -2,7 +2,7 @@
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
 use core::f64;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
@@ -73,8 +73,8 @@ impl ScCalculator {
                 };
 
                 // Locate neighboring atoms within cutoff to assign attention
-                // The items are (molecule index, Atom)
-                let neighbors: Vec<(usize, &Atom)> = tree
+                // The items are (molecule index, Atom, distance squared)
+                let neighbors: Vec<(usize, &Atom, f64)> = tree
                     .locate_within_distance(pos, max_radius_sq)
                     .map(|h| {
                         let h_chain = h.chain().id();
@@ -85,17 +85,17 @@ impl ScCalculator {
                         } else {
                             2 // Outside both groups, ignored later
                         };
-                        (h_mol, h.atom())
+                        (h_mol, h.atom(), atom.distance_2(&h.atom().pos()))
                     })
                     .collect();
 
                 let attention = match neighbors
                     .iter()
-                    .map(|(m, a)| {
+                    .map(|(m, _, d)| {
                         if (m == &2) | (&molecule == m) {
                             f64::INFINITY
                         } else {
-                            atom.distance_2(&a.pos())
+                            *d
                         }
                     })
                     .reduce(f64::min)
@@ -121,10 +121,10 @@ impl ScCalculator {
                     atomn: atom.name().to_string(),
                     resn: residue.name().unwrap_or("UNK").to_string(),
                     coor: Vec3::new(pos.0, pos.1, pos.2),
-                    all_neighbors_atomi: neighbors
+                    neighbors_atomi_dist2: neighbors
                         .into_iter()
-                        .map(|(_, atom)| atom.serial_number())
-                        .collect::<Vec<usize>>(),
+                        .map(|(_, atom, d)| (atom.serial_number(), d))
+                        .collect::<HashMap<usize, f64>>(),
                     neighbor_indices: Vec::new(),
                     buried_by_indices: Vec::new(),
                 })
