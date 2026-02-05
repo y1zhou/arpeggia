@@ -135,7 +135,7 @@ impl ScCalculator {
         self.base.run.results.n_atoms = atoms.len();
         for mol in 0..1 {
             self.base.run.results.surfaces[mol].n_atoms =
-                atoms.par_iter().filter(|atom| atom.molecule == mol).count();
+                atoms.iter().filter(|atom| atom.molecule == mol).count();
         }
         self.base.run.atoms.clear();
         self.base.run.atoms = atoms;

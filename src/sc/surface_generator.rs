@@ -157,8 +157,7 @@ impl SurfaceGenerator {
                     }
                     let atom2_idx = atomi_table.get(atom2_atomi).unwrap();
                     let atom2 = &atoms[*atom2_idx];
-                    let bridge = atom1.radius + atom2.radius + 2.0 * rp;
-                    let bridge2 = bridge * bridge;
+
                     let same_mol = atom1.molecule == atom2.molecule;
                     if same_mol && (atom2_dist2 <= &0.0001) {
                         return Err(SurfaceCalculatorError::Coincident(format!(
@@ -171,6 +170,8 @@ impl SurfaceGenerator {
                             atom2.atomn
                         )));
                     }
+                    let bridge = atom1.radius + atom2.radius + 2.0 * rp;
+                    let bridge2 = bridge * bridge;
                     if same_mol {
                         if atom2_dist2 < &bridge2 {
                             neighbor_indices_tmp.push((*atom2_idx, *atom2_dist2));
@@ -582,7 +583,7 @@ impl SurfaceGenerator {
             return Ok(());
         }
         let atom2_atomi = self.run.atoms[atom2_index].atomi;
-        for sub in subs {
+        for ring_point in subs {
             let mut tooclose = false;
             for &ni in &neighbors {
                 let neighbor = &self.run.atoms[ni];
@@ -590,7 +591,7 @@ impl SurfaceGenerator {
                     continue;
                 }
                 let expanded_neighbor_radius = (neighbor.radius + self.settings.rp).powi(2);
-                let d2 = sub.distance_squared(neighbor.coor);
+                let d2 = ring_point.distance_squared(neighbor.coor);
                 if d2 < expanded_neighbor_radius {
                     tooclose = true;
                     break;
@@ -599,7 +600,6 @@ impl SurfaceGenerator {
             if tooclose {
                 continue;
             }
-            let ring_point = sub;
             self.run.atoms[atom1_index].accessible = true;
             self.run.atoms[atom2_index].accessible = true;
             let vec_pi = (self.run.atoms[atom1_index].coor - ring_point) / expanded_radius_i;
@@ -651,32 +651,37 @@ impl SurfaceGenerator {
                     );
                 }
             }
-            let atom2_attention = self.run.atoms[atom2_index].attention;
-            if !matches!(atom2_attention, Attention::Far) {
-                let mut points: Vec<Vec3> = Vec::new();
-                let ps = self.sample_arc(
+            if !matches!(self.run.atoms[atom2_index].attention, Attention::Far) {
+                continue;
+            }
+            let mut points: Vec<Vec3> = Vec::new();
+            let ps = self.sample_arc(
+                ring_point,
+                self.settings.rp,
+                toroid_axis,
+                density,
+                arc_end_j,
+                vec_pj,
+                &mut points,
+            )?;
+            self.run.results.dots.toroidal += points.len();
+            let point_areas: Vec<f64> = points
+                .par_iter()
+                .map(|point| {
+                    ps * ts * distance_point_to_line(midplane_center, unit_axis, *point)
+                        / ring_radius
+                })
+                .collect();
+            for (point, area) in points.iter().zip(point_areas.iter()) {
+                let molecule2 = self.run.atoms[atom2_index].molecule;
+                self.add_dot(
+                    molecule2,
+                    DotKind::Reentrant,
+                    *point,
+                    *area,
                     ring_point,
-                    self.settings.rp,
-                    toroid_axis,
-                    density,
-                    arc_end_j,
-                    vec_pj,
-                    &mut points,
-                )?;
-                for &point in &points {
-                    let area = ps * ts * distance_point_to_line(midplane_center, unit_axis, point)
-                        / ring_radius;
-                    self.run.results.dots.toroidal += 1;
-                    let molecule2 = self.run.atoms[atom2_index].molecule;
-                    self.add_dot(
-                        molecule2,
-                        DotKind::Reentrant,
-                        point,
-                        area,
-                        ring_point,
-                        atom2_index,
-                    );
-                }
+                    atom2_index,
+                );
             }
         }
         Ok(())
@@ -889,19 +894,15 @@ impl SurfaceGenerator {
         } else {
             (pcen - coor) / self.settings.rp
         };
-        let mut buried = false;
-        let other_mol = usize::from(molecule == 0);
-        for b in &self.run.atoms {
-            if b.molecule != other_mol {
-                continue;
+        let buried = self.run.atoms.iter().any(|b| {
+            if b.molecule != molecule {
+                let erl = b.radius + self.settings.rp;
+                let d = pcen.distance_squared(b.coor);
+                d <= erl * erl
+            } else {
+                false
             }
-            let erl = b.radius + self.settings.rp;
-            let d = pcen.distance_squared(b.coor);
-            if d <= erl * erl {
-                buried = true;
-                break;
-            }
-        }
+        });
         let dot = Dot {
             coor,
             outnml,
