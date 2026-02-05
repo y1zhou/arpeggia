@@ -14,8 +14,8 @@ pub fn find_hydrophobic_contact(
     let e1_atom = entity1.atom();
     let e2_atom = entity2.atom();
     if is_hydrophobic(entity1.residue().name().unwrap(), e1_atom.name())
-        & is_hydrophobic(entity2.residue().name().unwrap(), e2_atom.name())
-        & (e1_atom.distance(e2_atom) <= HYDROPHOBIC_CONTACT_DIST)
+        && is_hydrophobic(entity2.residue().name().unwrap(), e2_atom.name())
+        && (e1_atom.distance(e2_atom) <= HYDROPHOBIC_CONTACT_DIST)
     {
         Some(Interaction::HydrophobicContact)
     } else {
@@ -26,7 +26,7 @@ pub fn find_hydrophobic_contact(
 /// Check if the entity has an atom that belongs to the hydrophobic category.
 fn is_hydrophobic(res_name: &str, atom_name: &str) -> bool {
     // Carbon beta of all other than Glycine/Serine
-    if (atom_name == "CB") & (res_name != "SER") {
+    if (atom_name == "CB") && (res_name != "SER") {
         return true;
     }
     matches!(

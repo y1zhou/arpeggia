@@ -98,8 +98,8 @@ impl<'a> InteractionComplex<'a> {
         }
 
         // Ignore if they are not a valid ligand-receptor pair
-        if !((self.ligand.contains(r1.chain) & self.receptor.contains(r2.chain))
-            | (self.ligand.contains(r2.chain) & self.receptor.contains(r1.chain)))
+        if !((self.ligand.contains(r1.chain) && self.receptor.contains(r2.chain))
+            | (self.ligand.contains(r2.chain) && self.receptor.contains(r1.chain)))
         {
             return false;
         }
@@ -110,7 +110,7 @@ impl<'a> InteractionComplex<'a> {
             let e2_idx = self.res2idx[r2];
 
             if symmetric {
-                (e2_idx > 1) & (e1_idx < e2_idx - 1) // not immediate neighbors
+                (e2_idx > 1) && (e1_idx < e2_idx - 1) // not immediate neighbors
             } else {
                 let is_neighboring = match e1_idx {
                     0 => (e2_idx == e1_idx) | (e2_idx == e1_idx + 1),
@@ -122,11 +122,11 @@ impl<'a> InteractionComplex<'a> {
             // Across two chains, avoid duplicate comparisons when the chains exist on both sides,
             // e.g. H,A,B/H,A where H-A and A-H are the same interactions
             !(symmetric
-                & self.receptor.contains(r1.chain)
-                & self.receptor.contains(r2.chain)
-                & self.ligand.contains(r1.chain)
-                & self.ligand.contains(r2.chain)
-                & (r1.chain > r2.chain))
+                && self.receptor.contains(r1.chain)
+                && self.receptor.contains(r2.chain)
+                && self.ligand.contains(r1.chain)
+                && self.ligand.contains(r2.chain)
+                && (r1.chain > r2.chain))
         }
     }
 
@@ -198,7 +198,7 @@ impl Interactions for InteractionComplex<'_> {
             .model
             .atoms_with_hierarchy()
             .filter(|x| {
-                self.ligand.contains(x.chain().id()) & (x.atom().element().unwrap() != &Element::H)
+                self.ligand.contains(x.chain().id()) && (x.atom().element().unwrap() != &Element::H)
             })
             .flat_map(|x| {
                 tree.locate_within_distance(x.atom().pos(), max_radius_squared)
@@ -361,8 +361,8 @@ impl Interactions for InteractionComplex<'_> {
                     .iter()
                     .filter(|(k2, _)| {
                         self.ligand.contains(k1.chain)
-                            & self.receptor.contains(k2.chain)
-                            & self.should_compare_residues(k1, k2, true)
+                            && self.receptor.contains(k2.chain)
+                            && self.should_compare_residues(k1, k2, true)
                     })
                     .map(|(k2, ring2)| (k1, ring1, k2, ring2))
                     .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>()

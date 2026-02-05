@@ -48,9 +48,9 @@ fn is_disulfide(
     entity2: &AtomConformerResidueChainModel,
 ) -> bool {
     if (entity1.residue().name().unwrap() == "CYS")
-        & (entity2.residue().name().unwrap() == "CYS")
-        & (entity1.atom().name() == "SG")
-        & (entity2.atom().name() == "SG")
+        && (entity2.residue().name().unwrap() == "CYS")
+        && (entity1.atom().name() == "SG")
+        && (entity2.atom().name() == "SG")
     {
         let cb1 = entity1
             .residue()

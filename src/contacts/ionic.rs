@@ -47,7 +47,7 @@ fn is_ionic_bond_pair<'a>(
     let e1_atom = entity1.atom().name();
     let e2_atom = entity2.atom().name();
 
-    if is_pos_ionizable(e1_conformer, e1_atom) & is_neg_ionizable(e2_conformer, e2_atom) {
+    if is_pos_ionizable(e1_conformer, e1_atom) && is_neg_ionizable(e2_conformer, e2_atom) {
         Some((entity1, entity2))
     } else if is_pos_ionizable(e2_conformer, e2_atom) & is_neg_ionizable(e1_conformer, e1_atom) {
         Some((entity2, entity1))
@@ -69,9 +69,9 @@ fn is_same_charge_pair<'a>(
     let e2_atom = entity2.atom().name();
 
     let both_pos_charged =
-        is_pos_ionizable(e1_conformer, e1_atom) & is_pos_ionizable(e2_conformer, e2_atom);
+        is_pos_ionizable(e1_conformer, e1_atom) && is_pos_ionizable(e2_conformer, e2_atom);
     let both_neg_charged =
-        is_neg_ionizable(e1_conformer, e1_atom) & is_neg_ionizable(e2_conformer, e2_atom);
+        is_neg_ionizable(e1_conformer, e1_atom) && is_neg_ionizable(e2_conformer, e2_atom);
 
     if both_pos_charged | both_neg_charged {
         Some((entity1, entity2))

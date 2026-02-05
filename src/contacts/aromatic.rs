@@ -21,7 +21,7 @@ pub fn find_cation_pi(
         let dist = ring.point_vec_dist(&atom_point);
         let theta = ring.point_vec_angle(&atom_point);
 
-        if (theta <= CATION_PI_ANGLE_THRESHOLD) & (dist <= CATION_PI_DIST_THRESHOLD) {
+        if (theta <= CATION_PI_ANGLE_THRESHOLD) && (dist <= CATION_PI_DIST_THRESHOLD) {
             return Some(Interaction::CationPi);
         }
     }
