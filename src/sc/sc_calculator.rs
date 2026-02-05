@@ -217,7 +217,7 @@ impl ScCalculator {
     }
 
     /// Trims peripheral dots that are within distance of non-buried dots.
-    /// Uses RTree for O(n log n) instead of O(n²) complexity.
+    /// Uses RTree spatial indexing for efficient range queries.
     fn trim_peripheral_band(&mut self, i: usize) -> f64 {
         let sdots = &self.base.run.dots[i];
         let r2 = self.base.settings.peripheral_band * self.base.settings.peripheral_band;
@@ -258,7 +258,7 @@ impl ScCalculator {
     }
 
     /// Calculate distances and scores between trimmed dots from two surfaces.
-    /// Uses RTree for O(n log n) nearest neighbor search instead of O(n*m).
+    /// Uses RTree spatial indexing for efficient nearest neighbor search.
     fn calc_neighbor_distance(&mut self, my: usize, their: usize) {
         let my_dots = &self.base.run.trimmed_dots[my];
         let their_dots = &self.base.run.trimmed_dots[their];
