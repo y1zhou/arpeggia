@@ -1,6 +1,7 @@
 //! Connolly molecular surface generator for SC calculations.
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
+use core::f64;
 use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt;
@@ -108,6 +109,15 @@ impl SurfaceGenerator {
         ))))
     }
 
+    fn atomi_to_index(&self) -> std::collections::HashMap<usize, usize> {
+        self.run
+            .atoms
+            .iter()
+            .enumerate()
+            .map(|(i, a)| (a.atomi, i))
+            .collect::<std::collections::HashMap<usize, usize>>()
+    }
+
     pub fn assign_attention_numbers(&mut self) {
         self.run.results.surfaces[0].n_buried_atoms = 0;
         self.run.results.surfaces[0].n_blocked_atoms = 0;
@@ -115,33 +125,41 @@ impl SurfaceGenerator {
         self.run.results.surfaces[1].n_blocked_atoms = 0;
 
         let sep2 = self.settings.separation_cutoff * self.settings.separation_cutoff;
-        let atoms_len = self.run.atoms.len();
-        let snapshot: Vec<(usize, usize, f64)> = (0..atoms_len)
-            .into_par_iter()
-            .map(|i| {
-                let a1 = &self.run.atoms[i];
-                let mut dist_min2 = f64::INFINITY;
-                for j in 0..atoms_len {
-                    let a2 = &self.run.atoms[j];
-                    if a2.molecule == a1.molecule {
-                        continue;
-                    }
-                    let r2 = a1.distance_squared(a2);
-                    if r2 < dist_min2 {
-                        dist_min2 = r2;
-                    }
+        let atomi_table = self.atomi_to_index();
+        let atoms = &self.run.atoms;
+        let atom_attentions: Vec<Attention> = atoms
+            .par_iter()
+            .map(|a1| {
+                let dist_min2 = a1
+                    .all_neighbors_atomi
+                    .iter()
+                    .map(|a2_atomi| {
+                        let a2_idx = atomi_table.get(a2_atomi).unwrap();
+                        let a2 = &atoms[*a2_idx];
+                        if a1.molecule == a2.molecule {
+                            return f64::INFINITY;
+                        }
+                        a1.distance_squared(a2)
+                    })
+                    .reduce(f64::min)
+                    .unwrap_or(f64::INFINITY);
+                if dist_min2 < sep2 {
+                    Attention::Buried
+                } else {
+                    Attention::Far
                 }
-                (i, a1.molecule, dist_min2)
             })
             .collect();
-        for (i, mol, dist_min2) in snapshot {
-            let a1 = &mut self.run.atoms[i];
-            if dist_min2 >= sep2 {
-                a1.attention = Attention::Far;
-                self.run.results.surfaces[mol].n_blocked_atoms += 1;
-            } else {
-                a1.attention = Attention::Buried;
-                self.run.results.surfaces[mol].n_buried_atoms += 1;
+        for (a, attention) in self.run.atoms.iter_mut().zip(atom_attentions) {
+            a.attention = attention;
+            match attention {
+                Attention::Buried => {
+                    self.run.results.surfaces[a.molecule].n_buried_atoms += 1;
+                }
+                Attention::Consider => {}
+                Attention::Far => {
+                    self.run.results.surfaces[a.molecule].n_blocked_atoms += 1;
+                }
             }
         }
     }
@@ -185,33 +203,18 @@ impl SurfaceGenerator {
     fn compute_neighbors_all_parallel(&mut self) -> Result<(), SurfaceCalculatorError> {
         let rp = self.settings.rp;
         let atoms: &Vec<ScAtom> = &self.run.atoms;
-        let atomi_table = atoms
-            .iter()
-            .enumerate()
-            .map(|(i, a)| (a.atomi, i))
-            .collect::<std::collections::HashMap<usize, usize>>();
+        let atomi_table = self.atomi_to_index();
         let results: NeighborResult = atoms
             .par_iter()
-            .enumerate()
-            .map(|(i, atom1)| {
+            .map(|atom1| {
                 let mut neighbor_indices: Vec<usize> = Vec::new();
                 let mut buried_by_indices: Vec<usize> = Vec::new();
-                // for (j, atom2) in atoms.iter().enumerate() {
-                if i == 1 {
-                    println!(
-                        "Atom {i} atomi{} checking neighbors {:?}",
-                        atom1.atomi, atom1.all_neighbors_atomi
-                    );
-                }
-                for (j, atom2_idx) in atom1.all_neighbors_atomi.iter().enumerate() {
-                    // if j == i {
-                    //     continue;
-                    // }
-                    // let atom2_idx = &atom2.atomi;
-                    let atom2 = &atoms[*atomi_table.get(atom2_idx).unwrap()];
-                    if &atom1.atomi == atom2_idx {
+                for atom2_atomi in atom1.all_neighbors_atomi.iter() {
+                    if &atom1.atomi == atom2_atomi {
                         continue;
                     }
+                    let atom2_idx = atomi_table.get(atom2_atomi).unwrap();
+                    let atom2 = &atoms[*atom2_idx];
                     let d2 = atom1.distance_squared(atom2);
                     if atom1.molecule == atom2.molecule {
                         if d2 <= 0.0001 {
@@ -226,21 +229,13 @@ impl SurfaceGenerator {
                             )));
                         }
                         let bridge = atom1.radius + atom2.radius + 2.0 * rp;
-                        if i == 1 {
-                            println!(
-                                "atom2 atomi{}: d2={:.3}, bridge2={:.3}",
-                                atom2.atomi,
-                                d2,
-                                bridge * bridge
-                            );
-                        }
                         if d2 < bridge * bridge {
-                            neighbor_indices.push(j);
+                            neighbor_indices.push(*atom2_idx);
                         }
                     } else {
                         let bridge = atom1.radius + atom2.radius + 2.0 * rp;
                         if d2 < bridge * bridge {
-                            buried_by_indices.push(j);
+                            buried_by_indices.push(*atom2_idx);
                         }
                     }
                 }

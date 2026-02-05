@@ -36,7 +36,7 @@ impl ScCalculator {
 
         let tree = pdb.create_atom_rtree();
         let max_radius_sq =
-            4.0 * self.base.settings.separation_cutoff * self.base.settings.separation_cutoff;
+            self.base.settings.separation_cutoff * self.base.settings.separation_cutoff;
 
         let atoms: Vec<ScAtom> = pdb
             .atoms_with_hierarchy()
@@ -79,7 +79,7 @@ impl ScCalculator {
                     molecule,
                     radius: atom_radius,
                     density: self.base.settings.dot_density,
-                    attention: Attention::Buried,
+                    attention: Attention::Far,
                     accessible: false,
                     atomn: atom.name().to_string(),
                     resn: residue.name().unwrap_or("UNK").to_string(),
