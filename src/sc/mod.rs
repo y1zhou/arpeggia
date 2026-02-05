@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn test_h_vs_c() {
         let pdb = load_multi_chain();
-        let sc_value = match run_with_threads(4, || get_sc(&pdb, "H/C", 0)) {
+        let sc_value = match run_with_threads(0, || get_sc(&pdb, "H/C", 0)) {
             Ok(value) => value,
             Err(e) => panic!("Error calculating SC: {:?}", e),
         };
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn test_hl_vs_cg() {
         let pdb = load_multi_chain();
-        let sc_value = match run_with_threads(4, || get_sc(&pdb, "H,L/C,G", 0)) {
+        let sc_value = match run_with_threads(0, || get_sc(&pdb, "H,L/C,G", 0)) {
             Ok(value) => value,
             Err(e) => panic!("Error calculating SC: {:?}", e),
         };

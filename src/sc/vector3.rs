@@ -1,6 +1,6 @@
 //! 3D Vector geometry for SC calculations.
 
-use rstar::{PointDistance, RTreeObject, AABB};
+use rstar::{AABB, PointDistance, RTreeObject};
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
