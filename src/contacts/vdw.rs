@@ -31,10 +31,13 @@ pub fn find_vdw_contact(
 
     match dist {
         d if d < sum_cov_radii - vdw_comp_factor => Some(Interaction::StericClash),
-        d if d < sum_cov_radii + vdw_comp_factor => match is_disulfide(entity1, entity2) {
-            true => Some(Interaction::Disulfide),
-            false => Some(Interaction::CovalentBond),
-        },
+        d if d < sum_cov_radii + vdw_comp_factor => {
+            if is_disulfide(entity1, entity2) {
+                Some(Interaction::Disulfide)
+            } else {
+                Some(Interaction::CovalentBond)
+            }
+        }
         d if d < sum_vdw_radii + vdw_comp_factor => Some(Interaction::VanDerWaalsContact),
         _ => None,
     }
@@ -45,9 +48,9 @@ fn is_disulfide(
     entity2: &AtomConformerResidueChainModel,
 ) -> bool {
     if (entity1.residue().name().unwrap() == "CYS")
-        & (entity2.residue().name().unwrap() == "CYS")
-        & (entity1.atom().name() == "SG")
-        & (entity2.atom().name() == "SG")
+        && (entity2.residue().name().unwrap() == "CYS")
+        && (entity1.atom().name() == "SG")
+        && (entity2.atom().name() == "SG")
     {
         let cb1 = entity1
             .residue()

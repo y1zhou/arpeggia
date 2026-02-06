@@ -41,26 +41,25 @@ use std::collections::HashMap;
 fn get_hydrophobicity(resn: &str) -> Option<f32> {
     // Black & Mould values minus Glycine (0.501)
     match resn.to_uppercase().as_str() {
-        "ALA" => Some(0.616 - 0.501), // 0.115
-        "ARG" => Some(0.000 - 0.501), // -0.501
-        "ASN" => Some(0.236 - 0.501), // -0.265
-        "ASP" => Some(0.028 - 0.501), // -0.473
-        "CYS" => Some(0.680 - 0.501), // 0.179
-        "GLU" => Some(0.043 - 0.501), // -0.458
-        "GLN" => Some(0.251 - 0.501), // -0.250
-        "GLY" => Some(0.000),         // 0.0 (reference)
-        "HIS" => Some(0.165 - 0.501), // -0.336
-        "ILE" => Some(0.943 - 0.501), // 0.442
-        "LEU" => Some(0.943 - 0.501), // 0.442
-        "LYS" => Some(0.283 - 0.501), // -0.218
-        "MET" => Some(0.738 - 0.501), // 0.237
-        "PHE" => Some(1.000 - 0.501), // 0.499
-        "PRO" => Some(0.711 - 0.501), // 0.210
-        "SER" => Some(0.359 - 0.501), // -0.142
-        "THR" => Some(0.450 - 0.501), // -0.051
-        "TRP" => Some(0.878 - 0.501), // 0.377
-        "TYR" => Some(0.880 - 0.501), // 0.379
-        "VAL" => Some(0.825 - 0.501), // 0.324
+        "ALA" => Some(0.616 - 0.501),         // 0.115
+        "ARG" => Some(0.000 - 0.501),         // -0.501
+        "ASN" => Some(0.236 - 0.501),         // -0.265
+        "ASP" => Some(0.028 - 0.501),         // -0.473
+        "CYS" => Some(0.680 - 0.501),         // 0.179
+        "GLU" => Some(0.043 - 0.501),         // -0.458
+        "GLN" => Some(0.251 - 0.501),         // -0.250
+        "GLY" => Some(0.000),                 // 0.0 (reference)
+        "HIS" => Some(0.165 - 0.501),         // -0.336
+        "ILE" | "LEU" => Some(0.943 - 0.501), // 0.442
+        "LYS" => Some(0.283 - 0.501),         // -0.218
+        "MET" => Some(0.738 - 0.501),         // 0.237
+        "PHE" => Some(1.000 - 0.501),         // 0.499
+        "PRO" => Some(0.711 - 0.501),         // 0.210
+        "SER" => Some(0.359 - 0.501),         // -0.142
+        "THR" => Some(0.450 - 0.501),         // -0.051
+        "TRP" => Some(0.878 - 0.501),         // 0.377
+        "TYR" => Some(0.880 - 0.501),         // 0.379
+        "VAL" => Some(0.825 - 0.501),         // 0.324
         _ => None,
     }
 }
@@ -113,13 +112,12 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)
-/// * `num_threads` - Number of threads for parallel processing
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, atomn, atomi, sasa, sap_score
+/// A Polars `DataFrame` with columns:
+/// - `chain`, `resn`, `resi`, `insertion`, `atomn`, `atomi`, `sasa`, `sap_score`
 ///
 /// # Example
 ///
@@ -130,11 +128,11 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
 /// let (pdb, _errors) = load_model(&input_file);
 ///
 /// // Calculate SAP for all chains
-/// let sap_df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+/// let sap_df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, "");
 /// println!("Calculated SAP score for {} atoms", sap_df.height());
 ///
 /// // Calculate SAP for only chains H and L (antibody heavy and light chain)
-/// let sap_hl = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "H,L");
+/// let sap_hl = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, "H,L");
 /// ```
 pub fn get_per_atom_sap_score(
     pdb: &PDB,
@@ -142,20 +140,11 @@ pub fn get_per_atom_sap_score(
     n_points: usize,
     model_num: usize,
     sap_radius: f32,
-    num_threads: isize,
     chains: &str,
 ) -> DataFrame {
     // Use get_atom_sasa from sasa.rs for SASA calculation
     // Note: This already handles hydrogen stripping and solvent/ion removal
-    let atom_sasa_df = get_atom_sasa(
-        pdb,
-        probe_radius,
-        n_points,
-        model_num,
-        num_threads,
-        true,
-        chains,
-    );
+    let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, true, chains);
 
     // Create a lookup map from atom serial number to SASA value
     let atomi_col = atom_sasa_df
@@ -192,7 +181,7 @@ pub fn get_per_atom_sap_score(
     // Use pdbtbx's R-tree for spatial indexing (similar to InteractionComplex::get_atomic_contacts)
     let pdb_no_hydrogens = prepare_pdb_for_sasa(pdb, true, true, chains);
     let tree = pdb_no_hydrogens.create_hierarchy_rtree();
-    let sap_radius_sq = (sap_radius * sap_radius) as f64;
+    let sap_radius_sq = f64::from(sap_radius * sap_radius);
 
     // Calculate SAP score for each atom in the DataFrame
     let sap_scores_map: HashMap<usize, f32> = pdb_no_hydrogens
@@ -281,13 +270,12 @@ pub fn get_per_atom_sap_score(
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)
-/// * `num_threads` - Number of threads for parallel processing
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
 ///
-/// A Polars DataFrame with columns:
-/// - chain, resn, resi, insertion, sc_sasa, sap_score
+/// A Polars `DataFrame` with columns:
+/// - `chain`, `resn`, `resi`, `insertion`, `sc_sasa`, `sap_score`
 ///
 /// # Example
 ///
@@ -298,11 +286,11 @@ pub fn get_per_atom_sap_score(
 /// let (pdb, _errors) = load_model(&input_file);
 ///
 /// // Calculate SAP for all chains
-/// let sap_df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+/// let sap_df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, "");
 /// println!("Calculated SAP score for {} residues", sap_df.height());
 ///
 /// // Calculate SAP for only chain A
-/// let sap_a = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "A");
+/// let sap_a = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, "A");
 /// ```
 pub fn get_per_residue_sap_score(
     pdb: &PDB,
@@ -310,19 +298,11 @@ pub fn get_per_residue_sap_score(
     n_points: usize,
     model_num: usize,
     sap_radius: f32,
-    num_threads: isize,
     chains: &str,
 ) -> DataFrame {
     // Get per-atom SAP scores
-    let atom_sap = get_per_atom_sap_score(
-        pdb,
-        probe_radius,
-        n_points,
-        model_num,
-        sap_radius,
-        num_threads,
-        chains,
-    );
+    let atom_sap =
+        get_per_atom_sap_score(pdb, probe_radius, n_points, model_num, sap_radius, chains);
 
     // Aggregate by residue
     let residue_sap = atom_sap
@@ -362,7 +342,7 @@ pub fn get_per_residue_sap_score(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::load_model;
+    use crate::utils::{load_model, run_with_threads};
 
     fn load_ubiquitin() -> PDB {
         let root = env!("CARGO_MANIFEST_DIR");
@@ -385,11 +365,11 @@ mod tests {
 
         // Phenylalanine should be most hydrophobic (positive)
         let phe = get_hydrophobicity("PHE").unwrap();
-        assert!(phe > 0.4, "PHE hydrophobicity should be high: {}", phe);
+        assert!(phe > 0.4, "PHE hydrophobicity should be high: {phe}");
 
         // Arginine should be most hydrophilic (negative)
         let arg = get_hydrophobicity("ARG").unwrap();
-        assert!(arg < -0.4, "ARG hydrophobicity should be low: {}", arg);
+        assert!(arg < -0.4, "ARG hydrophobicity should be low: {arg}");
 
         // Unknown residues should return None
         assert!(get_hydrophobicity("XXX").is_none());
@@ -403,13 +383,12 @@ mod tests {
             "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
         ];
 
-        for aa in amino_acids.iter() {
+        for aa in &amino_acids {
             let max_sasa = get_sc_max_asa(aa);
-            assert!(max_sasa.is_some(), "Should have max SASA for {}", aa);
+            assert!(max_sasa.is_some(), "Should have max SASA for {aa}");
             assert!(
                 max_sasa.unwrap() > 0.0,
-                "Max SASA for {} should be positive",
-                aa
+                "Max SASA for {aa} should be positive"
             );
         }
 
@@ -425,7 +404,7 @@ mod tests {
     #[test]
     fn test_per_atom_sap_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Check that we get results
         assert!(!df.is_empty(), "SAP DataFrame should not be empty");
@@ -448,7 +427,7 @@ mod tests {
     #[test]
     fn test_per_atom_sap_values_reasonable() {
         let pdb = load_ubiquitin();
-        let df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Get SAP scores
         let sap_values: Vec<f32> = df
@@ -472,7 +451,7 @@ mod tests {
     #[test]
     fn test_per_residue_sap_returns_data() {
         let pdb = load_ubiquitin();
-        let df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Check that we get results
         assert!(!df.is_empty(), "Residue SAP DataFrame should not be empty");
@@ -493,7 +472,7 @@ mod tests {
     #[test]
     fn test_sap_multi_chain() {
         let pdb = load_multi_chain();
-        let df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, 1, "");
+        let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Should have results
         assert!(!df.is_empty(), "Multi-chain SAP should not be empty");
@@ -502,8 +481,7 @@ mod tests {
         let chain_count = df.column("chain").unwrap().unique().unwrap().len();
         assert!(
             chain_count > 1,
-            "Should have multiple chains: {}",
-            chain_count
+            "Should have multiple chains: {chain_count}"
         );
     }
 }

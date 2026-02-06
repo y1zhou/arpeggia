@@ -1,6 +1,6 @@
 [package]
 name = "arpeggia"
-version = "0.7.0"
+version = "0.8.0"
 description = "A port of the Arpeggio library for Rust"
 edition = "2024"
 authors = ["Yi Zhou <me@y1zhou.com>"]
@@ -29,7 +29,10 @@ polars = { version = "0.52.0", default-features = false, features = [
     "round_series",
 ] }
 pyo3 = { version = "^0.26", features = ["extension-module"], optional = true }
-pyo3-polars = { version = "0.25", features = ["derive", "lazy"], optional = true }
+pyo3-polars = { version = "0.25", features = [
+    "derive",
+    "lazy",
+], optional = true }
 rayon = "1.10.0"
 rstar = "0.12.2"
 rust-sasa = "0.9.2"
@@ -39,3 +42,8 @@ tracing-subscriber = "0.3.19"
 [features]
 default = []
 python = ["pyo3", "pyo3-polars"]
+
+# cargo build --profile profiling to use with samply
+[profile.profiling]
+inherits = "release"
+debug = true

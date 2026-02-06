@@ -1,6 +1,6 @@
 use super::ionic::is_pos_ionizable;
+use super::residues::Plane;
 use super::structs::Interaction;
-use crate::residues::Plane;
 
 use nalgebra as na;
 use pdbtbx::*;
@@ -21,7 +21,7 @@ pub fn find_cation_pi(
         let dist = ring.point_vec_dist(&atom_point);
         let theta = ring.point_vec_angle(&atom_point);
 
-        if (theta <= CATION_PI_ANGLE_THRESHOLD) & (dist <= CATION_PI_DIST_THRESHOLD) {
+        if (theta <= CATION_PI_ANGLE_THRESHOLD) && (dist <= CATION_PI_DIST_THRESHOLD) {
             return Some(Interaction::CationPi);
         }
     }
@@ -48,10 +48,13 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
             d if d <= 60.0 => Some(Interaction::PiTiltedStacking),
             d if d <= 90.0 => match theta {
                 t if (30.0..60.0).contains(&t) => Some(Interaction::PiLStacking), // oe
-                _ => match dist <= PI_T_DIST_THREHOLD {
-                    true => Some(Interaction::PiTStacking), // fe and ef
-                    false => None,
-                },
+                _ => {
+                    if dist <= PI_T_DIST_THREHOLD {
+                        Some(Interaction::PiTStacking)
+                    } else {
+                        None
+                    }
+                }
             },
             _ => None,
         }
@@ -63,7 +66,8 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{residues::ResidueExt, utils::load_model};
+    use crate::contacts::residues::ResidueExt;
+    use crate::utils::load_model;
 
     #[test]
     fn test_good_cation_pi() {

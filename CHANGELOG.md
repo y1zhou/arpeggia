@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-02-05
+
+### Added
+
+- **Shape Complementarity (SC) score calculation**: New `sc` module for computing geometric complementarity at protein-protein interfaces following the Lawrence & Colman (1993) algorithm
+  - Full Connolly molecular surface generation with contact, toroidal, and concave surface dots
+  - RTree-based spatial indexing for efficient peripheral band trimming and neighbor search
+  - Attention classification system for dot filtering
+  - New `sc` CLI command: `arpeggia sc -i structure.pdb -g "H,L/A"`
+  - Python binding: `arpeggia.sc()` function returning SC score as float
+  - Multi-threading support with `--threads` parameter
+  - Model selection with `--model` parameter
+
+### Changed
+
+- Performance optimizations in SC module using RTree spatial indexing (6x speedup)
+- SC calculation uses pdbtbx's VdW radii as fallback when embedded radii table has no match
+
 ## [0.7.0] - 2026-01-30
 
 ### Added
@@ -184,7 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.0
 [0.7.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.7.0
 [0.6.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.6.0
 [0.5.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.5.1

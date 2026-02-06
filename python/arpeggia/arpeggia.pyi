@@ -10,6 +10,7 @@ def contacts(
     vdw_comp: float = 0.1,
     dist_cutoff: float = 6.5,
     ignore_zero_occupancy: bool = False,
+    num_threads: int = 1,
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate atomic and ring contacts.
 
@@ -20,6 +21,7 @@ def contacts(
         vdw_comp: VdW radii compensation factor. Defaults to 0.1.
         dist_cutoff: Distance cutoff for neighbor searches in Ångströms. Defaults to 6.5.
         ignore_zero_occupancy: If True, ignore atoms with zero occupancy. Defaults to False.
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
 
     Returns:
         A Polars DataFrame containing all identified contacts with columns:
@@ -36,8 +38,8 @@ def sasa(
     probe_radius: float = 1.4,
     n_points: int = 100,
     model_num: int = 0,
-    num_threads: int = 1,
     chains: str = "",
+    num_threads: int = 1,
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA).
 
@@ -50,9 +52,9 @@ def sasa(
         probe_radius: Probe radius in Ångströms. Defaults to 1.4.
         n_points: Number of points for surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
-        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
         chains: Comma-separated chain IDs to include (e.g., "A,B,C").
             If empty, includes all chains. Defaults to "".
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
 
     Returns:
         A Polars DataFrame with SASA values. Columns depend on the level:
@@ -94,8 +96,8 @@ def relative_sasa(
     probe_radius: float = 1.4,
     n_points: int = 100,
     model_num: int = 0,
-    num_threads: int = 1,
     chains: str = "",
+    num_threads: int = 1,
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate relative SASA (RSA) for each residue.
 
@@ -107,9 +109,9 @@ def relative_sasa(
         probe_radius: Probe radius in Ångströms. Defaults to 1.4.
         n_points: Number of points for surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
-        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
         chains: Comma-separated chain IDs to include (e.g., "A,B,C").
             If empty, includes all chains. Defaults to "".
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
 
     Returns:
         A Polars DataFrame with relative SASA values for each residue with columns:
@@ -124,8 +126,8 @@ def sap_score(
     n_points: int = 100,
     model_num: int = 0,
     sap_radius: float = 5.0,
-    num_threads: int = 1,
     chains: str = "",
+    num_threads: int = 1,
 ) -> pl.DataFrame:
     """Load a PDB or mmCIF file and calculate Spatial Aggregation Propensity (SAP) scores.
 
@@ -152,9 +154,9 @@ def sap_score(
         n_points: Number of points for SASA surface calculation. Defaults to 100.
         model_num: Model number to analyze (0 for first model). Defaults to 0.
         sap_radius: Radius in Ångströms for neighbor search. Defaults to 5.0.
-        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
         chains: Comma-separated chain IDs to include (e.g., "H,L").
             If empty, includes all chains. Defaults to "".
+        num_threads: Number of threads for parallel processing (0 for all cores). Defaults to 1.
 
     Returns:
         A Polars DataFrame with SAP scores. Columns depend on the level:
@@ -163,7 +165,7 @@ def sap_score(
     """
     ...
 
-def pdb2seq(input_file: str) -> dict[str, str]:
+def seq(input_file: str) -> dict[str, str]:
     """Load a PDB or mmCIF file and extract sequences for all chains.
 
     Args:
@@ -171,5 +173,30 @@ def pdb2seq(input_file: str) -> dict[str, str]:
 
     Returns:
         A dictionary mapping chain IDs to their sequences
+    """
+    ...
+
+def sc(
+    input_file: str,
+    groups: str,
+    model_num: int = 0,
+    num_threads: int = 0,
+) -> float:
+    """Calculate Shape Complementarity (SC) between two chain groups.
+
+    Shape complementarity measures how well two molecular surfaces fit together,
+    following Lawrence & Colman (1993) "Shape Complementarity at Protein/Protein Interfaces".
+    Higher SC values (closer to 1.0) indicate better geometric fit between surfaces.
+    Typical protein-protein interfaces have SC values between 0.5 and 0.7.
+
+    Args:
+        input_file: Path to the PDB or mmCIF file
+        groups: Chain groups specification, e.g., "H,L/A" for chains H,L vs chain A.
+            Both groups must be specified separated by "/".
+        model_num: Model number to analyze (0 for first model). Defaults to 0.
+        num_threads: Number of threads for parallel calculations (0 for auto). Defaults to 0.
+
+    Returns:
+        The shape complementarity score (0-1), or -1.0 if calculation fails.
     """
     ...

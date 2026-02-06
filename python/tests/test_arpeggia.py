@@ -22,7 +22,7 @@ def test_import():
     assert hasattr(arpeggia, "__version__")
     assert hasattr(arpeggia, "contacts")
     assert hasattr(arpeggia, "sasa")
-    assert hasattr(arpeggia, "pdb2seq")
+    assert hasattr(arpeggia, "seq")
 
 
 def test_contacts(test_pdb_file):
@@ -166,7 +166,7 @@ def test_pdb2seq(test_pdb_file):
     """Test the pdb2seq function returns expected structure."""
     import arpeggia
 
-    seqs = arpeggia.pdb2seq(test_pdb_file)
+    seqs = arpeggia.seq(test_pdb_file)
 
     # Check return type
     assert isinstance(seqs, dict), "Sequences should return a dictionary"
@@ -200,7 +200,7 @@ def test_sequences_validity(test_pdb_file):
     """Test that returned sequences contain valid amino acid codes."""
     import arpeggia
 
-    seqs = arpeggia.pdb2seq(test_pdb_file)
+    seqs = arpeggia.seq(test_pdb_file)
 
     # Valid single-letter amino acid codes
     valid_codes = set("ACDEFGHIKLMNPQRSTVWYXO")

@@ -4,11 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "arpeggia"
-version = "0.7.0"
+version = "0.8.0"
 description = "A library for analyzing protein-protein interactions in PDB and mmCIF files"
-authors = [
-    {name = "Yi Zhou", email = "me@y1zhou.com"}
-]
+authors = [{ name = "Yi Zhou", email = "me@y1zhou.com" }]
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
@@ -26,19 +24,19 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Chemistry",
 ]
-keywords = ["bioinformatics", "structural-biology", "pdb", "protein-interactions"]
-license = {text = "MIT"}
+keywords = [
+    "bioinformatics",
+    "structural-biology",
+    "pdb",
+    "protein-interactions",
+]
+license = { text = "MIT" }
 
 # The Python dependencies
-dependencies = [
-    "polars>=0.19.0,<2",
-]
+dependencies = ["polars>=0.19.0,<2"]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
-    "maturin>=1.0",
-]
+dev = ["pytest>=7.0", "maturin>=1.0"]
 
 [project.urls]
 Homepage = "https://github.com/y1zhou/arpeggia"
@@ -52,5 +50,7 @@ python-source = "python"
 features = ["python"]
 # Build mode (release for better performance)
 profile = "release"
+# Build mode for local development
+editable-profile = "dev"
 # Strip the library for minimum file size
 strip = true

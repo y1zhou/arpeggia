@@ -52,7 +52,7 @@ pub fn find_hydrogen_bond(
             let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
             if donor_h.par_iter().any(|h| {
                 (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
-                    & (donor.atom().angle(h, acceptor.atom()) >= 90.0)
+                    && (donor.atom().angle(h, acceptor.atom()) >= 90.0)
             }) {
                 return Some(Interaction::HydrogenBond);
             }
@@ -96,7 +96,7 @@ pub fn find_weak_hydrogen_bond(
             let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
             if donor_h.par_iter().any(|h| {
                 (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
-                    & (donor.atom().angle(h, acceptor.atom()) >= 130.0)
+                    && (donor.atom().angle(h, acceptor.atom()) >= 130.0)
             }) {
                 return Some(Interaction::WeakHydrogenBond);
             }
@@ -122,9 +122,10 @@ fn is_donor_acceptor_pair<'a>(
     let e1_atom = entity1.atom().name();
     let e2_atom = entity2.atom().name();
 
-    if is_hydrogen_donor(e1_conformer, e1_atom) & is_hydrogen_acceptor(e2_conformer, e2_atom) {
+    if is_hydrogen_donor(e1_conformer, e1_atom) && is_hydrogen_acceptor(e2_conformer, e2_atom) {
         Some((entity1, entity2))
-    } else if is_hydrogen_donor(e2_conformer, e2_atom) & is_hydrogen_acceptor(e1_conformer, e1_atom)
+    } else if is_hydrogen_donor(e2_conformer, e2_atom)
+        && is_hydrogen_acceptor(e1_conformer, e1_atom)
     {
         Some((entity2, entity1))
     } else {
@@ -143,13 +144,10 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
         (res_name, atom_name),
         ("ASN", "OD1")
             // | ("ASN", "ND2")
-            | ("ASP", "OD1")
-            | ("ASP", "OD2")
+            | ("ASP", "OD1" | "OD2")
             | ("GLN", "OE1")
-            | ("GLU", "OE1")
-            | ("GLU", "OE2")
-            | ("HIS", "ND1")
-            | ("HIS", "NE2")
+            | ("GLU", "OE1" | "OE2")
+            | ("HIS", "ND1" | "NE2")
             | ("SER", "OG")
             | ("THR", "OG1")
             | ("TYR", "OH")
@@ -166,13 +164,10 @@ fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     }
     matches!(
         (res_name, atom_name),
-        ("ARG", "NE")
-            | ("ARG", "NH1")
-            | ("ARG", "NH2")
+        ("ARG", "NE" | "NH1" | "NH2")
             | ("ASN", "ND2")
             | ("GLN", "NE2")
-            | ("HIS", "ND1")
-            | ("HIS", "NE2")
+            | ("HIS", "ND1" | "NE2")
             | ("LYS", "NZ")
             | ("SER", "OG")
             | ("THR", "OG1")
@@ -195,9 +190,10 @@ fn is_weak_donor_acceptor_pair<'a>(
     let e1_atom = entity1.atom().name();
     let e2_atom = entity2.atom().name();
 
-    if is_weak_hydrogen_donor(entity1.atom()) & is_hydrogen_acceptor(e2_conformer, e2_atom) {
+    if is_weak_hydrogen_donor(entity1.atom()) && is_hydrogen_acceptor(e2_conformer, e2_atom) {
         Some((entity1, entity2))
-    } else if is_weak_hydrogen_donor(entity2.atom()) & is_hydrogen_acceptor(e1_conformer, e1_atom) {
+    } else if is_weak_hydrogen_donor(entity2.atom()) && is_hydrogen_acceptor(e1_conformer, e1_atom)
+    {
         Some((entity2, entity1))
     } else {
         None

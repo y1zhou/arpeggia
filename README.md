@@ -27,6 +27,7 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 - [x] Calculate SASA (Solvent Accessible Surface Area) at atom, residue, and chain levels
 - [x] Calculate relative SASA (RSA) normalized by MaxASA values
 - [x] Calculate SAP (Spatial Aggregation Propensity) scores for aggregation prediction
+- [x] Calculate Shape Complementarity (SC) scores at protein-protein interfaces
 - [x] Filter calculations to specific chains
 - [x] Output results in various formats (e.g., JSON, CSV, Parquet)
 - [x] Python bindings via PyO3
@@ -110,6 +111,10 @@ print(f"Calculated SAP for H and L chains")
 bsa = arpeggia.dsasa("structure.pdb", groups="A,B/C,D")
 print(f"Buried surface area: {bsa:.2f} Å²")
 
+# Calculate Shape Complementarity at an interface
+sc_score = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
+print(f"Shape Complementarity: {sc_score:.3f}")  # Typical values: 0.5-0.7
+
 # Extract protein sequences
 sequences = arpeggia.pdb2seq("structure.pdb")
 for chain_id, seq in sequences.items():
@@ -160,6 +165,9 @@ arpeggia sap -i antibody.pdb -o output_dir --chains "H,L"
 # Calculate buried surface area at the interface
 arpeggia dsasa -i structure.pdb -g "A,B/C,D"
 
+# Calculate Shape Complementarity at an interface
+arpeggia sc -i antibody_antigen.pdb -g "H,L/A"
+
 # Extract sequences
 arpeggia seq structure.pdb
 ```
@@ -199,3 +207,13 @@ cargo test
 ## License
 
 MIT License - see LICENSE file for details.
+
+## Credit
+
+This project would not be possible without the following resources:
+
+- [Arpeggio](https://github.com/PDBeurope/arpeggio/): Original Python library for protein-protein interaction analysis.
+- [pdbtbx](https://github.com/douweschulte/pdbtbx/): The structural file parser doing all the heavy lifting.
+- [RustSASA](https://github.com/maxall41/RustSASA): Library for calculating solvent accessible surface area.
+- [sc-rs](https://github.com/cytokineking/sc-rs/): Library for calculating the Shape Complementarity by Lawrence & Colman (1993).
+- [Rosetta](https://github.com/RosettaCommons/rosetta): Where the Spatial Aggregation Propensity (SAP) score calculations are inspired from.

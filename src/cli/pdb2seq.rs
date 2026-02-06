@@ -19,9 +19,9 @@ pub(crate) fn run(args: &Args) {
         let (pdb, _) = load_model(&input_file);
         let sequences = arpeggia::get_sequences(&pdb);
 
-        println!("File: {}", input_file);
+        println!("File: {input_file}");
         for (chain_id, seq) in sequences {
-            println!("{}: {}", chain_id, seq);
+            println!("{chain_id}: {seq}");
         }
         println!();
     }

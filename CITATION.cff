@@ -16,5 +16,5 @@ authors:
 repository-code: 'https://github.com/y1zhou/arpeggia'
 license: GPL-3.0
 commit: 4908b8ff4660b42f52eec255969ab51b0b08e0ae
-version: v0.4.2
-date-released: '2025-03-18'
+version: v0.8.0
+date-released: '2026-02-05'

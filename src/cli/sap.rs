@@ -1,4 +1,4 @@
-use arpeggia::{DataFrameFileType, get_num_threads, load_model, write_df_to_file};
+use arpeggia::{DataFrameFileType, load_model, run_with_threads, write_df_to_file};
 use clap::{Parser, ValueEnum};
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
@@ -73,13 +73,6 @@ pub(crate) struct Args {
 pub(crate) fn run(args: &Args) {
     trace!("{args:?}");
 
-    // Create Rayon thread pool
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(args.num_threads)
-        .build_global()
-        .unwrap();
-    debug!("Using {} thread(s)", rayon::current_num_threads());
-
     // Make sure `input` exists
     let input_path = Path::new(&args.input).canonicalize().unwrap();
     let input_file: String = input_path.to_str().unwrap().parse().unwrap();
@@ -87,37 +80,37 @@ pub(crate) fn run(args: &Args) {
     // Load file as complex structure
     let (pdb, pdb_warnings) = load_model(&input_file);
     if !pdb_warnings.is_empty() {
-        pdb_warnings.iter().for_each(|e| match e.level() {
-            pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-            pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-            _ => warn!("{e}"),
-        });
+        for e in &pdb_warnings {
+            match e.level() {
+                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
+                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
+                _ => warn!("{e}"),
+            }
+        }
     }
 
-    // Convert thread count to isize for rust-sasa
-    let num_threads = get_num_threads(args.num_threads);
-
     // Calculate SAP score based on the specified level
-    let mut df_sap = match args.level {
-        SapLevel::Atom => arpeggia::get_per_atom_sap_score(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
-            args.sap_radius,
-            num_threads,
-            &args.chains,
-        ),
-        SapLevel::Residue => arpeggia::get_per_residue_sap_score(
-            &pdb,
-            args.probe_radius,
-            args.n_points,
-            args.model_num,
-            args.sap_radius,
-            num_threads,
-            &args.chains,
-        ),
-    };
+    let mut df_sap = run_with_threads(args.num_threads as isize, || {
+        debug!("Using {} thread(s)", rayon::current_num_threads());
+        match args.level {
+            SapLevel::Atom => arpeggia::get_per_atom_sap_score(
+                &pdb,
+                args.probe_radius,
+                args.n_points,
+                args.model_num,
+                args.sap_radius,
+                &args.chains,
+            ),
+            SapLevel::Residue => arpeggia::get_per_residue_sap_score(
+                &pdb,
+                args.probe_radius,
+                args.n_points,
+                args.model_num,
+                args.sap_radius,
+                &args.chains,
+            ),
+        }
+    });
 
     if df_sap.is_empty() {
         error!(
@@ -129,9 +122,10 @@ pub(crate) fn run(args: &Args) {
     // Prepare output directory
     let output_path = Path::new(&args.output).canonicalize().unwrap();
     let _ = std::fs::create_dir_all(output_path.clone());
-    let output_file = match output_path.is_dir() {
-        true => output_path.join(args.filename.clone()),
-        false => output_path,
+    let output_file = if output_path.is_dir() {
+        output_path.join(args.filename.clone())
+    } else {
+        output_path
     }
     .with_extension(args.output_format.to_string());
 

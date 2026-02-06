@@ -2,11 +2,9 @@ use super::{
     InteractingEntity, Interaction, ResultEntry, find_cation_pi, find_hydrogen_bond,
     find_hydrophobic_contact, find_ionic_bond, find_ionic_repulsion, find_pi_pi, find_vdw_contact,
     find_weak_hydrogen_bond,
-};
-use crate::{
     residues::{Plane, ResidueExt, ResidueId},
-    utils::parse_groups,
 };
+use crate::utils::parse_groups;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -40,7 +38,7 @@ impl<'a> InteractionComplex<'a> {
         groups: &'a str,
         vdw_comp_factor: f64,
         interacting_threshold: f64,
-    ) -> Result<(Self, Vec<String>), Vec<String>> {
+    ) -> (Self, Vec<String>) {
         // Parse all chains and input chain groups
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups);
@@ -54,7 +52,7 @@ impl<'a> InteractionComplex<'a> {
         // Similarly, build a mapping of side chain planes
         let sc_planes = build_sc_plane_positions(model);
 
-        Ok((
+        (
             Self {
                 model,
                 ligand,
@@ -66,7 +64,7 @@ impl<'a> InteractionComplex<'a> {
                 sc_planes,
             },
             ring_err,
-        ))
+        )
     }
 
     /// Determine if two entities need to be checked for interactions or not.
@@ -100,8 +98,8 @@ impl<'a> InteractionComplex<'a> {
         }
 
         // Ignore if they are not a valid ligand-receptor pair
-        if !((self.ligand.contains(r1.chain) & self.receptor.contains(r2.chain))
-            | (self.ligand.contains(r2.chain) & self.receptor.contains(r1.chain)))
+        if !((self.ligand.contains(r1.chain) && self.receptor.contains(r2.chain))
+            | (self.ligand.contains(r2.chain) && self.receptor.contains(r1.chain)))
         {
             return false;
         }
@@ -112,7 +110,7 @@ impl<'a> InteractionComplex<'a> {
             let e2_idx = self.res2idx[r2];
 
             if symmetric {
-                (e2_idx > 1) & (e1_idx < e2_idx - 1) // not immediate neighbors
+                (e2_idx > 1) && (e1_idx < e2_idx - 1) // not immediate neighbors
             } else {
                 let is_neighboring = match e1_idx {
                     0 => (e2_idx == e1_idx) | (e2_idx == e1_idx + 1),
@@ -124,11 +122,11 @@ impl<'a> InteractionComplex<'a> {
             // Across two chains, avoid duplicate comparisons when the chains exist on both sides,
             // e.g. H,A,B/H,A where H-A and A-H are the same interactions
             !(symmetric
-                & self.receptor.contains(r1.chain)
-                & self.receptor.contains(r2.chain)
-                & self.ligand.contains(r1.chain)
-                & self.ligand.contains(r2.chain)
-                & (r1.chain > r2.chain))
+                && self.receptor.contains(r1.chain)
+                && self.receptor.contains(r2.chain)
+                && self.ligand.contains(r1.chain)
+                && self.ligand.contains(r2.chain)
+                && (r1.chain > r2.chain))
         }
     }
 
@@ -200,7 +198,7 @@ impl Interactions for InteractionComplex<'_> {
             .model
             .atoms_with_hierarchy()
             .filter(|x| {
-                self.ligand.contains(x.chain().id()) & (x.atom().element().unwrap() != &Element::H)
+                self.ligand.contains(x.chain().id()) && (x.atom().element().unwrap() != &Element::H)
             })
             .flat_map(|x| {
                 tree.locate_within_distance(x.atom().pos(), max_radius_squared)
@@ -363,8 +361,8 @@ impl Interactions for InteractionComplex<'_> {
                     .iter()
                     .filter(|(k2, _)| {
                         self.ligand.contains(k1.chain)
-                            & self.receptor.contains(k2.chain)
-                            & self.should_compare_residues(k1, k2, true)
+                            && self.receptor.contains(k2.chain)
+                            && self.should_compare_residues(k1, k2, true)
                     })
                     .map(|(k2, ring2)| (k1, ring1, k2, ring2))
                     .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>()
@@ -471,10 +469,8 @@ fn build_ring_positions(model: &'_ PDB) -> RingPositionResult<'_> {
                             ring_positions.insert(res_id, ring);
                         }
                         None => {
-                            errors.push(format!(
-                                "Failed to calculate ring position for {:?}",
-                                res_id
-                            ));
+                            errors
+                                .push(format!("Failed to calculate ring position for {res_id:?}"));
                         }
                     }
                 }

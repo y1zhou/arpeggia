@@ -24,6 +24,8 @@ enum Commands {
     RelativeSasa(crate::cli::relative_sasa::Args),
     /// Calculate Spatial Aggregation Propensity (SAP) score for aggregation-prone region prediction
     Sap(crate::cli::sap::Args),
+    /// Calculate Shape Complementarity (SC) between two chain groups
+    Sc(crate::cli::sc::Args),
     /// Print the sequences of all chains in a PDB or mmCIF file
     Seq(crate::cli::pdb2seq::Args),
 }
@@ -49,6 +51,9 @@ fn main() {
         }
         Commands::Sap(args) => {
             crate::cli::sap::run(args);
+        }
+        Commands::Sc(args) => {
+            crate::cli::sc::run(args);
         }
         Commands::Seq(args) => {
             crate::cli::pdb2seq::run(args);
