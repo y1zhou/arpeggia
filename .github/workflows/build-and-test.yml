@@ -9,6 +9,7 @@ on:
   #     - python/**
   #     - pyproject.toml
   #     - .github/workflows/build-and-test.yml
+  workflow_dispatch: # manual trigger
   pull_request:
     branches: ["master"]
     types:
