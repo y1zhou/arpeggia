@@ -169,7 +169,7 @@ def test_pdb2seq(test_pdb_file):
     seqs = arpeggia.seq(test_pdb_file)
 
     # Check return type
-    assert isinstance(seqs, dict), "Sequences should return a dictionary"
+    assert isinstance(seqs, list), "Sequences should return a list"
     assert len(seqs) > 0, "Should have at least one chain"
 
     # For 1ubq.pdb, we know it has 1 chain with a specific sequence
@@ -177,7 +177,7 @@ def test_pdb2seq(test_pdb_file):
     assert len(seqs) == 1, f"Expected 1 chain, got {len(seqs)}"
 
     # Check sequence properties
-    for chain_id, seq in seqs.items():
+    for chain_id, seq in seqs:
         assert isinstance(chain_id, str), "Chain ID should be string"
         assert isinstance(seq, str), "Sequence should be string"
         assert len(seq) > 0, "Sequence should not be empty"
@@ -205,7 +205,7 @@ def test_sequences_validity(test_pdb_file):
     # Valid single-letter amino acid codes
     valid_codes = set("ACDEFGHIKLMNPQRSTVWYXO")
 
-    for chain_id, seq in seqs.items():
+    for chain_id, seq in seqs:
         # All characters should be valid amino acid codes
         assert all(aa in valid_codes for aa in seq), (
             f"Sequence for chain {chain_id} contains invalid amino acid codes"

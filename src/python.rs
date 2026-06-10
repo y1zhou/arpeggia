@@ -194,7 +194,7 @@ fn dsasa(
 ///     input_file (str): Path to the PDB or mmCIF file
 ///
 /// Returns:
-///     dict[str, str]: A dictionary mapping chain IDs to their sequences
+///     list[tuple[str, str]]: A list of (chain ID, sequence) tuples
 ///
 /// Example:
 ///     >>> import arpeggia
@@ -202,7 +202,7 @@ fn dsasa(
 ///     >>> for chain_id, seq in sequences.items():
 ///     ...     print(f"Chain {chain_id}: {seq}")
 #[pyfunction]
-fn seq(input_file: String) -> PyResult<std::collections::HashMap<String, String>> {
+fn seq(input_file: String) -> PyResult<std::vec::Vec<(String, String)>> {
     // Load the PDB file
     let (pdb, _warnings) = crate::load_model(&input_file);
 
@@ -305,6 +305,7 @@ fn relative_sasa(
 ///     >>> print(f"Calculated SAP for {len(sap_hl)} residues")
 #[pyfunction]
 #[pyo3(signature = (input_file, level="residue", probe_radius=1.4, n_points=100, model_num=0, sap_radius=5.0, chains="", num_threads=1))]
+#[allow(clippy::too_many_arguments)]
 fn sap_score(
     input_file: String,
     level: &str,

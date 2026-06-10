@@ -5,7 +5,6 @@
 
 use crate::contacts::chains::ChainExt;
 use pdbtbx::*;
-use std::collections::HashMap;
 
 /// Get sequences of all chains in a PDB structure.
 ///
@@ -15,7 +14,7 @@ use std::collections::HashMap;
 ///
 /// # Returns
 ///
-/// A `HashMap` mapping chain IDs to their sequences as strings.
+/// A `Vec` of `(chain_id, sequence)` pairs.
 ///
 /// # Example
 ///
@@ -29,7 +28,7 @@ use std::collections::HashMap;
 ///     println!("Chain {}: {}", chain_id, seq);
 /// }
 /// ```
-pub fn get_sequences(pdb: &PDB) -> HashMap<String, String> {
+pub fn get_sequences(pdb: &PDB) -> Vec<(String, String)> {
     pdb.chains()
         .map(|chain| (chain.id().to_string(), chain.pdb_seq().join("")))
         .collect()
