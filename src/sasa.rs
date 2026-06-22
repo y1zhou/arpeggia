@@ -534,14 +534,14 @@ pub fn get_relative_sasa(
     let max_sasa_values: Vec<Option<f32>> = resn_col
         .str()
         .unwrap()
-        .into_iter()
+        .iter()
         .map(|opt_resn| opt_resn.and_then(get_max_asa))
         .collect();
 
     let relative_sasa_values: Vec<Option<f32>> = sasa_col
         .f32()
         .unwrap()
-        .into_iter()
+        .iter()
         .zip(max_sasa_values.iter())
         .map(|(sasa_opt, max_opt)| match (sasa_opt, max_opt) {
             (Some(sasa), Some(max)) if *max > 0.0 => Some(sasa / max),
@@ -585,7 +585,7 @@ mod tests {
         let df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, true, ""));
 
         // Check that we get results
-        assert!(!df.is_empty(), "SASA DataFrame should not be empty");
+        assert!(df.height() > 0, "SASA DataFrame should not be empty");
 
         // Check that the expected columns exist
         let columns: Vec<String> = df
@@ -626,7 +626,7 @@ mod tests {
 
         // Get the SASA column and check values are non-negative
         let sasa_col = df.column("sasa").unwrap();
-        let sasa_values: Vec<f32> = sasa_col.f32().unwrap().into_iter().flatten().collect();
+        let sasa_values: Vec<f32> = sasa_col.f32().unwrap().iter().flatten().collect();
 
         assert!(
             sasa_values.iter().all(|&v| v >= 0.0),
@@ -644,7 +644,10 @@ mod tests {
         let df = run_with_threads(1, || get_residue_sasa(&pdb, 1.4, 100, 0, ""));
 
         // Check that we get results
-        assert!(!df.is_empty(), "Residue SASA DataFrame should not be empty");
+        assert!(
+            df.height() > 0,
+            "Residue SASA DataFrame should not be empty"
+        );
 
         // Check that the expected columns exist
         let columns: Vec<String> = df
@@ -711,7 +714,7 @@ mod tests {
         let df = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, ""));
 
         // Check that we get results
-        assert!(!df.is_empty(), "Chain SASA DataFrame should not be empty");
+        assert!(df.height() > 0, "Chain SASA DataFrame should not be empty");
 
         // Check that the expected columns exist
         let columns: Vec<String> = df
@@ -753,7 +756,7 @@ mod tests {
 
         // Check that all SASA values are non-negative
         let sasa_col = df.column("sasa").unwrap();
-        let sasa_values: Vec<f32> = sasa_col.f32().unwrap().into_iter().flatten().collect();
+        let sasa_values: Vec<f32> = sasa_col.f32().unwrap().iter().flatten().collect();
 
         assert!(
             sasa_values.iter().all(|&v| v >= 0.0),
@@ -862,7 +865,7 @@ mod tests {
 
         // Check that we get results
         assert!(
-            !df.is_empty(),
+            df.height() > 0,
             "Relative SASA DataFrame should not be empty"
         );
 
@@ -905,7 +908,7 @@ mod tests {
             .unwrap()
             .f32()
             .unwrap()
-            .into_iter()
+            .iter()
             .flatten()
             .collect();
 
@@ -997,7 +1000,7 @@ mod tests {
 
         // Check that we only have A and B chains
         let chain_col = df_ab.column("chain").unwrap();
-        let chain_ids: Vec<&str> = chain_col.str().unwrap().into_iter().flatten().collect();
+        let chain_ids: Vec<&str> = chain_col.str().unwrap().iter().flatten().collect();
         for chain_id in &chain_ids {
             assert!(
                 *chain_id == "A" || *chain_id == "B",

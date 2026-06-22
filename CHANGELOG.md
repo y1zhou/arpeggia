@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Changed `pdb2seq` output from `dict` to `list[tuple]` to preserve chain order
+- Updated dependency versions (clap, nalgebra, polars, pyo3, pyo3-polars, rayon, tracing, and tracing-subscriber)
+
 ## [0.8.0] - 2026-02-05
 
 ### Added

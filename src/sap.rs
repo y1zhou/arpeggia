@@ -152,17 +152,16 @@ pub fn get_per_atom_sap_score(
         .unwrap()
         .i32()
         .unwrap()
-        .into_iter()
+        .iter()
         .flatten();
     let sasa_col = atom_sasa_df
         .column("sasa")
         .unwrap()
         .f32()
         .unwrap()
-        .into_iter()
+        .iter()
         .flatten();
     let atom_sasa_map: HashMap<usize, f32> = atomi_col
-        .into_iter()
         .zip(sasa_col)
         .map(|(atomi, sasa)| (atomi as usize, sasa))
         .collect();
@@ -173,7 +172,7 @@ pub fn get_per_atom_sap_score(
     let resn_hphobicity_map: HashMap<&str, f32> = resn_col
         .str()
         .unwrap()
-        .into_iter()
+        .iter()
         .flatten()
         .filter_map(|s| get_hydrophobicity(s).map(|h| (s, h)))
         .collect();
@@ -224,7 +223,7 @@ pub fn get_per_atom_sap_score(
         .collect();
     let sc_atom_sasa_df = atom_sasa_df
         .lazy()
-        .filter(col("atomi").is_in(lit(sidechain_atomi).implode(), false))
+        .filter(col("atomi").is_in(lit(sidechain_atomi).implode(false), false))
         .collect()
         .unwrap();
     let sap_scores: Vec<f32> = sc_atom_sasa_df
@@ -232,7 +231,7 @@ pub fn get_per_atom_sap_score(
         .unwrap()
         .i32()
         .unwrap()
-        .into_iter()
+        .iter()
         .flatten()
         .map(|atomi| *sap_scores_map.get(&(atomi as usize)).unwrap_or(&0.0))
         .collect();
@@ -321,7 +320,7 @@ pub fn get_per_residue_sap_score(
         .unwrap()
         .str()
         .unwrap()
-        .into_iter()
+        .iter()
         .flatten()
         .map(|resn| get_sc_max_asa(resn).unwrap())
         .collect();
@@ -407,7 +406,7 @@ mod tests {
         let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Check that we get results
-        assert!(!df.is_empty(), "SAP DataFrame should not be empty");
+        assert!(df.height() > 0, "SAP DataFrame should not be empty");
 
         // Check columns
         let columns: Vec<String> = df
@@ -435,7 +434,7 @@ mod tests {
             .unwrap()
             .f32()
             .unwrap()
-            .into_iter()
+            .iter()
             .flatten()
             .collect();
 
@@ -454,7 +453,7 @@ mod tests {
         let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Check that we get results
-        assert!(!df.is_empty(), "Residue SAP DataFrame should not be empty");
+        assert!(df.height() > 0, "Residue SAP DataFrame should not be empty");
 
         // Check columns
         let columns: Vec<String> = df
@@ -475,7 +474,7 @@ mod tests {
         let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
 
         // Should have results
-        assert!(!df.is_empty(), "Multi-chain SAP should not be empty");
+        assert!(df.height() > 0, "Multi-chain SAP should not be empty");
 
         // Should have multiple chains
         let chain_count = df.column("chain").unwrap().unique().unwrap().len();

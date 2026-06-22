@@ -112,7 +112,7 @@ pub(crate) fn run(args: &Args) {
         }
     });
 
-    if df_sap.is_empty() {
+    if df_sap.height() == 0 {
         error!(
             "No data found in the input file. Please check the provided arguments, especially the model number."
         );
