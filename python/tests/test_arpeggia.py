@@ -147,6 +147,33 @@ def test_sasa_parameters(test_pdb_file):
     assert len(df1) == len(df2)
 
 
+def test_sasa_and_sap_default_model_uses_first_explicit_model(test_pdb_file, tmp_path):
+    """Test model_num=0 with explicit model serials that do not start at 1."""
+    import arpeggia
+
+    source_lines = Path(test_pdb_file).read_text().splitlines()
+    coordinate_lines = [
+        line for line in source_lines if line.startswith(("ATOM  ", "HETATM", "TER   "))
+    ]
+    multimodel_pdb = tmp_path / "first-model-serial-7.pdb"
+    multimodel_pdb.write_text(
+        "MODEL        7\n"
+        + "\n".join(coordinate_lines)
+        + "\nENDMDL\n"
+        + "MODEL        9\n"
+        + "\n".join(coordinate_lines)
+        + "\nENDMDL\nEND\n"
+    )
+
+    default_sasa = arpeggia.sasa(str(multimodel_pdb), model_num=0)
+    explicit_sasa = arpeggia.sasa(str(multimodel_pdb), model_num=7)
+    default_sap = arpeggia.sap_score(str(multimodel_pdb), model_num=0)
+    explicit_sap = arpeggia.sap_score(str(multimodel_pdb), model_num=7)
+
+    assert default_sasa.height == explicit_sasa.height == 602
+    assert default_sap.height == explicit_sap.height == 34
+
+
 def test_seq(test_pdb_file):
     """Test the seq function returns expected structure."""
     import arpeggia
