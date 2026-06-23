@@ -1,4 +1,6 @@
-use arpeggia::{DataFrameFileType, load_model, run_with_threads, write_df_to_file};
+use arpeggia::{
+    DataFrameFileType, load_model, prepare_df_output_dir, run_with_threads, write_df_to_file,
+};
 use clap::{Parser, ValueEnum};
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace, warn};
@@ -119,16 +121,6 @@ pub(crate) fn run(args: &Args) {
         return;
     }
 
-    // Prepare output directory
-    let output_path = Path::new(&args.output).canonicalize().unwrap();
-    let _ = std::fs::create_dir_all(output_path.clone());
-    let output_file = if output_path.is_dir() {
-        output_path.join(args.filename.clone())
-    } else {
-        output_path
-    }
-    .with_extension(args.output_format.to_string());
-
     // Log SAP score summary
     let entity_name = match args.level {
         SapLevel::Atom => "atoms",
@@ -142,6 +134,7 @@ pub(crate) fn run(args: &Args) {
     );
 
     // Save results to file
+    let output_file = prepare_df_output_dir(&args.output, &args.filename, args.output_format);
     write_df_to_file(&mut df_sap, &output_file, args.output_format);
     let output_file_str = output_file.to_str().unwrap();
     info!("Results saved to {output_file_str}");

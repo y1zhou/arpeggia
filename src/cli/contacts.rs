@@ -1,4 +1,6 @@
-use arpeggia::{DataFrameFileType, load_model, run_with_threads, write_df_to_file};
+use arpeggia::{
+    DataFrameFileType, load_model, prepare_df_output_dir, run_with_threads, write_df_to_file,
+};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
@@ -106,12 +108,6 @@ pub(crate) fn run(args: &Args) {
         arpeggia::get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff)
     });
 
-    // Prepare output directory
-    let _ = std::fs::create_dir_all(output_path.clone());
-    let output_file = output_path
-        .join(args.filename.clone())
-        .with_extension(args.output_format.to_string());
-
     // Save results and log the identified interactions
     let df_clash = df_contacts
         .clone()
@@ -131,7 +127,7 @@ pub(crate) fn run(args: &Args) {
         );
     }
 
-    // Save res to CSV files
+    let output_file = prepare_df_output_dir(&output_path, &args.filename, args.output_format);
     write_df_to_file(&mut df_contacts, &output_file, args.output_format);
     let output_file_str = output_file.to_str().unwrap();
     info!("Results saved to {output_file_str}");
