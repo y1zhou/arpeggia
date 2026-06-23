@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-06-23
+
 ### Changed
 
 - Changed `pdb2seq` output from `dict` to `list[tuple]` to preserve chain order
 - Updated dependency versions (clap, nalgebra, polars, pyo3, pyo3-polars, rayon, tracing, and tracing-subscriber)
+- Fixed issue where `model_num=0` did not default to the first model in the structure
+- Refactored Rust library for improved performance and robustness
 
 ## [0.8.0] - 2026-02-05
 
@@ -207,7 +211,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.1
 [0.8.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.0
 [0.7.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.7.0
 [0.6.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.6.0

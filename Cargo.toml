@@ -1,6 +1,6 @@
 [package]
 name = "arpeggia"
-version = "0.8.0"
+version = "0.8.1"
 description = "A port of the Arpeggio library for Rust"
 edition = "2024"
 authors = ["Yi Zhou <me@y1zhou.com>"]
@@ -28,7 +28,7 @@ polars = { version = "0.54.4", default-features = false, features = [
     "is_in",
     "round_series"
 ] }
-pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"], optional = true }
+pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 pyo3-polars = { version = "0.27", default-features = false, features = [
     "derive",
     "lazy",
