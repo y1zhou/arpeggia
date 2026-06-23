@@ -15,13 +15,15 @@ mod sap;
 mod sasa;
 mod sc;
 mod sequences;
+mod structure;
 mod utils;
 
 // Re-export key public types
 pub use contacts::residues::{Plane, ResidueExt, ResidueId};
 pub use contacts::{InteractingEntity, Interaction, Interactions, ResultEntry};
+pub use structure::{load_model, parse_groups};
 pub use utils::{
-    DataFrameFileType, load_model, parse_groups, run_with_threads, sum_float_col, write_df_to_file,
+    DataFrameFileType, prepare_df_output_dir, run_with_threads, sum_float_col, write_df_to_file,
 };
 
 // Re-export public functions from modules

@@ -18,16 +18,30 @@ def test_pdb_file():
 def test_import():
     """Test that the module can be imported."""
     import arpeggia
+    from arpeggia import _contract
 
     assert hasattr(arpeggia, "__version__")
     assert hasattr(arpeggia, "contacts")
     assert hasattr(arpeggia, "sasa")
     assert hasattr(arpeggia, "seq")
+    assert arpeggia.__all__ == list(_contract.EXPORTED_FUNCTIONS)
+
+
+def test_stub_consumes_python_contract():
+    """Test that the type stub imports the shared exposure contract."""
+    stub = Path(__file__).parent.parent / "arpeggia" / "arpeggia.pyi"
+    stub_text = stub.read_text()
+
+    assert "from ._contract import SapLevel, SasaLevel, SequenceList" in stub_text
+    assert "level: SasaLevel = ..." in stub_text
+    assert "level: SapLevel = ..." in stub_text
+    assert "def seq(input_file: str) -> SequenceList" in stub_text
 
 
 def test_contacts(test_pdb_file):
     """Test the contacts function returns expected DataFrame structure."""
     import arpeggia
+    from arpeggia import _contract
 
     df = arpeggia.contacts(test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5)
 
@@ -35,28 +49,7 @@ def test_contacts(test_pdb_file):
     assert df.height == 532, "Contacts DataFrame should not be empty"
 
     # Check expected columns exist
-    expected_columns = [
-        "model",
-        "interaction",
-        "distance",
-        "from_chain",
-        "from_resn",
-        "from_resi",
-        "from_insertion",
-        "from_altloc",
-        "from_atomn",
-        "from_atomi",
-        "to_chain",
-        "to_resn",
-        "to_resi",
-        "to_insertion",
-        "to_altloc",
-        "to_atomn",
-        "to_atomi",
-        "sc_centroid_dist",
-        "sc_dihedral",
-        "sc_centroid_angle",
-    ]
+    expected_columns = _contract.CONTACT_COLUMNS
 
     for col in expected_columns:
         assert col in df.columns, (
@@ -115,6 +108,7 @@ def test_contacts_ignore_zero_occupancy(test_pdb_file):
 def test_sasa(test_pdb_file):
     """Test the sasa function returns expected DataFrame structure."""
     import arpeggia
+    from arpeggia import _contract
 
     df = arpeggia.sasa(test_pdb_file, probe_radius=1.4, n_points=100, model_num=0)
 
@@ -122,16 +116,7 @@ def test_sasa(test_pdb_file):
     assert df.height == 602, "SASA DataFrame should not be empty"
 
     # Check expected columns exist
-    expected_columns = [
-        "atomi",
-        "sasa",
-        "chain",
-        "resn",
-        "resi",
-        "insertion",
-        "altloc",
-        "atomn",
-    ]
+    expected_columns = _contract.SASA_COLUMNS["atom"]
 
     for col in expected_columns:
         assert col in df.columns, f"Column '{col}' should be present in SASA DataFrame"
@@ -162,8 +147,8 @@ def test_sasa_parameters(test_pdb_file):
     assert len(df1) == len(df2)
 
 
-def test_pdb2seq(test_pdb_file):
-    """Test the pdb2seq function returns expected structure."""
+def test_seq(test_pdb_file):
+    """Test the seq function returns expected structure."""
     import arpeggia
 
     seqs = arpeggia.seq(test_pdb_file)

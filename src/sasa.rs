@@ -5,138 +5,48 @@
 //! (buried surface area) and relative SASA.
 
 use crate::contacts::InteractingEntity;
-use crate::utils::{parse_groups, sum_float_col};
+use crate::structure::{parse_groups, prepare_structure, prepare_structure_with_chains};
 use pdbtbx::*;
 use polars::prelude::*;
 use std::collections::HashSet;
 
-/// Filter a PDB structure to keep only the specified model.
-///
-/// Creates a clone of the PDB and removes all models except the one at the specified index.
-/// If `model_num` is 0, the first model is used. Otherwise, the model with the matching
-/// serial number is kept.
-///
-/// # Arguments
-///
-/// * `pdb` - Reference to a PDB structure
-/// * `model_num` - Model number to keep (0 for first model)
-///
-/// # Returns
-///
-/// A filtered PDB structure containing only the specified model.
-pub(crate) fn filter_pdb_by_model(pdb: &PDB, model_num: usize) -> PDB {
-    let mut pdb_filtered = pdb.clone();
-    if pdb_filtered.model_count() > 1 {
-        // Find the model index (0-based) for the given model_num
-        let model_idx = if model_num == 0 {
-            0 // Use first model
-        } else {
-            pdb_filtered
-                .models()
-                .position(|m| m.serial_number() == model_num)
-                .unwrap_or(0)
-        };
-        pdb_filtered.remove_models_except(&[model_idx]);
-    }
-    pdb_filtered
+#[derive(Clone, Debug)]
+pub(crate) struct AtomSasaRecord {
+    pub(crate) chain: String,
+    pub(crate) resn: String,
+    pub(crate) resi: i32,
+    pub(crate) insertion: String,
+    pub(crate) altloc: String,
+    pub(crate) atomn: String,
+    pub(crate) atomi: i32,
+    pub(crate) sasa: f32,
 }
 
-/// Common residue names for solvent molecules.
-const SOLVENT_RESIDUES: &[&str] = &["HOH", "H2O", "D2O", "WAT", "TIP", "TIP3", "TIP4", "SPC"];
-
-/// Common residue names for ions.
-const ION_RESIDUES: &[&str] = &[
-    "NA", "CL", "K", "CA", "MG", "ZN", "FE", "MN", "CU", "CO", "NI", "CD", "SO4", "PO4", "NO3",
-    "ACE", "NH2",
-];
-
-/// Parse a comma-separated chain string into a `HashSet` of chain IDs.
-///
-/// # Arguments
-///
-/// * `chains` - Comma-separated chain IDs (e.g., "A,B,C"). Empty string means all chains.
-///
-/// # Returns
-///
-/// A `HashSet` of chain IDs. If the input is empty, returns an empty `HashSet` (meaning all chains).
-///
-/// # Example
-///
-/// ```ignore
-/// let chains = parse_chain_string("A,B,C");
-/// assert!(chains.contains("A"));
-/// assert!(chains.contains("B"));
-/// assert!(chains.contains("C"));
-/// ```
-fn parse_chain_string(chains: &str) -> HashSet<String> {
-    if chains.is_empty() {
-        HashSet::new()
-    } else {
-        chains
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect()
-    }
+#[derive(Clone, Debug)]
+pub(crate) struct ResidueSasaRecord {
+    pub(crate) chain: String,
+    pub(crate) resn: String,
+    pub(crate) resi: i32,
+    pub(crate) insertion: String,
+    pub(crate) sasa: f32,
+    pub(crate) is_polar: bool,
 }
 
-/// Prepare a PDB structure for SASA calculation by removing solvent, ions, hydrogens,
-/// and optionally filtering to specific chains.
-///
-/// This function creates a clone of the PDB and removes:
-/// - Chains not in the specified list (if chains is not empty)
-/// - All hydrogen atoms (if `remove_hydrogens` is true)
-/// - Solvent molecules (HOH, H2O, WAT, etc.) (if `remove_solvent_and_ions` is true)
-/// - Common ions (NA, CL, CA, MG, ZN, etc.) (if `remove_solvent_and_ions` is true)
-///
-/// # Arguments
-///
-/// * `pdb` - Reference to a PDB structure
-/// * `remove_hydrogens` - Whether to remove hydrogen atoms
-/// * `remove_solvent_and_ions` - Whether to remove solvent and ion residues
-/// * `chains` - Comma-separated chain IDs to keep (e.g., "A,B,C"). Empty string keeps all chains.
-///
-/// # Returns
-///
-/// A filtered PDB structure suitable for SASA calculations.
-///
-/// # Example
-///
-/// ```ignore
-/// // Keep only chains A and B, remove hydrogens and solvent
-/// let filtered = prepare_pdb_for_sasa(&pdb, true, true, "A,B");
-///
-/// // Keep all chains
-/// let all_chains = prepare_pdb_for_sasa(&pdb, true, true, "");
-/// ```
-pub(crate) fn prepare_pdb_for_sasa(
-    pdb: &PDB,
-    remove_hydrogens: bool,
-    remove_solvent_and_ions: bool,
-    chains: &str,
-) -> PDB {
-    let mut pdb_prepared = pdb.clone();
+#[derive(Clone, Debug)]
+pub(crate) struct ChainSasaRecord {
+    pub(crate) chain: String,
+    pub(crate) sasa: f32,
+}
 
-    // Filter to specific chains if specified
-    let chain_filter = parse_chain_string(chains);
-    if !chain_filter.is_empty() {
-        pdb_prepared.remove_chains_by(|chain| !chain_filter.contains(chain.id()));
-    }
-
-    // Remove hydrogens
-    if remove_hydrogens {
-        pdb_prepared.remove_atoms_by(|atom| atom.element() == Some(&Element::H));
-    }
-
-    // Remove entire residues that are solvent or ions
-    if remove_solvent_and_ions {
-        pdb_prepared.remove_residues_by(|residue| {
-            let resn = residue.name().unwrap_or("");
-            SOLVENT_RESIDUES.contains(&resn) || ION_RESIDUES.contains(&resn)
-        });
-    }
-
-    pdb_prepared
+#[derive(Clone, Debug)]
+pub(crate) struct RelativeSasaRecord {
+    pub(crate) chain: String,
+    pub(crate) resn: String,
+    pub(crate) resi: i32,
+    pub(crate) insertion: String,
+    pub(crate) sasa: f32,
+    pub(crate) is_polar: bool,
+    pub(crate) relative_sasa: Option<f32>,
 }
 
 /// Calculate solvent accessible surface area (SASA) for each atom in a PDB structure.
@@ -179,18 +89,31 @@ pub fn get_atom_sasa(
     remove_hydrogens: bool,
     chains: &str,
 ) -> DataFrame {
+    atom_sasa_records_to_dataframe(&calculate_atom_sasa_records(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        remove_hydrogens,
+        chains,
+    ))
+}
+
+pub(crate) fn calculate_atom_sasa_records(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    remove_hydrogens: bool,
+    chains: &str,
+) -> Vec<AtomSasaRecord> {
     use rust_sasa::{Atom as SASAAtom, calculate_sasa_internal};
 
-    // Prepare PDB: remove solvent, ions, hydrogens, and filter chains
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, remove_hydrogens, true, chains);
+    let pdb_filtered = prepare_structure(pdb, model_num, remove_hydrogens, chains);
 
-    // If model_num is 0, we use the first model; otherwise use the specified model
-    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
-
-    // Calculate the SASA for each atom (excluding solvent, ions, hydrogens already removed)
-    let atoms = pdb_filtered
-        .atoms_with_hierarchy()
-        .filter(|x| x.model().serial_number() == model_num)
+    let atom_hierarchy = pdb_filtered.atoms_with_hierarchy().collect::<Vec<_>>();
+    let atoms = atom_hierarchy
+        .iter()
         .map(|x| SASAAtom {
             position: [
                 x.atom().pos().0 as f32,
@@ -215,33 +138,35 @@ pub fn get_atom_sasa(
         rayon::current_num_threads() as isize,
     );
 
-    // Create a DataFrame with the results
-    let atom_annotations = pdb_filtered
-        .atoms_with_hierarchy()
-        .map(|x| InteractingEntity::from_hier(&x))
-        .collect::<Vec<InteractingEntity>>();
-    let atom_annot_df = df!(
-        "chain" => atom_annotations.iter().map(|x| x.chain.clone()).collect::<Vec<String>>(),
-        "resn" => atom_annotations.iter().map(|x| x.resn.clone()).collect::<Vec<String>>(),
-        "resi" => atom_annotations.iter().map(|x| x.resi as i32).collect::<Vec<i32>>(),
-        "insertion" => atom_annotations.iter().map(|x| x.insertion.clone()).collect::<Vec<String>>(),
-        "altloc" => atom_annotations.iter().map(|x| x.altloc.clone()).collect::<Vec<String>>(),
-        "atomn" => atom_annotations.iter().map(|x| x.atomn.clone()).collect::<Vec<String>>(),
-        "atomi" => atom_annotations.iter().map(|x| x.atomi as i32).collect::<Vec<i32>>(),
-    )
-    .unwrap();
+    atom_hierarchy
+        .iter()
+        .zip(atom_sasa)
+        .map(|(hier, sasa)| {
+            let entity = InteractingEntity::from_hier(hier);
+            AtomSasaRecord {
+                chain: entity.chain,
+                resn: entity.resn,
+                resi: entity.resi as i32,
+                insertion: entity.insertion,
+                altloc: entity.altloc,
+                atomn: entity.atomn,
+                atomi: entity.atomi as i32,
+                sasa,
+            }
+        })
+        .collect()
+}
 
+pub(crate) fn atom_sasa_records_to_dataframe(records: &[AtomSasaRecord]) -> DataFrame {
     df!(
-        "atomi" => atoms.iter().map(|x| x.id as i32).collect::<Vec<i32>>(),
-        "sasa" => atom_sasa
-    )
-    .unwrap()
-    .join(
-        &atom_annot_df,
-        ["atomi"],
-        ["atomi"],
-        JoinArgs::new(JoinType::Inner),
-        None,
+        "atomi" => records.iter().map(|x| x.atomi).collect::<Vec<i32>>(),
+        "sasa" => records.iter().map(|x| x.sasa).collect::<Vec<f32>>(),
+        "chain" => records.iter().map(|x| x.chain.clone()).collect::<Vec<String>>(),
+        "resn" => records.iter().map(|x| x.resn.clone()).collect::<Vec<String>>(),
+        "resi" => records.iter().map(|x| x.resi).collect::<Vec<i32>>(),
+        "insertion" => records.iter().map(|x| x.insertion.clone()).collect::<Vec<String>>(),
+        "altloc" => records.iter().map(|x| x.altloc.clone()).collect::<Vec<String>>(),
+        "atomn" => records.iter().map(|x| x.atomn.clone()).collect::<Vec<String>>(),
     )
     .unwrap()
     .sort(["atomi"], Default::default())
@@ -288,11 +213,25 @@ pub fn get_residue_sasa(
     model_num: usize,
     chains: &str,
 ) -> DataFrame {
+    residue_sasa_records_to_dataframe(&calculate_residue_sasa_records(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        chains,
+    ))
+}
+
+pub(crate) fn calculate_residue_sasa_records(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    chains: &str,
+) -> Vec<ResidueSasaRecord> {
     use rust_sasa::{ResidueLevel, SASAOptions};
 
-    // Prepare PDB: remove solvent, ions, hydrogens, and filter chains, then filter by model
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true, chains);
-    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
+    let pdb_filtered = prepare_structure(pdb, model_num, true, chains);
 
     let options = SASAOptions::<ResidueLevel>::new()
         .with_probe_radius(probe_radius)
@@ -304,13 +243,29 @@ pub fn get_residue_sasa(
         .process(&pdb_filtered)
         .expect("Failed to calculate residue-level SASA");
 
+    let mut records = result
+        .iter()
+        .map(|r| ResidueSasaRecord {
+            chain: r.chain_id.clone(),
+            resn: r.name.clone(),
+            resi: r.serial_number as i32,
+            insertion: r.insertion_code.clone(),
+            sasa: r.value,
+            is_polar: r.is_polar,
+        })
+        .collect::<Vec<_>>();
+    records.sort_by(|a, b| (&a.chain, a.resi, &a.insertion).cmp(&(&b.chain, b.resi, &b.insertion)));
+    records
+}
+
+pub(crate) fn residue_sasa_records_to_dataframe(records: &[ResidueSasaRecord]) -> DataFrame {
     df!(
-        "chain" => result.iter().map(|r| r.chain_id.clone()).collect::<Vec<String>>(),
-        "resn" => result.iter().map(|r| r.name.clone()).collect::<Vec<String>>(),
-        "resi" => result.iter().map(|r| r.serial_number as i32).collect::<Vec<i32>>(),
-        "insertion" => result.iter().map(|r| r.insertion_code.clone()).collect::<Vec<String>>(),
-        "sasa" => result.iter().map(|r| r.value).collect::<Vec<f32>>(),
-        "is_polar" => result.iter().map(|r| r.is_polar).collect::<Vec<bool>>(),
+        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
+        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
+        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
+        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
+        "is_polar" => records.iter().map(|r| r.is_polar).collect::<Vec<bool>>(),
     )
     .unwrap()
     .sort(["chain", "resi", "insertion"], Default::default())
@@ -356,11 +311,25 @@ pub fn get_chain_sasa(
     model_num: usize,
     chains: &str,
 ) -> DataFrame {
+    chain_sasa_records_to_dataframe(&calculate_chain_sasa_records(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        chains,
+    ))
+}
+
+pub(crate) fn calculate_chain_sasa_records(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    chains: &str,
+) -> Vec<ChainSasaRecord> {
     use rust_sasa::{ChainLevel, SASAOptions};
 
-    // Prepare PDB: remove solvent, ions, hydrogens, and filter chains, then filter by model
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true, chains);
-    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
+    let pdb_filtered = prepare_structure(pdb, model_num, true, chains);
 
     let options = SASAOptions::<ChainLevel>::new()
         .with_probe_radius(probe_radius)
@@ -372,9 +341,53 @@ pub fn get_chain_sasa(
         .process(&pdb_filtered)
         .expect("Failed to calculate chain-level SASA");
 
+    let mut records = result
+        .iter()
+        .map(|r| ChainSasaRecord {
+            chain: r.name.clone(),
+            sasa: r.value,
+        })
+        .collect::<Vec<_>>();
+    records.sort_by(|a, b| a.chain.cmp(&b.chain));
+    records
+}
+
+fn calculate_chain_sasa_records_for_chain_set(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    chains: &HashSet<String>,
+) -> Vec<ChainSasaRecord> {
+    use rust_sasa::{ChainLevel, SASAOptions};
+
+    let pdb_filtered = prepare_structure_with_chains(pdb, model_num, true, chains);
+
+    let options = SASAOptions::<ChainLevel>::new()
+        .with_probe_radius(probe_radius)
+        .with_n_points(n_points)
+        .with_threads(rayon::current_num_threads() as isize)
+        .with_allow_vdw_fallback(true);
+
+    let result = options
+        .process(&pdb_filtered)
+        .expect("Failed to calculate chain-level SASA");
+
+    let mut records = result
+        .iter()
+        .map(|r| ChainSasaRecord {
+            chain: r.name.clone(),
+            sasa: r.value,
+        })
+        .collect::<Vec<_>>();
+    records.sort_by(|a, b| a.chain.cmp(&b.chain));
+    records
+}
+
+pub(crate) fn chain_sasa_records_to_dataframe(records: &[ChainSasaRecord]) -> DataFrame {
     df!(
-        "chain" => result.iter().map(|r| r.name.clone()).collect::<Vec<String>>(),
-        "sasa" => result.iter().map(|r| r.value).collect::<Vec<f32>>(),
+        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
+        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
     )
     .unwrap()
     .sort(["chain"], Default::default())
@@ -414,40 +427,38 @@ pub fn get_dsasa(
     let combined_group_chains: HashSet<String> =
         group1_chains.union(&group2_chains).cloned().collect();
 
-    // Create PDB with only chains from both groups (remove unrelated chains)
-    let mut pdb_combined = pdb.clone();
-    pdb_combined.remove_chains_by(|chain| !combined_group_chains.contains(chain.id()));
-
-    // Calculate SASA for the combined complex (only chains in groups)
-    let combined_sasa = get_chain_sasa(
-        &pdb_combined,
+    let combined_sasa = calculate_chain_sasa_records_for_chain_set(
+        pdb,
         probe_radius,
         n_points,
         model_num,
-        "", // Already filtered by combined_group_chains
+        &combined_group_chains,
     );
+    let combined_total = sum_chain_sasa(&combined_sasa);
 
-    let combined_total = sum_float_col(&combined_sasa, "sasa");
+    let group1_sasa = calculate_chain_sasa_records_for_chain_set(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        &group1_chains,
+    );
+    let group1_total = sum_chain_sasa(&group1_sasa);
 
-    // Create PDB with only group1 chains and calculate SASA
-    let mut pdb_group1 = pdb.clone();
-    pdb_group1.remove_chains_by(|chain| !group1_chains.contains(chain.id()));
+    let group2_sasa = calculate_chain_sasa_records_for_chain_set(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        &group2_chains,
+    );
+    let group2_total = sum_chain_sasa(&group2_sasa);
 
-    let group1_sasa = get_chain_sasa(&pdb_group1, probe_radius, n_points, model_num, "");
-
-    let group1_total = sum_float_col(&group1_sasa, "sasa");
-
-    // Create PDB with only group2 chains and calculate SASA
-    let mut pdb_group2 = pdb.clone();
-    pdb_group2.remove_chains_by(|chain| !group2_chains.contains(chain.id()));
-
-    let group2_sasa = get_chain_sasa(&pdb_group2, probe_radius, n_points, model_num, "");
-
-    let group2_total = sum_float_col(&group2_sasa, "sasa");
-
-    // Calculate buried surface area (dSASA)
-    // dSASA = SASA_group1 + SASA_group2 - SASA_complex
     group1_total + group2_total - combined_total
+}
+
+fn sum_chain_sasa(records: &[ChainSasaRecord]) -> f32 {
+    records.iter().map(|record| record.sasa).sum()
 }
 
 /// Maximum solvent accessible surface area (`MaxASA`) values for amino acids.
@@ -524,46 +535,59 @@ pub fn get_relative_sasa(
     model_num: usize,
     chains: &str,
 ) -> DataFrame {
-    // Get residue-level SASA
-    let residue_sasa = get_residue_sasa(pdb, probe_radius, n_points, model_num, chains);
+    relative_sasa_records_to_dataframe(&calculate_relative_sasa_records(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        chains,
+    ))
+}
 
-    // Calculate max_sasa and relative_sasa for each residue
-    let resn_col = residue_sasa.column("resn").unwrap();
-    let sasa_col = residue_sasa.column("sasa").unwrap();
+fn calculate_relative_sasa_records(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    chains: &str,
+) -> Vec<RelativeSasaRecord> {
+    calculate_residue_sasa_records(pdb, probe_radius, n_points, model_num, chains)
+        .into_iter()
+        .map(|record| {
+            let relative_sasa = get_max_asa(&record.resn)
+                .filter(|max_sasa| *max_sasa > 0.0)
+                .map(|max_sasa| record.sasa / max_sasa);
 
-    let max_sasa_values: Vec<Option<f32>> = resn_col
-        .str()
-        .unwrap()
-        .iter()
-        .map(|opt_resn| opt_resn.and_then(get_max_asa))
-        .collect();
-
-    let relative_sasa_values: Vec<Option<f32>> = sasa_col
-        .f32()
-        .unwrap()
-        .iter()
-        .zip(max_sasa_values.iter())
-        .map(|(sasa_opt, max_opt)| match (sasa_opt, max_opt) {
-            (Some(sasa), Some(max)) if *max > 0.0 => Some(sasa / max),
-            _ => None,
+            RelativeSasaRecord {
+                chain: record.chain,
+                resn: record.resn,
+                resi: record.resi,
+                insertion: record.insertion,
+                sasa: record.sasa,
+                is_polar: record.is_polar,
+                relative_sasa,
+            }
         })
-        .collect();
-
-    // Add the relative_sasa column to the DataFrame
-    let relative_sasa_series = Series::new("relative_sasa".into(), relative_sasa_values);
-
-    residue_sasa
-        .clone()
-        .lazy()
-        .with_columns([relative_sasa_series.lit()])
         .collect()
-        .unwrap()
+}
+
+fn relative_sasa_records_to_dataframe(records: &[RelativeSasaRecord]) -> DataFrame {
+    df!(
+        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
+        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
+        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
+        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
+        "is_polar" => records.iter().map(|r| r.is_polar).collect::<Vec<bool>>(),
+        "relative_sasa" => records.iter().map(|r| r.relative_sasa).collect::<Vec<Option<f32>>>(),
+    )
+    .unwrap()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{load_model, run_with_threads};
+    use crate::{load_model, run_with_threads, sum_float_col};
 
     fn load_ubiquitin() -> PDB {
         let root = env!("CARGO_MANIFEST_DIR");

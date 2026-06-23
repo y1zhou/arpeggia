@@ -16,11 +16,35 @@
 //! - SASA is the side-chain solvent accessible surface area
 //! - SASA_max is the maximum SASA for that residue type
 
-use crate::sasa::{get_atom_sasa, prepare_pdb_for_sasa};
+use crate::sasa::{AtomSasaRecord, calculate_atom_sasa_records};
+use crate::structure::prepare_structure;
 use pdbtbx::*;
 use polars::prelude::*;
-use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+#[derive(Clone, Debug)]
+struct AtomSapRecord {
+    chain: String,
+    resn: String,
+    resi: i32,
+    insertion: String,
+    atomn: String,
+    atomi: i32,
+    sasa: f32,
+    sap_score: f32,
+}
+
+#[derive(Clone, Debug)]
+struct ResidueSapRecord {
+    chain: String,
+    resn: String,
+    resi: i32,
+    insertion: String,
+    sc_sasa: f32,
+    sap_score: f32,
+    max_sc_asa: f32,
+    relative_sc_sasa: f32,
+}
 
 /// Black & Mould (1991) hydrophobicity scale values for amino acids.
 /// These values are normalized so that the scale ranges from 0 to 1,
@@ -142,68 +166,57 @@ pub fn get_per_atom_sap_score(
     sap_radius: f32,
     chains: &str,
 ) -> DataFrame {
-    // Use get_atom_sasa from sasa.rs for SASA calculation
-    // Note: This already handles hydrogen stripping and solvent/ion removal
-    let atom_sasa_df = get_atom_sasa(pdb, probe_radius, n_points, model_num, true, chains);
+    atom_sap_records_to_dataframe(&calculate_per_atom_sap_records(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        sap_radius,
+        chains,
+    ))
+}
 
-    // Create a lookup map from atom serial number to SASA value
-    let atomi_col = atom_sasa_df
-        .column("atomi")
-        .unwrap()
-        .i32()
-        .unwrap()
+fn calculate_per_atom_sap_records(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    sap_radius: f32,
+    chains: &str,
+) -> Vec<AtomSapRecord> {
+    let atom_sasa_records =
+        calculate_atom_sasa_records(pdb, probe_radius, n_points, model_num, true, chains);
+    let atom_sasa_map: HashMap<i32, f32> = atom_sasa_records
         .iter()
-        .flatten();
-    let sasa_col = atom_sasa_df
-        .column("sasa")
-        .unwrap()
-        .f32()
-        .unwrap()
-        .iter()
-        .flatten();
-    let atom_sasa_map: HashMap<usize, f32> = atomi_col
-        .zip(sasa_col)
-        .map(|(atomi, sasa)| (atomi as usize, sasa))
+        .map(|record| (record.atomi, record.sasa))
         .collect();
 
-    // Also create a map of residue name to hydrophobicity scale for lookup
-    // Non-standard residues are filtered out as they don't have hydrophobicity values
-    let resn_col = atom_sasa_df.column("resn").unwrap().unique().unwrap();
-    let resn_hphobicity_map: HashMap<&str, f32> = resn_col
-        .str()
-        .unwrap()
+    let resn_hydrophobicity_map: HashMap<String, f32> = atom_sasa_records
         .iter()
-        .flatten()
-        .filter_map(|s| get_hydrophobicity(s).map(|h| (s, h)))
+        .filter_map(|record| get_hydrophobicity(&record.resn).map(|h| (record.resn.clone(), h)))
         .collect();
 
-    // Use pdbtbx's R-tree for spatial indexing (similar to InteractionComplex::get_atomic_contacts)
-    let pdb_no_hydrogens = prepare_pdb_for_sasa(pdb, true, true, chains);
+    let pdb_no_hydrogens = prepare_structure(pdb, model_num, true, chains);
     let tree = pdb_no_hydrogens.create_hierarchy_rtree();
     let sap_radius_sq = f64::from(sap_radius * sap_radius);
 
-    // Calculate SAP score for each atom in the DataFrame
-    let sap_scores_map: HashMap<usize, f32> = pdb_no_hydrogens
+    let sap_scores_map: HashMap<i32, f32> = pdb_no_hydrogens
         .atoms_with_hierarchy()
         .filter(|h| h.is_sidechain())
         .map(|x| {
-            let x_atomi = x.atom().serial_number();
-
+            let x_atomi = x.atom().serial_number() as i32;
             let atom_sap_score = tree
-                // Find neighboring sidechain atoms within SAP radius
-                // Note: Self is included in neighbors intentionally, as per the SAP formula
                 .locate_within_distance(x.atom().pos(), sap_radius_sq)
                 .filter(|y| y.is_sidechain())
-                // SAP contribution = hydrophobicity * (SASA / max_SASA)
-                // Clamp to 1.0 in case the observed SASA exceed its theoretical max
                 .map(|y| {
                     let neighbor_resn = y.residue().name().unwrap();
-                    if let (Some(neighbor_atom_sasa), Some(neighbor_res_hphobicity)) = (
-                        atom_sasa_map.get(&(y.atom().serial_number())),
-                        resn_hphobicity_map.get(neighbor_resn),
+                    if let (Some(neighbor_atom_sasa), Some(neighbor_res_hydrophobicity)) = (
+                        atom_sasa_map.get(&(y.atom().serial_number() as i32)),
+                        resn_hydrophobicity_map.get(neighbor_resn),
                     ) {
                         let max_res_asa = get_sc_max_asa(neighbor_resn).unwrap();
-                        neighbor_res_hphobicity * (neighbor_atom_sasa / max_res_asa).clamp(0.0, 1.0)
+                        neighbor_res_hydrophobicity
+                            * (neighbor_atom_sasa / max_res_asa).clamp(0.0, 1.0)
                     } else {
                         0.0
                     }
@@ -213,48 +226,48 @@ pub fn get_per_atom_sap_score(
         })
         .collect();
 
-    // Returned DataFrame should only include side-chain atoms
-    let sidechain_atomi: Series = pdb
-        .par_atoms()
-        .filter(|a| !a.is_backbone())
-        .map(|a| a.serial_number() as i32)
-        .collect::<Vec<i32>>()
-        .iter()
-        .collect();
-    let sc_atom_sasa_df = atom_sasa_df
-        .lazy()
-        .filter(col("atomi").is_in(lit(sidechain_atomi).implode(false), false))
-        .collect()
-        .unwrap();
-    let sap_scores: Vec<f32> = sc_atom_sasa_df
-        .column("atomi")
-        .unwrap()
-        .i32()
-        .unwrap()
-        .iter()
-        .flatten()
-        .map(|atomi| *sap_scores_map.get(&(atomi as usize)).unwrap_or(&0.0))
+    let sidechain_atomi: HashSet<i32> = pdb_no_hydrogens
+        .atoms_with_hierarchy()
+        .filter(|h| h.is_sidechain())
+        .map(|h| h.atom().serial_number() as i32)
         .collect();
 
-    // Add SAP scores to the DataFrame
-    sc_atom_sasa_df
-        .lazy()
-        .with_column(Series::new("sap_score".into(), sap_scores).lit())
-        .collect()
-        .unwrap()
-        .select([
-            "chain",
-            "resn",
-            "resi",
-            "insertion",
-            "atomn",
-            "atomi",
-            "sasa",
-            "sap_score",
-        ])
-        .unwrap()
-        .sort(["atomi"], Default::default())
-        .unwrap()
+    let mut records = atom_sasa_records
+        .into_iter()
+        .filter(|record| sidechain_atomi.contains(&record.atomi))
+        .map(|record| atom_sasa_to_sap(record, &sap_scores_map))
+        .collect::<Vec<_>>();
+    records.sort_by_key(|record| record.atomi);
+    records
+}
+
+fn atom_sasa_to_sap(record: AtomSasaRecord, sap_scores_map: &HashMap<i32, f32>) -> AtomSapRecord {
+    AtomSapRecord {
+        chain: record.chain,
+        resn: record.resn,
+        resi: record.resi,
+        insertion: record.insertion,
+        atomn: record.atomn,
+        atomi: record.atomi,
+        sasa: record.sasa,
+        sap_score: *sap_scores_map.get(&record.atomi).unwrap_or(&0.0),
+    }
+}
+
+fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
+    df!(
+        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
+        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
+        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
+        "atomn" => records.iter().map(|r| r.atomn.clone()).collect::<Vec<String>>(),
+        "atomi" => records.iter().map(|r| r.atomi).collect::<Vec<i32>>(),
+        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
+        "sap_score" => records.iter().map(|r| r.sap_score).collect::<Vec<f32>>(),
+    )
+    .unwrap()
+    .sort(["atomi"], Default::default())
+    .unwrap()
 }
 
 /// Calculate the SAP score aggregated by residue.
@@ -299,49 +312,75 @@ pub fn get_per_residue_sap_score(
     sap_radius: f32,
     chains: &str,
 ) -> DataFrame {
-    // Get per-atom SAP scores
-    let atom_sap =
-        get_per_atom_sap_score(pdb, probe_radius, n_points, model_num, sap_radius, chains);
+    residue_sap_records_to_dataframe(&calculate_per_residue_sap_records(
+        pdb,
+        probe_radius,
+        n_points,
+        model_num,
+        sap_radius,
+        chains,
+    ))
+}
 
-    // Aggregate by residue
-    let residue_sap = atom_sap
-        .lazy()
-        .rename(["sasa"], ["sc_sasa"], true) // Be clear this is side-chain SASA
-        .filter(col("sap_score").gt(lit(0.0))) // Ref. calculate_per_res_sap in Rosetta
-        .group_by([col("chain"), col("resn"), col("resi"), col("insertion")])
-        .agg([col("sc_sasa").sum(), col("sap_score").sum()])
-        .sort(["chain", "resi", "insertion"], Default::default())
-        .collect()
-        .unwrap();
+fn calculate_per_residue_sap_records(
+    pdb: &PDB,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    sap_radius: f32,
+    chains: &str,
+) -> Vec<ResidueSapRecord> {
+    let mut grouped: BTreeMap<(String, String, i32, String), (f32, f32)> = BTreeMap::new();
 
-    // Annotate theroetical max sidechain SASA for reference
-    let max_sc_asa: Vec<f32> = residue_sap
-        .column("resn")
-        .unwrap()
-        .str()
-        .unwrap()
-        .iter()
-        .flatten()
-        .map(|resn| get_sc_max_asa(resn).unwrap())
-        .collect();
+    for record in
+        calculate_per_atom_sap_records(pdb, probe_radius, n_points, model_num, sap_radius, chains)
+            .into_iter()
+            .filter(|record| record.sap_score > 0.0)
+    {
+        let key = (record.chain, record.resn, record.resi, record.insertion);
+        let (sc_sasa, sap_score) = grouped.entry(key).or_insert((0.0, 0.0));
+        *sc_sasa += record.sasa;
+        *sap_score += record.sap_score;
+    }
 
-    residue_sap
-        .lazy()
-        .with_column(Series::new("max_sc_asa".into(), max_sc_asa).lit())
-        .with_column(
-            (col("sc_sasa") / col("max_sc_asa"))
-                .clip(lit(0.0), lit(1.0))
-                .alias("relative_sc_sasa")
-                .cast(DataType::Float32),
-        )
-        .collect()
-        .unwrap()
+    let mut records = grouped
+        .into_iter()
+        .map(|((chain, resn, resi, insertion), (sc_sasa, sap_score))| {
+            let max_sc_asa = get_sc_max_asa(&resn).unwrap();
+            ResidueSapRecord {
+                chain,
+                resn,
+                resi,
+                insertion,
+                sc_sasa,
+                sap_score,
+                max_sc_asa,
+                relative_sc_sasa: (sc_sasa / max_sc_asa).clamp(0.0, 1.0),
+            }
+        })
+        .collect::<Vec<_>>();
+    records.sort_by(|a, b| (&a.chain, a.resi, &a.insertion).cmp(&(&b.chain, b.resi, &b.insertion)));
+    records
+}
+
+fn residue_sap_records_to_dataframe(records: &[ResidueSapRecord]) -> DataFrame {
+    df!(
+        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
+        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
+        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
+        "sc_sasa" => records.iter().map(|r| r.sc_sasa).collect::<Vec<f32>>(),
+        "sap_score" => records.iter().map(|r| r.sap_score).collect::<Vec<f32>>(),
+        "max_sc_asa" => records.iter().map(|r| r.max_sc_asa).collect::<Vec<f32>>(),
+        "relative_sc_sasa" => records.iter().map(|r| r.relative_sc_sasa).collect::<Vec<f32>>(),
+    )
+    .unwrap()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{load_model, run_with_threads};
+    use crate::{load_model, run_with_threads};
 
     fn load_ubiquitin() -> PDB {
         let root = env!("CARGO_MANIFEST_DIR");

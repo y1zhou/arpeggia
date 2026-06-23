@@ -4,7 +4,7 @@ use super::{
     find_weak_hydrogen_bond,
     residues::{Plane, ResidueExt, ResidueId},
 };
-use crate::utils::parse_groups;
+use crate::structure::parse_groups;
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};

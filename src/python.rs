@@ -199,7 +199,7 @@ fn dsasa(
 /// Example:
 ///     >>> import arpeggia
 ///     >>> sequences = arpeggia.seq("structure.pdb")
-///     >>> for chain_id, seq in sequences.items():
+///     >>> for chain_id, seq in sequences:
 ///     ...     print(f"Chain {chain_id}: {seq}")
 #[pyfunction]
 fn seq(input_file: String) -> PyResult<std::vec::Vec<(String, String)>> {
@@ -370,7 +370,7 @@ fn sap_score(
 #[pyfunction]
 #[pyo3(signature = (input_file, groups, model_num=0, num_threads=0))]
 fn sc(input_file: String, groups: &str, model_num: usize, num_threads: usize) -> PyResult<f64> {
-    // Load the PDB file and normalize using prepare_pdb_for_sasa
+    // Load the PDB file; SC applies shared structure preparation internally.
     let (pdb, _warnings) = crate::load_model(&input_file);
 
     // Calculate SC

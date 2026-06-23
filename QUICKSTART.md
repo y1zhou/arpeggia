@@ -42,8 +42,8 @@ sasa_df = arpeggia.sasa(
 print(f"Calculated SASA for {len(sasa_df)} atoms")
 
 # Extract sequences
-sequences = arpeggia.pdb2seq("test-data/1ubq.pdb")
-for chain_id, seq in sequences.items():
+sequences = arpeggia.seq("test-data/1ubq.pdb")
+for chain_id, seq in sequences:
     print(f"Chain {chain_id}: {seq[:50]}...")  # First 50 residues
 ```
 
@@ -72,7 +72,7 @@ contacts_df.write_parquet("contacts.parquet")
 
 - `"/"` - All chains with all chains (self-interactions included)
 - `"A,B/C,D"` - Chains A,B interact with chains C,D
-- `"A/"` - Chain A interacts with all other chains  
+- `"A/"` - Chain A interacts with all other chains
 - `"/C,D"` - All chains interact with chains C,D
 
 ## For CLI Users
@@ -236,6 +236,7 @@ ImportError: cannot import name 'arpeggia'
 ```
 
 **Solution:** Make sure you've built the package with maturin:
+
 ```bash
 maturin develop --release --features python
 ```
@@ -243,6 +244,7 @@ maturin develop --release --features python
 ### Build Errors
 
 **Missing Python.h:**
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get install python3-dev
@@ -252,6 +254,7 @@ brew install python
 ```
 
 **Version conflicts:**
+
 ```bash
 cargo clean
 maturin develop --release --features python
@@ -261,5 +264,5 @@ maturin develop --release --features python
 
 - Read the [full README](README.md) for more details
 - Check [BUILD.md](BUILD.md) for advanced build options
-- See the [test script](python/test_arpeggia.py) for more examples
+- See the [test script](python/tests/test_arpeggia.py) for more examples
 - Report issues on [GitHub](https://github.com/y1zhou/arpeggia/issues)

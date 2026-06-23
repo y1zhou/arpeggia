@@ -1,7 +1,5 @@
-use crate::contacts::residues::ResidueExt;
-use pdbtbx::*;
 use polars::prelude::*;
-use std::{collections::HashSet, path::Path};
+use std::path::{Path, PathBuf};
 
 /// Execute a parallel operation with the configured thread limit.
 /// Uses rayon's thread pool with the specified number of threads.
@@ -47,71 +45,36 @@ pub fn sum_float_col(df: &DataFrame, colname: &str) -> f32 {
         .unwrap_or(0.0)
 }
 
-/// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
-pub fn load_model(input_file: &String) -> (PDB, Vec<PDBError>) {
-    // Load file as complex structure
-    let (mut pdb, errors) = pdbtbx::ReadOptions::default()
-        .set_only_atomic_coords(true)
-        .set_level(pdbtbx::StrictnessLevel::Loose)
-        .read(input_file)
-        .unwrap();
-
-    // Remove non-protein residues from model
-    pdb.remove_residues_by(|res| res.resn().is_none());
-
-    (pdb, errors)
-}
-
-/// Parse the chain groups from the input string.
-/// Only checks the first two fields separated by `/`.
-/// If one of the groups is unspecified, all remaining chains from `all_chains` are used.
+/// Prepare output directory for `DataFrame` output
 ///
-/// # Panics
-/// This function will panic if the input format is invalid or if one of the groups ends up empty.
-pub fn parse_groups(
-    all_chains: &HashSet<String>,
-    groups: &str,
-) -> (HashSet<String>, HashSet<String>) {
-    // Parse the first two fields in groups
-    let sel_vec: Vec<&str> = groups.split('/').collect();
-    assert!(
-        (sel_vec.len() >= 2),
-        "Invalid chain groups format! Use '/' for all-to-all comparisons."
-    );
-    let ligand_chains = sel_vec.first().unwrap_or(&"");
-    let receptor_chains = sel_vec.get(1).unwrap_or(&"");
+/// # Arguments
+///
+/// * `output` - Output directory or file path
+/// * `filename` - Base filename for the output file
+/// * `output_format` - File format for the output file
+///
+/// # Returns
+///
+/// The canonicalized output file path with the correct file extension.
+pub fn prepare_df_output_dir(
+    output: &PathBuf,
+    filename: &str,
+    output_format: DataFrameFileType,
+) -> PathBuf {
+    let output_path = match std::path::absolute(output) {
+        Ok(path) => path,
+        Err(e) => {
+            panic!("Failed to resolve the output directory: {}", e);
+        }
+    };
+    let _ = std::fs::create_dir_all(&output_path);
 
-    // Create a HashSet of chains for the ligand and receptor
-    let mut ligand: HashSet<String> = ligand_chains
-        .split(',')
-        .map(|c| c.to_string())
-        .filter(|c| !c.is_empty())
-        .collect();
-    let mut receptor: HashSet<String> = receptor_chains
-        .split(',')
-        .map(|c| c.to_string())
-        .filter(|c| !c.is_empty())
-        .collect();
-
-    // If both groups are empty, perform all-to-all comparisons
-    if ligand.is_empty() && receptor.is_empty() {
-        return (all_chains.clone(), all_chains.clone());
+    if output_path.is_dir() {
+        output_path.join(filename)
+    } else {
+        output_path.canonicalize().unwrap()
     }
-
-    // If there are no ligand or receptor chains, use all remaining chains
-    if ligand.is_empty() {
-        ligand = all_chains.difference(&receptor).cloned().collect();
-    } else if receptor.is_empty() {
-        receptor = all_chains.difference(&ligand).cloned().collect();
-    }
-
-    // Panic if there are no chains in one of the groups
-    assert!(
-        !(ligand.is_empty() || receptor.is_empty()),
-        "Empty chain groups!"
-    );
-
-    (ligand, receptor)
+    .with_extension(output_format.to_string())
 }
 
 /// Write a `DataFrame` to a CSV file
@@ -164,85 +127,5 @@ impl std::fmt::Display for DataFrameFileType {
             DataFrameFileType::Json => write!(f, "json"),
             DataFrameFileType::NDJson => write!(f, "ndjson"),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn good_group_splits() {
-        let chains: HashSet<String> = HashSet::from(["A", "B", "C", "D"].map(|c| c.to_string()));
-
-        // All chains are specified
-        assert_eq!(
-            (
-                HashSet::from(["A", "B"].map(|c| c.to_string())),
-                HashSet::from(["C", "D"].map(|c| c.to_string()))
-            ),
-            parse_groups(&chains, "A,B/C,D")
-        );
-
-        // One chain missing (ignored in searches)
-        assert_eq!(
-            (
-                HashSet::from(["A"].map(|c| c.to_string())),
-                HashSet::from(["C", "D"].map(|c| c.to_string()))
-            ),
-            parse_groups(&chains, "A/C,D")
-        );
-
-        // Empty group
-        assert_eq!(
-            (
-                HashSet::from(["A", "B"].map(|c| c.to_string())),
-                HashSet::from(["C", "D"].map(|c| c.to_string()))
-            ),
-            parse_groups(&chains, "/C,D")
-        );
-        assert_eq!(
-            (
-                HashSet::from(["C"].map(|c| c.to_string())),
-                HashSet::from(["A", "B", "D"].map(|c| c.to_string()))
-            ),
-            parse_groups(&chains, "C/")
-        );
-        assert_eq!((chains.clone(), chains.clone()), parse_groups(&chains, "/"));
-    }
-
-    #[test]
-    #[should_panic(expected = "Invalid chain groups format! Use '/' for all-to-all comparisons.")]
-    fn empty_group_splits() {
-        // Nothing passed
-        let chains: HashSet<String> = HashSet::from(["A", "B", "C", "D"].map(|c| c.to_string()));
-        parse_groups(&chains, "");
-    }
-
-    #[test]
-    #[should_panic(expected = "Empty chain groups!")]
-    fn missing_groups_in_split() {
-        // Nothing passed
-        let chains: HashSet<String> = HashSet::from(["A", "B", "C"].map(|c| c.to_string()));
-        parse_groups(&chains, "A,B,C/");
-    }
-
-    #[test]
-    fn test_remove_atoms_zero_occupancy() {
-        let root = env!("CARGO_MANIFEST_DIR");
-        let path = format!("{}/{}", root, "test-data/1ubq.pdb");
-
-        let (mut pdb, _) = load_model(&path);
-        let initial_atom_count = pdb.atom_count();
-
-        // Remove atoms with zero occupancy (1ubq.pdb has all atoms with occupancy 1.0)
-        pdb.remove_atoms_by(|atom| atom.occupancy() == 0.0);
-        let final_atom_count = pdb.atom_count();
-
-        // No atoms should be removed since all have occupancy 1.0
-        assert_eq!(
-            initial_atom_count, final_atom_count,
-            "Atom count should remain the same since all atoms have occupancy 1.0"
-        );
     }
 }

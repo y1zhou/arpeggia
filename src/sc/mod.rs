@@ -12,8 +12,7 @@ pub mod surface_generator;
 pub mod types;
 pub mod vector3;
 
-use crate::sasa::{filter_pdb_by_model, prepare_pdb_for_sasa};
-use crate::utils::parse_groups;
+use crate::structure::{parse_groups, prepare_structure_with_chains};
 use pdbtbx::PDB;
 use sc_calculator::ScCalculator;
 use std::collections::HashSet;
@@ -55,19 +54,9 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> Result<f64, SurfaceC
     // Parse groups
     let (group1_chains, group2_chains) = parse_groups(&all_chains, groups);
 
-    // Combine all chains from both groups for filtering
-    let all_selected_chains: String = group1_chains
-        .iter()
-        .chain(group2_chains.iter())
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(",");
-
-    // Prepare PDB: remove hydrogens, solvent, and ions; filter to selected chains
-    let pdb_prepared = prepare_pdb_for_sasa(pdb, true, true, &all_selected_chains);
-
-    // Filter to specified model
-    let pdb_filtered = filter_pdb_by_model(&pdb_prepared, model_num);
+    let all_selected_chains: HashSet<String> =
+        group1_chains.union(&group2_chains).cloned().collect();
+    let pdb_filtered = prepare_structure_with_chains(pdb, model_num, true, &all_selected_chains);
 
     // Initialize the calculator with thread settings
     let mut calc = ScCalculator::new();
@@ -84,7 +73,7 @@ pub fn get_sc(pdb: &PDB, groups: &str, model_num: usize) -> Result<f64, SurfaceC
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{load_model, run_with_threads};
+    use crate::{load_model, run_with_threads};
 
     fn load_multi_chain() -> PDB {
         let root = env!("CARGO_MANIFEST_DIR");

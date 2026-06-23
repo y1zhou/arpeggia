@@ -16,7 +16,7 @@ impl ChainExt for Chain {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::load_model;
+    use crate::load_model;
 
     #[test]
     fn test_pdb_seq() {

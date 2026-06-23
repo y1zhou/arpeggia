@@ -301,7 +301,7 @@ impl ResidueExt for Residue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::load_model;
+    use crate::load_model;
 
     #[test]
     fn test_plane_dist_angles() {

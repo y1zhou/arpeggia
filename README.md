@@ -116,8 +116,8 @@ sc_score = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
 print(f"Shape Complementarity: {sc_score:.3f}")  # Typical values: 0.5-0.7
 
 # Extract protein sequences
-sequences = arpeggia.pdb2seq("structure.pdb")
-for chain_id, seq in sequences.items():
+sequences = arpeggia.seq("structure.pdb")
+for chain_id, seq in sequences:
     print(f"Chain {chain_id}: {seq}")
 ```
 

@@ -49,13 +49,14 @@ Example:
     >>>
     >>> # Extract sequences
     >>> sequences = arpeggia.seq("structure.pdb")
-    >>> for chain_id, seq in sequences.items():
+    >>> for chain_id, seq in sequences:
     ...     print(f"Chain {chain_id}: {seq}")
 """
 
 from importlib.metadata import version
 
-from arpeggia.arpeggia import (
+from arpeggia._contract import EXPORTED_FUNCTIONS
+from arpeggia.arpeggia import (  # noqa: F401
     contacts,
     dsasa,
     relative_sasa,
@@ -66,4 +67,4 @@ from arpeggia.arpeggia import (
 )
 
 __version__ = version("arpeggia")
-__all__ = ["contacts", "sasa", "relative_sasa", "sap_score", "dsasa", "sc", "seq"]
+__all__ = list(EXPORTED_FUNCTIONS)

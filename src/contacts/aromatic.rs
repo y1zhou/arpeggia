@@ -67,7 +67,7 @@ pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
 mod tests {
     use super::*;
     use crate::contacts::residues::ResidueExt;
-    use crate::utils::load_model;
+    use crate::load_model;
 
     #[test]
     fn test_good_cation_pi() {
