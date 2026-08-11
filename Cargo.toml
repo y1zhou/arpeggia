@@ -20,7 +20,7 @@ required-features = []
 clap = { version = "4.6.1", features = ["derive"] }
 nalgebra = "0.35"
 pdbtbx = { version = "0.12.0", features = ["rayon", "rstar"] }
-polars = { version = "0.54.4", default-features = false, features = [
+polars = { version = "0.55.2", default-features = false, features = [
     "lazy",
     "parquet",
     "json",
@@ -28,8 +28,8 @@ polars = { version = "0.54.4", default-features = false, features = [
     "is_in",
     "round_series"
 ] }
-pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
-pyo3-polars = { version = "0.27", default-features = false, features = [
+pyo3 = { version = "0.29", features = ["extension-module"], optional = true }
+pyo3-polars = { version = "0.28", default-features = false, features = [
     "derive",
     "lazy",
 ], optional = true }
