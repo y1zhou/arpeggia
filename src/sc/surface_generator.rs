@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt;
 
-use super::atomic_radii::{embedded_atomic_radii, wildcard_match};
+use super::atomic_radii::{EMBEDDED_ATOMIC_RADII, wildcard_match};
 use super::settings::Settings;
 use super::types::*;
 use super::vector3::Vec3;
@@ -21,8 +21,10 @@ pub enum SurfaceCalculatorError {
     Io(std::io::Error),
     /// Overlapping atoms detected
     Coincident(String),
-    /// Sampling limit exceeded
-    TooManySubdivisions,
+    /// The selected groups do not form a sampled interface.
+    NoInterface,
+    /// Invalid public calculation arguments.
+    InvalidInput(String),
 }
 
 impl fmt::Display for SurfaceCalculatorError {
@@ -33,7 +35,10 @@ impl fmt::Display for SurfaceCalculatorError {
             SurfaceCalculatorError::Coincident(msg) => {
                 write!(f, "Overlapping atoms detected: {msg}")
             }
-            SurfaceCalculatorError::TooManySubdivisions => write!(f, "Sampling limit exceeded"),
+            SurfaceCalculatorError::NoInterface => {
+                write!(f, "selected groups do not form a sampled interface")
+            }
+            SurfaceCalculatorError::InvalidInput(message) => write!(f, "Invalid input: {message}"),
         }
     }
 }
@@ -58,7 +63,7 @@ type NeighborResult = Result<Vec<(Vec<usize>, Vec<usize>, bool)>, SurfaceCalcula
 
 pub struct SurfaceGenerator {
     pub settings: Settings,
-    radii: Vec<AtomRadius>,
+    radii: &'static [AtomRadius],
     pub(crate) run: RunState,
 }
 
@@ -81,24 +86,18 @@ impl SurfaceGenerator {
     pub fn new() -> Self {
         Self {
             settings: Settings::default(),
-            radii: Vec::new(),
+            radii: EMBEDDED_ATOMIC_RADII,
             run: RunState::default(),
-        }
-    }
-
-    pub fn init(&mut self) {
-        if self.radii.is_empty() {
-            self.radii = embedded_atomic_radii();
         }
     }
 
     pub fn get_atom_radius(&self, resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
         // First try the embedded radii table
-        for radius in &self.radii {
-            if !wildcard_match(resn, &radius.residue) {
+        for radius in self.radii {
+            if !wildcard_match(resn, radius.residue) {
                 continue;
             }
-            if !wildcard_match(atomn, &radius.atom) {
+            if !wildcard_match(atomn, radius.atom) {
                 continue;
             }
             return Ok(radius.radius);
@@ -572,7 +571,7 @@ impl SurfaceGenerator {
         let eccentricity = mean_radius / ring_radius;
         let effective_density = eccentricity * eccentricity * density;
         let mut subs: Vec<Vec3> = Vec::new();
-        let ts = self.sample_circle(
+        let ts = geom_sample_circle(
             midplane_center,
             ring_radius,
             unit_axis,
@@ -627,7 +626,7 @@ impl SurfaceGenerator {
             }
             if !matches!(self.run.atoms[atom1_index].attention, Attention::Far) {
                 let mut points: Vec<Vec3> = Vec::new();
-                let ps = self.sample_arc(
+                let ps = geom_sample_arc(
                     ring_point,
                     self.settings.rp,
                     toroid_axis,
@@ -651,11 +650,11 @@ impl SurfaceGenerator {
                     );
                 }
             }
-            if !matches!(self.run.atoms[atom2_index].attention, Attention::Far) {
+            if matches!(self.run.atoms[atom2_index].attention, Attention::Far) {
                 continue;
             }
             let mut points: Vec<Vec3> = Vec::new();
-            let ps = self.sample_arc(
+            let ps = geom_sample_arc(
                 ring_point,
                 self.settings.rp,
                 toroid_axis,
@@ -913,53 +912,6 @@ impl SurfaceGenerator {
         };
         self.run.dots[molecule].push(dot);
     }
-
-    #[allow(clippy::too_many_arguments)]
-    fn sample_arc(
-        &self,
-        cen: Vec3,
-        rad: f64,
-        axis: Vec3,
-        density: f64,
-        x: Vec3,
-        v: Vec3,
-        points: &mut Vec<Vec3>,
-    ) -> Result<f64, SurfaceCalculatorError> {
-        let y = axis.cross(x);
-        let dt1 = v.dot(x);
-        let dt2 = v.dot(y);
-        let mut angle = dt2.atan2(dt1);
-        if angle < 0.0 {
-            angle += 2.0 * PI;
-        }
-        sample_arc_segment(cen, rad, x, y, angle, density, points)
-    }
-
-    fn sample_circle(
-        &self,
-        cen: Vec3,
-        rad: f64,
-        axis: Vec3,
-        density: f64,
-        points: &mut Vec<Vec3>,
-    ) -> Result<f64, SurfaceCalculatorError> {
-        let mut v1 = Vec3::new(
-            axis.y * axis.y + axis.z * axis.z,
-            axis.x * axis.x + axis.z * axis.z,
-            axis.x * axis.x + axis.y * axis.y,
-        );
-        v1.normalize();
-        let dt = v1.dot(axis);
-        if dt.abs() > 0.99 {
-            v1 = Vec3::new(1.0, 0.0, 0.0);
-        }
-        let mut v2 = axis.cross(v1);
-        v2.normalize();
-        let mut x = axis.cross(v2);
-        x.normalize();
-        let y = axis.cross(x);
-        sample_arc_segment(cen, rad, x, y, 2.0 * PI, density, points)
-    }
 }
 
 fn distance_point_to_line(cen: Vec3, axis: Vec3, pnt: Vec3) -> f64 {
@@ -987,19 +939,19 @@ fn geom_sample_arc_segment(
         return Ok(0.0);
     }
     let delta = 1.0 / (density.sqrt() * rad);
-    let mut a = -delta / 2.0;
+    if !delta.is_finite() || delta <= 0.0 || !angle.is_finite() || angle < 0.0 {
+        return Err(SurfaceCalculatorError::InvalidInput(
+            "surface sampling geometry must be finite and non-negative".into(),
+        ));
+    }
     points.clear();
-    for _ in 0..100000 {
-        a += delta;
-        if a > angle {
-            break;
-        }
+    let sample_count = (angle / delta + 0.5).floor() as usize;
+    points.reserve(sample_count);
+    for step in 0..sample_count {
+        let a = delta * (step as f64 + 0.5);
         let c = rad * a.cos();
         let s = rad * a.sin();
         points.push(cen + x * c + y * s);
-    }
-    if a + delta < angle {
-        return Err(SurfaceCalculatorError::TooManySubdivisions);
     }
     let ps = if points.is_empty() {
         0.0
@@ -1051,41 +1003,4 @@ fn geom_sample_circle(
     x.normalize();
     let y = axis.cross(x);
     geom_sample_arc_segment(cen, rad, x, y, 2.0 * PI, density, points)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn sample_arc_segment(
-    cen: Vec3,
-    rad: f64,
-    x: Vec3,
-    y: Vec3,
-    angle: f64,
-    density: f64,
-    points: &mut Vec<Vec3>,
-) -> Result<f64, SurfaceCalculatorError> {
-    if rad <= 0.0 {
-        points.clear();
-        return Ok(0.0);
-    }
-    let delta = 1.0 / (density.sqrt() * rad);
-    let mut a = -delta / 2.0;
-    points.clear();
-    for _ in 0..100000 {
-        a += delta;
-        if a > angle {
-            break;
-        }
-        let c = rad * a.cos();
-        let s = rad * a.sin();
-        points.push(cen + x * c + y * s);
-    }
-    if a + delta < angle {
-        return Err(SurfaceCalculatorError::TooManySubdivisions);
-    }
-    let ps = if points.is_empty() {
-        0.0
-    } else {
-        rad * angle / (points.len() as f64)
-    };
-    Ok(ps)
 }

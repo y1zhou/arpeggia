@@ -32,8 +32,6 @@ impl ScCalculator {
         group1_chains: &HashSet<String>,
         group2_chains: &HashSet<String>,
     ) -> Result<(), SurfaceCalculatorError> {
-        self.base.init();
-
         let tree = pdb.create_hierarchy_rtree();
         let max_radius_sq =
             self.base.settings.separation_cutoff * self.base.settings.separation_cutoff;
@@ -58,12 +56,15 @@ impl ScCalculator {
 
                 let atom_radius = match self
                     .base
-                    .get_atom_radius(residue.name().unwrap(), atom.name())
+                    .get_atom_radius(residue.name().unwrap_or(""), atom.name())
                 {
                     Ok(r) => r,
                     // Fallback to pdbtbx element VdW radius
                     Err(_e) => {
-                        match atom.element().unwrap().atomic_radius().van_der_waals {
+                        match atom
+                            .element()
+                            .and_then(|element| element.atomic_radius().van_der_waals)
+                        {
                             Some(r) => r,
                             None => return None, // Skip if no radius info
                         }
@@ -96,8 +97,7 @@ impl ScCalculator {
                             *d
                         }
                     })
-                    .reduce(f64::min)
-                    .unwrap()
+                    .fold(f64::INFINITY, f64::min)
                 {
                     d if d < max_radius_sq => {
                         self.base.run.results.surfaces[molecule].n_buried_atoms += 1;
@@ -131,7 +131,7 @@ impl ScCalculator {
 
         // Add atoms to calculator
         self.base.run.results.n_atoms = atoms.len();
-        for mol in 0..1 {
+        for mol in 0..2 {
             self.base.run.results.surfaces[mol].n_atoms =
                 atoms.iter().filter(|atom| atom.molecule == mol).count();
         }
@@ -141,13 +141,12 @@ impl ScCalculator {
     }
 
     pub fn calc(&mut self) -> Result<Results, SurfaceCalculatorError> {
-        self.base.init();
         self.base.run.results.valid = 0;
 
         if self.base.run.atoms.is_empty() {
             return Err(SurfaceCalculatorError::NoAtoms);
         }
-        for i in 0..1 {
+        for i in 0..2 {
             if self.base.run.results.surfaces[i].n_atoms == 0 {
                 return Err(SurfaceCalculatorError::Io(std::io::Error::other(format!(
                     "No atoms for chain group {}",
@@ -159,9 +158,7 @@ impl ScCalculator {
         self.base.generate_molecular_surfaces()?;
 
         if self.base.run.dots.iter().any(|x| x.is_empty()) {
-            return Err(SurfaceCalculatorError::Io(std::io::Error::other(
-                "No molecular dots generated",
-            )));
+            return Err(SurfaceCalculatorError::NoInterface);
         }
 
         for i in 0..2 {
@@ -344,5 +341,25 @@ impl ScCalculator {
         self.base.run.results.surfaces[my].d_median = d_median_val;
         self.base.run.results.surfaces[my].s_mean = -(score_sum / s_len);
         self.base.run.results.surfaces[my].s_median = s_median_val;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::load_model;
+
+    #[test]
+    fn records_atoms_for_both_surface_groups() {
+        let path = format!("{}/test-data/6bft.pdb", env!("CARGO_MANIFEST_DIR"));
+        let pdb = load_model(&path).unwrap().value;
+        let group1 = HashSet::from(["H".to_string()]);
+        let group2 = HashSet::from(["L".to_string()]);
+        let mut calculator = ScCalculator::new();
+
+        calculator.add_atoms(&pdb, &group1, &group2).unwrap();
+
+        assert!(calculator.base.run.results.surfaces[0].n_atoms > 0);
+        assert!(calculator.base.run.results.surfaces[1].n_atoms > 0);
     }
 }

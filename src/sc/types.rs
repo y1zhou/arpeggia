@@ -110,7 +110,7 @@ pub struct Results {
 
 #[derive(Clone, Debug, Default)]
 pub struct AtomRadius {
-    pub residue: String,
-    pub atom: String,
+    pub residue: &'static str,
+    pub atom: &'static str,
     pub radius: f64,
 }
