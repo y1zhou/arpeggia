@@ -17,8 +17,10 @@ on:
     paths:
       - src/**
       - Cargo.toml
+      - Cargo.lock
       - python/**
       - pyproject.toml
+      - uv.lock
       - .github/workflows/build-and-test.yml
 
 env:
@@ -29,35 +31,29 @@ jobs:
     name: Rust
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           toolchain: stable
           override: true
       - name: Build Rust library
-        run: cargo build
+        run: cargo build --locked
       - name: Run Rust tests
-        run: cargo test --verbose
+        run: cargo test --locked --verbose
 
   build-python:
     name: Python package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
-      # - name: Set up Rust
-      #   uses: actions-rust-lang/setup-rust-toolchain@v1
-      #   with:
-      #     toolchain: stable
-      #     override: true
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
 
       - name: Build Python package
         run: |
-          uv sync -v --all-extras
+          uv sync --frozen -v --all-extras
 
       - name: Run Python tests
         run: uv run --no-sync pytest python/tests/ -v

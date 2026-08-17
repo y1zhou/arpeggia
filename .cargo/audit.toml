@@ -1,0 +1,5 @@
+[advisories]
+# These crates remain in Cargo.lock through optional Polars dependency metadata,
+# but neither appears in `cargo tree` for default or Python builds. Arpeggia's
+# local-only eager I/O path does not compile object_store or quick-xml.
+ignore = ["RUSTSEC-2026-0194", "RUSTSEC-2026-0195"]
