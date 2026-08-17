@@ -1,15 +1,13 @@
 use super::{
-    InteractingEntity, Interaction, ResultEntry, find_cation_pi, find_hydrogen_bond,
-    find_hydrophobic_contact, find_ionic_bond, find_ionic_repulsion, find_pi_pi, find_vdw_contact,
-    find_weak_hydrogen_bond,
+    InteractingEntity, Interaction, ProtonationMode, ResultEntry, find_cation_pi,
+    find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond_with_protonation,
+    find_ionic_repulsion_with_protonation, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond,
     residues::{Plane, ResidueExt, ResidueId},
 };
-use crate::structure::parse_groups;
+use crate::{BondEndpoint, StructureMetadata, structure::parse_groups};
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
-
-type RingPositionResult<'a> = Result<(HashMap<ResidueId<'a>, Plane>, Vec<String>), Vec<String>>;
 
 /// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex<'a> {
@@ -23,6 +21,9 @@ pub struct InteractionComplex<'a> {
     pub vdw_comp_factor: f64,
     /// Distance cutoff when searching for neighboring atoms
     pub interacting_threshold: f64,
+    metadata: Option<&'a StructureMetadata>,
+    protonation: ProtonationMode,
+    ph: f64,
 
     /// Maps residue names to unique indices
     res2idx: HashMap<ResidueId<'a>, usize>,
@@ -33,38 +34,85 @@ pub struct InteractionComplex<'a> {
 }
 
 impl<'a> InteractionComplex<'a> {
-    pub fn new(
+    /// Construct a contact complex with all scientific policies explicit.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_options(
         model: &'a PDB,
+        metadata: Option<&'a StructureMetadata>,
         groups: &'a str,
         vdw_comp_factor: f64,
         interacting_threshold: f64,
-    ) -> (Self, Vec<String>) {
+        protonation: ProtonationMode,
+        ph: f64,
+    ) -> crate::ArpeggiaResult<(Self, Vec<String>)> {
+        Self::build(
+            model,
+            metadata,
+            groups,
+            vdw_comp_factor,
+            interacting_threshold,
+            protonation,
+            ph,
+        )
+    }
+
+    fn build(
+        model: &'a PDB,
+        metadata: Option<&'a StructureMetadata>,
+        groups: &'a str,
+        vdw_comp_factor: f64,
+        interacting_threshold: f64,
+        protonation: ProtonationMode,
+        ph: f64,
+    ) -> crate::ArpeggiaResult<(Self, Vec<String>)> {
         // Parse all chains and input chain groups
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
-        let (ligand, receptor) = parse_groups(&all_chains, groups);
+        let (ligand, receptor) = parse_groups(&all_chains, groups)?;
 
         // Build a mapping of residue names to indices
         let res2idx = build_residue_index(model);
 
         // Build a mapping of ring residue names to ring centers and normals
-        let (rings, ring_err) = build_ring_positions(model).expect("Error building ring positions");
+        let (rings, ring_err) = build_ring_positions(model);
 
         // Similarly, build a mapping of side chain planes
         let sc_planes = build_sc_plane_positions(model);
 
-        (
+        Ok((
             Self {
                 model,
                 ligand,
                 receptor,
                 vdw_comp_factor,
                 interacting_threshold,
+                metadata,
+                protonation,
+                ph,
                 res2idx,
                 rings,
                 sc_planes,
             },
             ring_err,
-        )
+        ))
+    }
+
+    fn has_explicit_bond(
+        &self,
+        first: &AtomConformerResidueChainModel,
+        second: &AtomConformerResidueChainModel,
+    ) -> bool {
+        let Some(metadata) = self.metadata else {
+            return false;
+        };
+        let endpoint = |entity: &AtomConformerResidueChainModel| {
+            BondEndpoint::from_parts(
+                entity.chain().id(),
+                entity.residue().serial_number(),
+                entity.residue().insertion_code().unwrap_or(""),
+                entity.atom().name(),
+            )
+        };
+        metadata.has_bond(&endpoint(first), &endpoint(second))
     }
 
     /// Determine if two entities need to be checked for interactions or not.
@@ -80,9 +128,7 @@ impl<'a> InteractionComplex<'a> {
         symmetric: bool,
     ) -> bool {
         // Ignore if any of the atoms is a hydrogen atom
-        if (e1.atom().element().unwrap() == &Element::H)
-            | (e2.atom().element().unwrap() == &Element::H)
-        {
+        if (e1.atom().element() == Some(&Element::H)) | (e2.atom().element() == Some(&Element::H)) {
             return false;
         }
 
@@ -198,7 +244,7 @@ impl Interactions for InteractionComplex<'_> {
             .model
             .atoms_with_hierarchy()
             .filter(|x| {
-                self.ligand.contains(x.chain().id()) && (x.atom().element().unwrap() != &Element::H)
+                self.ligand.contains(x.chain().id()) && (x.atom().element() != Some(&Element::H))
             })
             .flat_map(|x| {
                 tree.locate_within_distance(x.atom().pos(), max_radius_squared)
@@ -220,13 +266,15 @@ impl Interactions for InteractionComplex<'_> {
                 let dist = e1.atom().distance(e2.atom());
 
                 // Clashes and VdW contacts
-                let vdw = find_vdw_contact(e1, e2, self.vdw_comp_factor).map(|intxn| ResultEntry {
-                    model: model_id,
-                    interaction: intxn,
-                    ligand: InteractingEntity::from_hier(e1),
-                    receptor: InteractingEntity::from_hier(e2),
-                    distance: dist,
-                });
+                let vdw =
+                    find_vdw_contact(e1, e2, self.vdw_comp_factor, self.has_explicit_bond(e1, e2))
+                        .map(|intxn| ResultEntry {
+                            model: model_id,
+                            interaction: intxn,
+                            ligand: InteractingEntity::from_hier(e1),
+                            receptor: InteractingEntity::from_hier(e2),
+                            distance: dist,
+                        });
                 atomic_contacts.extend(vdw.clone());
 
                 // Skip checking for other interactions if there is a clash
@@ -235,16 +283,16 @@ impl Interactions for InteractionComplex<'_> {
                 }
 
                 // Ionic bonds, Hydrogen bonds and polar contacts
-                let ionic_bonds = find_ionic_bond(e1, e2);
-                let hbonds = find_hydrogen_bond(e1, e2, self.vdw_comp_factor);
+                let ionic_bonds =
+                    find_ionic_bond_with_protonation(e1, e2, self.protonation, self.ph);
+                let hbonds = find_hydrogen_bond(e1, e2, self.vdw_comp_factor, self.metadata);
                 let electrostatic = match (ionic_bonds, hbonds) {
-                    (Some(ionic), Some(hbond)) => {
-                        match hbond {
-                            Interaction::HydrogenBond => Some(Interaction::SaltBridge),
-                            // If it's just a polar interaction, ignore and return the stronger ionic bond
-                            _ => Some(ionic),
-                        }
+                    (Some(Interaction::IonicBond), Some(Interaction::HydrogenBond)) => {
+                        Some(Interaction::SaltBridge)
                     }
+                    // Potential protonation cannot establish a definite salt bridge. For
+                    // other polar contacts, retain the stronger ionic classification.
+                    (Some(ionic), Some(_)) => Some(ionic),
                     (Some(ionic), None) => Some(ionic),
                     (None, Some(hbond)) => Some(hbond),
                     _ => None,
@@ -260,25 +308,28 @@ impl Interactions for InteractionComplex<'_> {
 
                 // C-H...O bonds
                 let weak_hbonds =
-                    find_weak_hydrogen_bond(e1, e2, self.vdw_comp_factor).map(|intxn| {
-                        ResultEntry {
+                    find_weak_hydrogen_bond(e1, e2, self.vdw_comp_factor, self.metadata).map(
+                        |intxn| ResultEntry {
                             model: model_id,
                             interaction: intxn,
                             ligand: InteractingEntity::from_hier(e1),
                             receptor: InteractingEntity::from_hier(e2),
                             distance: dist,
-                        }
-                    });
+                        },
+                    );
                 atomic_contacts.extend(weak_hbonds);
 
                 // Charge-charge repulsions
-                let charge_repulsions = find_ionic_repulsion(e1, e2).map(|intxn| ResultEntry {
-                    model: model_id,
-                    interaction: intxn,
-                    ligand: InteractingEntity::from_hier(e1),
-                    receptor: InteractingEntity::from_hier(e2),
-                    distance: dist,
-                });
+                let charge_repulsions =
+                    find_ionic_repulsion_with_protonation(e1, e2, self.protonation, self.ph).map(
+                        |intxn| ResultEntry {
+                            model: model_id,
+                            interaction: intxn,
+                            ligand: InteractingEntity::from_hier(e1),
+                            receptor: InteractingEntity::from_hier(e2),
+                            distance: dist,
+                        },
+                    );
                 atomic_contacts.extend(charge_repulsions);
 
                 // Hydrophobic contacts
@@ -328,21 +379,22 @@ impl Interactions for InteractionComplex<'_> {
 
                 // Cation-pi interactions
                 let dist = ring.point_dist(&y.atom().pos());
-                let cation_pi_contacts = find_cation_pi(ring, y).map(|intxn| ResultEntry {
-                    model: k.model,
-                    interaction: intxn,
-                    ligand: InteractingEntity::new(
-                        k.chain,
-                        k.resi,
-                        k.insertion,
-                        k.altloc,
-                        k.resn,
-                        "Ring",
-                        0,
-                    ),
-                    receptor: InteractingEntity::from_hier(y),
-                    distance: dist,
-                });
+                let cation_pi_contacts =
+                    find_cation_pi(ring, y, self.protonation, self.ph).map(|intxn| ResultEntry {
+                        model: k.model,
+                        interaction: intxn,
+                        ligand: InteractingEntity::new(
+                            k.chain,
+                            k.resi,
+                            k.insertion,
+                            k.altloc,
+                            k.resn,
+                            "Ring",
+                            0,
+                        ),
+                        receptor: InteractingEntity::from_hier(y),
+                        distance: dist,
+                    });
                 ring_contacts.extend(cation_pi_contacts);
 
                 Some(ring_contacts)
@@ -439,18 +491,20 @@ fn build_residue_index(model: &'_ PDB) -> HashMap<ResidueId<'_>, usize> {
         .collect::<HashMap<ResidueId, usize>>()
 }
 
-fn build_ring_positions(model: &'_ PDB) -> RingPositionResult<'_> {
-    let ring_res = HashSet::from(["HIS", "PHE", "TYR", "TRP"]);
+fn build_ring_positions(model: &'_ PDB) -> (HashMap<ResidueId<'_>, Plane>, Vec<String>) {
+    let ring_res = HashSet::from([
+        "HIS", "HID", "HIE", "HIP", "HSD", "HSE", "HSP", "PHE", "TYR", "TRP",
+    ]);
     let mut ring_positions = HashMap::new();
     let mut errors = Vec::new();
 
     for m in model.models() {
         let model_id = m.serial_number();
-        for c in model.chains() {
+        for c in m.chains() {
             let chain_id = c.id();
             for r in c
                 .residues()
-                .filter(|r| ring_res.contains(r.name().unwrap()))
+                .filter(|r| r.name().is_some_and(|name| ring_res.contains(name)))
             {
                 let (resi, insertion_code) = r.id();
                 let insertion_code = insertion_code.unwrap_or("");
@@ -477,10 +531,7 @@ fn build_ring_positions(model: &'_ PDB) -> RingPositionResult<'_> {
             }
         }
     }
-    if ring_positions.is_empty() {
-        return Err(errors);
-    }
-    Ok((ring_positions, errors))
+    (ring_positions, errors)
 }
 
 fn build_sc_plane_positions(model: &PDB) -> HashMap<ResidueId<'_>, Plane> {
@@ -488,7 +539,7 @@ fn build_sc_plane_positions(model: &PDB) -> HashMap<ResidueId<'_>, Plane> {
 
     for m in model.models() {
         let model_id = m.serial_number();
-        for c in model.chains() {
+        for c in m.chains() {
             let chain_id = c.id();
             for r in c.residues() {
                 let (resi, insertion_code) = r.id();
@@ -511,4 +562,43 @@ fn build_sc_plane_positions(model: &PDB) -> HashMap<ResidueId<'_>, Plane> {
         }
     }
     sc_plane_positions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::BufReader;
+
+    #[test]
+    fn ring_planes_are_model_local() {
+        let input = b"MODEL        1\n\
+ATOM      1  CG  PHE A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  CD1 PHE A   1       1.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      3  CE1 PHE A   1       1.500   1.000   0.000  1.00 20.00           C  \n\
+ATOM      4  CZ  PHE A   1       1.000   2.000   0.000  1.00 20.00           C  \n\
+ATOM      5  CE2 PHE A   1       0.000   2.000   0.000  1.00 20.00           C  \n\
+ATOM      6  CD2 PHE A   1      -0.500   1.000   0.000  1.00 20.00           C  \n\
+ENDMDL\n\
+MODEL        2\n\
+ATOM      1  CG  PHE A   1      10.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  CD1 PHE A   1      11.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      3  CE1 PHE A   1      11.500   1.000   0.000  1.00 20.00           C  \n\
+ATOM      4  CZ  PHE A   1      11.000   2.000   0.000  1.00 20.00           C  \n\
+ATOM      5  CE2 PHE A   1      10.000   2.000   0.000  1.00 20.00           C  \n\
+ATOM      6  CD2 PHE A   1       9.500   1.000   0.000  1.00 20.00           C  \n\
+ENDMDL\nEND\n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+
+        let (rings, errors) = build_ring_positions(&pdb);
+
+        assert!(errors.is_empty());
+        assert_eq!(rings.len(), 2);
+        let first = rings.iter().find(|(id, _)| id.model == 1).unwrap().1;
+        let second = rings.iter().find(|(id, _)| id.model == 2).unwrap().1;
+        assert!((second.center.x - first.center.x) > 5.0);
+    }
 }

@@ -1,4 +1,5 @@
 use super::structs::Interaction;
+use crate::{BondEndpoint, StructureMetadata};
 
 use pdbtbx::*;
 use rayon::prelude::*;
@@ -12,7 +13,7 @@ const POLAR_DIST: f64 = 3.5;
 /// ## Details
 ///
 /// It first checks if the two input residues are hydrogen bond donors and acceptors.
-/// If so, it collects all the hydrogen atoms of the donor residue and checks if any of them satisfy:
+/// If so, it collects hydrogens attached to that donor and checks if any satisfy:
 ///
 /// * dist(H, acceptor) <= vdw_radius(H) + vdw_radius(acceptor) + vdw_comp_factor, and
 /// * angle(donor, H, acceptor) >= 90°,
@@ -26,11 +27,13 @@ const POLAR_DIST: f64 = 3.5;
 /// * [PyMOL wiki](https://pymolwiki.org/index.php/Displaying_Biochemical_Properties#Hydrogen_bonds_and_Polar_Contacts)
 /// * [Arpeggio implementation](https://github.com/PDBeurope/arpeggio/blob/258855b8ba13447f2776b232ca32884d637c6a9c/arpeggio/core/utils.py#L73)
 ///
-/// TODO: add special case for water-mediated hydrogen bonds
+/// [WARNING] Water-mediated hydrogen-bond geometry is not currently modeled.
+/// Search strong hydrogen bonds using canonical names or explicit input bonds.
 pub fn find_hydrogen_bond(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     vdw_comp_factor: f64,
+    metadata: Option<&StructureMetadata>,
 ) -> Option<Interaction> {
     if let Some((donor, acceptor)) = is_donor_acceptor_pair(entity1, entity2) {
         let da_dist = donor.atom().distance(acceptor.atom());
@@ -38,17 +41,28 @@ pub fn find_hydrogen_bond(
             let donor_h: Vec<&Atom> = donor
                 .residue()
                 .par_atoms()
-                .filter(|atom| atom.element().unwrap() == &Element::H)
+                .filter(|atom| {
+                    atom.element() == Some(&Element::H)
+                        && (is_hydrogen_for_donor(
+                            donor.conformer().name(),
+                            donor.atom().name(),
+                            atom.name(),
+                        ) || metadata.is_some_and(|metadata| {
+                            metadata.has_bond(
+                                &endpoint_for_entity(donor),
+                                &BondEndpoint::from_parts(
+                                    donor.chain().id(),
+                                    donor.residue().serial_number(),
+                                    donor.residue().insertion_code().unwrap_or(""),
+                                    atom.name(),
+                                ),
+                            )
+                        }))
+                })
                 .collect();
 
             // Hydrogen bonds are stricter as they have angle restrictions
-            let acceptor_vdw: f64 = acceptor
-                .atom()
-                .element()
-                .unwrap()
-                .atomic_radius()
-                .van_der_waals
-                .unwrap();
+            let acceptor_vdw = acceptor.atom().element()?.atomic_radius().van_der_waals?;
             let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
             if donor_h.par_iter().any(|h| {
                 (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
@@ -71,10 +85,13 @@ pub fn find_hydrogen_bond(
 ///
 /// * Seeks for C-H...O bonds instead of the usual N and O donors.
 /// * Checks for angle(donor, H, acceptor) >= 130° instead of 90°.
+///
+/// Search weak hydrogen bonds using canonical names or explicit input bonds.
 pub fn find_weak_hydrogen_bond(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     vdw_comp_factor: f64,
+    metadata: Option<&StructureMetadata>,
 ) -> Option<Interaction> {
     if let Some((donor, acceptor)) = is_weak_donor_acceptor_pair(entity1, entity2) {
         let da_dist = donor.atom().distance(acceptor.atom());
@@ -82,17 +99,25 @@ pub fn find_weak_hydrogen_bond(
             let donor_h: Vec<&Atom> = donor
                 .residue()
                 .par_atoms()
-                .filter(|atom| atom.element().unwrap() == &Element::H)
+                .filter(|atom| {
+                    atom.element() == Some(&Element::H)
+                        && (is_hydrogen_for_carbon(donor.atom().name(), atom.name())
+                            || metadata.is_some_and(|metadata| {
+                                metadata.has_bond(
+                                    &endpoint_for_entity(donor),
+                                    &BondEndpoint::from_parts(
+                                        donor.chain().id(),
+                                        donor.residue().serial_number(),
+                                        donor.residue().insertion_code().unwrap_or(""),
+                                        atom.name(),
+                                    ),
+                                )
+                            }))
+                })
                 .collect();
 
             // Hydrogen bonds are stricter as they have angle restrictions
-            let acceptor_vdw: f64 = acceptor
-                .atom()
-                .element()
-                .unwrap()
-                .atomic_radius()
-                .van_der_waals
-                .unwrap();
+            let acceptor_vdw = acceptor.atom().element()?.atomic_radius().van_der_waals?;
             let h_vdw: f64 = Element::H.atomic_radius().van_der_waals.unwrap();
             if donor_h.par_iter().any(|h| {
                 (h.distance(acceptor.atom()) <= h_vdw + acceptor_vdw + vdw_comp_factor)
@@ -107,6 +132,15 @@ pub fn find_weak_hydrogen_bond(
         }
     }
     None
+}
+
+fn endpoint_for_entity(entity: &AtomConformerResidueChainModel) -> BondEndpoint {
+    BondEndpoint::from_parts(
+        entity.chain().id(),
+        entity.residue().serial_number(),
+        entity.residue().insertion_code().unwrap_or(""),
+        entity.atom().name(),
+    )
 }
 
 /// Determine if the two entities are a valid hydrogen bond donor-acceptor pair
@@ -147,7 +181,10 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
             | ("ASP", "OD1" | "OD2")
             | ("GLN", "OE1")
             | ("GLU", "OE1" | "OE2")
-            | ("HIS", "ND1" | "NE2")
+            | (
+                "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP",
+                "ND1" | "NE2"
+            )
             | ("SER", "OG")
             | ("THR", "OG1")
             | ("TYR", "OH")
@@ -159,7 +196,7 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
 /// Determine if the atom in the residue is a hydrogen donor
 fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
     // All amide niteogens in the main chain except proline
-    if atom_name == "N" {
+    if atom_name == "N" && res_name != "PRO" {
         return true;
     }
     matches!(
@@ -167,7 +204,10 @@ fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
         ("ARG", "NE" | "NH1" | "NH2")
             | ("ASN", "ND2")
             | ("GLN", "NE2")
-            | ("HIS", "ND1" | "NE2")
+            | (
+                "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP",
+                "ND1" | "NE2"
+            )
             | ("LYS", "NZ")
             | ("SER", "OG")
             | ("THR", "OG1")
@@ -175,6 +215,65 @@ fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
             | ("TYR", "OH")
             | ("CYS", "SG") // 10.1002/prot.22327
     )
+}
+
+fn is_hydrogen_for_donor(res_name: &str, donor_name: &str, hydrogen_name: &str) -> bool {
+    if donor_name == "N" {
+        return matches!(
+            hydrogen_name,
+            "H" | "H1" | "H2" | "H3" | "HN" | "1H" | "2H" | "3H"
+        );
+    }
+    match (res_name, donor_name) {
+        ("ARG", "NE") => hydrogen_name == "HE",
+        ("ARG", "NH1") => matches!(hydrogen_name, "HH11" | "HH12"),
+        ("ARG", "NH2") => matches!(hydrogen_name, "HH21" | "HH22"),
+        ("ASN", "ND2") => matches!(hydrogen_name, "HD21" | "HD22"),
+        ("GLN", "NE2") => matches!(hydrogen_name, "HE21" | "HE22"),
+        ("HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP", "ND1") => hydrogen_name == "HD1",
+        ("HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP", "NE2") => hydrogen_name == "HE2",
+        ("LYS", "NZ") => matches!(hydrogen_name, "HZ1" | "HZ2" | "HZ3"),
+        ("SER", "OG") | ("CYS", "SG") => hydrogen_name == "HG",
+        ("THR", "OG1") => hydrogen_name == "HG1",
+        ("TRP", "NE1") => hydrogen_name == "HE1",
+        ("TYR", "OH") => hydrogen_name == "HH",
+        _ => false,
+    }
+}
+
+pub(crate) fn count_donors_without_explicit_hydrogen(
+    pdb: &PDB,
+    metadata: Option<&StructureMetadata>,
+) -> usize {
+    pdb.atoms_with_hierarchy()
+        .filter(|entity| {
+            let residue_name = entity.conformer().name();
+            let donor_name = entity.atom().name();
+            is_hydrogen_donor(residue_name, donor_name)
+                && !entity.residue().atoms().any(|atom| {
+                    atom.element() == Some(&Element::H)
+                        && (is_hydrogen_for_donor(residue_name, donor_name, atom.name())
+                            || metadata.is_some_and(|metadata| {
+                                metadata.has_bond(
+                                    &endpoint_for_entity(entity),
+                                    &BondEndpoint::from_parts(
+                                        entity.chain().id(),
+                                        entity.residue().serial_number(),
+                                        entity.residue().insertion_code().unwrap_or(""),
+                                        atom.name(),
+                                    ),
+                                )
+                            }))
+                })
+        })
+        .count()
+}
+
+fn is_hydrogen_for_carbon(donor_name: &str, hydrogen_name: &str) -> bool {
+    donor_name
+        .strip_prefix('C')
+        .zip(hydrogen_name.strip_prefix('H'))
+        .is_some_and(|(donor_suffix, hydrogen_suffix)| hydrogen_suffix.starts_with(donor_suffix))
 }
 
 /// Determine if the two entities are a valid weak hydrogen bond donor-acceptor pair
@@ -203,5 +302,5 @@ fn is_weak_donor_acceptor_pair<'a>(
 /// Determine if the atom is a weak hydrogen donor
 fn is_weak_hydrogen_donor(atom: &Atom) -> bool {
     // All the non-carbonyl carbon atoms
-    (atom.element().unwrap() == &Element::C) && atom.name() != "C"
+    (atom.element() == Some(&Element::C)) && atom.name() != "C"
 }

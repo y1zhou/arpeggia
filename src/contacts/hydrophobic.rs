@@ -13,8 +13,8 @@ pub fn find_hydrophobic_contact(
 ) -> Option<Interaction> {
     let e1_atom = entity1.atom();
     let e2_atom = entity2.atom();
-    if is_hydrophobic(entity1.residue().name().unwrap(), e1_atom.name())
-        && is_hydrophobic(entity2.residue().name().unwrap(), e2_atom.name())
+    if is_hydrophobic(entity1.residue().name().unwrap_or(""), e1_atom.name())
+        && is_hydrophobic(entity2.residue().name().unwrap_or(""), e2_atom.name())
         && (e1_atom.distance(e2_atom) <= HYDROPHOBIC_CONTACT_DIST)
     {
         Some(Interaction::HydrophobicContact)
