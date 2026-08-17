@@ -2,7 +2,13 @@
 
 import polars as pl
 
-from ._contract import SapLevel, SasaLevel, SequenceList
+from ._contract import (
+    DsasaComponents,
+    ProtonationMode,
+    SapLevel,
+    SasaLevel,
+    SequenceList,
+)
 
 def contacts(
     input_file: str,
@@ -10,6 +16,8 @@ def contacts(
     vdw_comp: float = ...,
     dist_cutoff: float = ...,
     ignore_zero_occupancy: bool = ...,
+    protonation: ProtonationMode = ...,
+    ph: float = ...,
     num_threads: int = ...,
 ) -> pl.DataFrame: ...
 def sasa(
@@ -29,6 +37,14 @@ def dsasa(
     model_num: int = ...,
     num_threads: int = ...,
 ) -> float: ...
+def dsasa_components(
+    input_file: str,
+    groups: str,
+    probe_radius: float = ...,
+    n_points: int = ...,
+    model_num: int = ...,
+    num_threads: int = ...,
+) -> DsasaComponents: ...
 def relative_sasa(
     input_file: str,
     probe_radius: float = ...,
@@ -48,6 +64,7 @@ def sap_score(
     num_threads: int = ...,
 ) -> pl.DataFrame: ...
 def seq(input_file: str) -> SequenceList: ...
+def seqres(input_file: str) -> SequenceList: ...
 def sc(
     input_file: str,
     groups: str,

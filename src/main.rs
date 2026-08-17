@@ -3,7 +3,9 @@
 
 mod cli;
 
+use arpeggia::ArpeggiaResult;
 use clap::{Parser, Subcommand};
+use std::process::ExitCode;
 
 #[derive(Parser)]
 #[command(version, about, author)]
@@ -28,35 +30,33 @@ enum Commands {
     Sc(crate::cli::sc::Args),
     /// Print the sequences of all chains in a PDB or mmCIF file
     Seq(crate::cli::pdb2seq::Args),
+    /// Print declared SEQRES/entity-polymer sequences
+    Seqres(crate::cli::pdb2seq::Args),
 }
 
 /// Entry to the CLI tool. Verbosity can be controlled with the `RUST_LOG` environment variable.
-fn main() {
-    tracing_subscriber::fmt::init();
+fn main() -> ExitCode {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     config_polars_output();
 
     let cli = Cli::parse();
-    match &cli.command {
-        Commands::Contacts(args) => {
-            crate::cli::contacts::run(args);
-        }
-        Commands::Sasa(args) => {
-            crate::cli::sasa::run(args);
-        }
-        Commands::Dsasa(args) => {
-            crate::cli::dsasa::run(args);
-        }
-        Commands::RelativeSasa(args) => {
-            crate::cli::relative_sasa::run(args);
-        }
-        Commands::Sap(args) => {
-            crate::cli::sap::run(args);
-        }
-        Commands::Sc(args) => {
-            crate::cli::sc::run(args);
-        }
-        Commands::Seq(args) => {
-            crate::cli::pdb2seq::run(args);
+    let result: ArpeggiaResult<()> = match &cli.command {
+        Commands::Contacts(args) => crate::cli::contacts::run(args),
+        Commands::Sasa(args) => crate::cli::sasa::run(args),
+        Commands::Dsasa(args) => crate::cli::dsasa::run(args),
+        Commands::RelativeSasa(args) => crate::cli::relative_sasa::run(args),
+        Commands::Sap(args) => crate::cli::sap::run(args),
+        Commands::Sc(args) => crate::cli::sc::run(args),
+        Commands::Seq(args) => crate::cli::pdb2seq::run(args),
+        Commands::Seqres(args) => crate::cli::pdb2seq::run_declared(args),
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!("{error}");
+            ExitCode::FAILURE
         }
     }
 }

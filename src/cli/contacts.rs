@@ -1,12 +1,13 @@
 use arpeggia::{
-    DataFrameFileType, load_model, prepare_df_output_dir, run_with_threads, write_df_to_file,
+    ArpeggiaResult, DataFrameFileType, ProtonationMode, prepare_df_output_dir, run_with_threads,
+    write_df_to_file,
 };
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
@@ -51,39 +52,29 @@ pub(crate) struct Args {
     /// Ignore atoms with zero occupancy
     #[arg(long = "ignore-zero-occupancy", default_value_t = false)]
     ignore_zero_occupancy: bool,
+
+    /// How unresolved histidine protonation affects ionic-contact typing
+    #[arg(long, value_enum, default_value_t = ProtonationMode::AllCharged)]
+    protonation: ProtonationMode,
+
+    /// pH used only by the heuristic protonation mode
+    #[arg(long, default_value_t = 7.4)]
+    ph: f64,
 }
 
-pub(crate) fn run(args: &Args) {
+pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     trace!("{args:?}");
 
     // Make sure `input` exists
-    let input_path = match Path::new(&args.input).canonicalize() {
-        Ok(path) => path,
-        Err(e) => {
-            error!("Failed to retrieve input file: {}", e);
-            return;
-        }
-    };
-    let output_path = match std::path::absolute(&args.output) {
-        Ok(path) => path,
-        Err(e) => {
-            error!("Failed to resolve the output directory: {}", e);
-            return;
-        }
-    };
-    let input_file: String = input_path.to_str().unwrap().parse().unwrap();
+    let output_path = std::path::absolute(&args.output)?;
 
     // Load file as complex structure
-    let (mut pdb, pdb_warnings) = load_model(&input_file);
-    if !pdb_warnings.is_empty() {
-        for e in &pdb_warnings {
-            match e.level() {
-                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-                _ => warn!("{e}"),
-            }
-        }
+    let mut pdb = super::load_input(Path::new(&args.input))?;
+    let metadata = arpeggia::read_metadata(&args.input)?;
+    for warning in metadata.warnings {
+        warn!("{warning}");
     }
+    let metadata = metadata.value;
 
     // Filter out atoms with zero occupancy if requested
     if args.ignore_zero_occupancy {
@@ -93,7 +84,7 @@ pub(crate) fn run(args: &Args) {
 
     if pdb
         .par_atoms()
-        .filter(|a| a.element().unwrap() == &Element::H)
+        .filter(|atom| atom.element() == Some(&Element::H))
         .count()
         == 0
     {
@@ -103,18 +94,31 @@ pub(crate) fn run(args: &Args) {
     }
 
     // Use the library function
-    let mut df_contacts = run_with_threads(args.num_threads as isize, || {
+    let analysis = run_with_threads(args.num_threads as isize, || {
         debug!("Using {} thread(s)", rayon::current_num_threads());
-        arpeggia::get_contacts(&pdb, args.groups.as_str(), args.vdw_comp, args.dist_cutoff)
-    });
+        arpeggia::analyze_contacts(
+            &pdb,
+            Some(&metadata),
+            args.groups.as_str(),
+            args.vdw_comp,
+            args.dist_cutoff,
+            args.protonation,
+            args.ph,
+        )
+    })?;
+    for warning in analysis.warnings {
+        warn!("{warning}");
+    }
+    let mut df_contacts = analysis.value;
 
     // Save results and log the identified interactions
-    let df_clash = df_contacts
-        .clone()
-        .lazy()
-        .filter(col("interaction").eq(lit("StericClash")))
-        .collect()
-        .unwrap();
+    let clash_mask = df_contacts
+        .column("interaction")
+        .unwrap()
+        .str()
+        .unwrap()
+        .equal("StericClash");
+    let df_clash = df_contacts.filter(&clash_mask).unwrap();
     if df_clash.height() > 0 {
         warn!(
             "Found {} steric {}\n{}",
@@ -127,8 +131,8 @@ pub(crate) fn run(args: &Args) {
         );
     }
 
-    let output_file = prepare_df_output_dir(&output_path, &args.filename, args.output_format);
-    write_df_to_file(&mut df_contacts, &output_file, args.output_format);
-    let output_file_str = output_file.to_str().unwrap();
-    info!("Results saved to {output_file_str}");
+    let output_file = prepare_df_output_dir(&output_path, &args.filename, args.output_format)?;
+    write_df_to_file(&mut df_contacts, &output_file, args.output_format)?;
+    info!("Results saved to {}", output_file.display());
+    Ok(())
 }

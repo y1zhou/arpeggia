@@ -5,6 +5,45 @@
 
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
+use std::ffi::CString;
+
+fn python_error(error: crate::ArpeggiaError) -> PyErr {
+    match error {
+        crate::ArpeggiaError::Io(error) => pyo3::exceptions::PyOSError::new_err(error.to_string()),
+        crate::ArpeggiaError::Parse(message) | crate::ArpeggiaError::InvalidArgument(message) => {
+            pyo3::exceptions::PyValueError::new_err(message)
+        }
+    }
+}
+
+fn load_for_python(py: Python<'_>, input_file: &str) -> PyResult<pdbtbx::PDB> {
+    let analysis = py
+        .detach(|| crate::load_model(input_file))
+        .map_err(python_error)?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(analysis.value)
+}
+
+fn emit_python_warnings(py: Python<'_>, warnings: Vec<crate::AnalysisWarning>) -> PyResult<()> {
+    let category = py.get_type::<pyo3::exceptions::PyUserWarning>();
+    for warning in warnings {
+        let message = CString::new(warning.to_string())
+            .map_err(|_| pyo3::exceptions::PyValueError::new_err("warning contains a NUL byte"))?;
+        PyErr::warn(py, &category, &message, 1)?;
+    }
+    Ok(())
+}
+
+fn protonation_mode(value: &str) -> PyResult<crate::ProtonationMode> {
+    match value.to_ascii_lowercase().replace('_', "-").as_str() {
+        "all-charged" => Ok(crate::ProtonationMode::AllCharged),
+        "heuristic" => Ok(crate::ProtonationMode::Heuristic),
+        "explicit-only" => Ok(crate::ProtonationMode::ExplicitOnly),
+        _ => Err(pyo3::exceptions::PyValueError::new_err(
+            "protonation must be 'all-charged', 'heuristic', or 'explicit-only'",
+        )),
+    }
+}
 
 /// Load a PDB or mmCIF file and calculate atomic and ring contacts.
 ///
@@ -15,6 +54,9 @@ use pyo3_polars::PyDataFrame;
 ///     vdw_comp (float, optional): VdW radii compensation factor. Defaults to 0.1.
 ///     dist_cutoff (float, optional): Distance cutoff for neighbor searches in Ångströms. Defaults to 6.5.
 ///     ignore_zero_occupancy (bool, optional): If True, ignore atoms with zero occupancy. Defaults to False.
+///     protonation (str, optional): Histidine policy: "all-charged" (default),
+///         "heuristic", or "explicit-only".
+///     ph (float, optional): pH used by heuristic protonation. Defaults to 7.4.
 ///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
 ///
 /// Returns:
@@ -29,17 +71,26 @@ use pyo3_polars::PyDataFrame;
 ///     >>> contacts = arpeggia.contacts("structure.pdb", groups="/", vdw_comp=0.1)
 ///     >>> print(f"Found {len(contacts)} contacts")
 #[pyfunction]
-#[pyo3(signature = (input_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5, ignore_zero_occupancy=false, num_threads=1))]
+#[pyo3(signature = (input_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5, ignore_zero_occupancy=false, protonation="all-charged", ph=7.4, num_threads=1))]
+#[allow(clippy::too_many_arguments)]
 fn contacts(
+    py: Python<'_>,
     input_file: String,
     groups: &str,
     vdw_comp: f64,
     dist_cutoff: f64,
     ignore_zero_occupancy: bool,
+    protonation: &str,
+    ph: f64,
     num_threads: usize,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
-    let (mut pdb, _warnings) = crate::load_model(&input_file);
+    let mut pdb = load_for_python(py, &input_file)?;
+    let metadata = py
+        .detach(|| crate::read_metadata(&input_file))
+        .map_err(python_error)?;
+    emit_python_warnings(py, metadata.warnings)?;
+    let metadata = metadata.value;
 
     // Filter out atoms with zero occupancy if requested
     if ignore_zero_occupancy {
@@ -47,12 +98,26 @@ fn contacts(
     }
 
     // Get contacts
-    let df = crate::run_with_threads(num_threads as isize, || {
-        crate::get_contacts(&pdb, groups, vdw_comp, dist_cutoff)
-    });
+    let protonation = protonation_mode(protonation)?;
+    let analysis = py
+        .detach(|| {
+            crate::run_with_threads(num_threads as isize, || {
+                crate::analyze_contacts(
+                    &pdb,
+                    Some(&metadata),
+                    groups,
+                    vdw_comp,
+                    dist_cutoff,
+                    protonation,
+                    ph,
+                )
+            })
+        })
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    emit_python_warnings(py, analysis.warnings)?;
 
     // Convert to PyDataFrame for Python
-    Ok(PyDataFrame(df))
+    Ok(PyDataFrame(analysis.value))
 }
 
 /// Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA).
@@ -72,9 +137,10 @@ fn contacts(
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame with SASA values. Columns depend on the level:
-///         - atom: atomi, sasa, chain, resn, resi, insertion, altloc, atomn
-///         - residue: chain, resn, resi, insertion, altloc, sasa, is_polar
-///         - chain: chain, sasa
+///         - atom: atomi, sasa, polarity, chain, resn, resi, insertion, altloc, atomn
+///         - residue: chain, resn, resi, insertion, sasa, polar_sasa,
+///           hydrophobic_sasa, unclassified_sasa
+///         - chain: chain, sasa, polar_sasa, hydrophobic_sasa, unclassified_sasa
 ///
 /// Example:
 ///     >>> import arpeggia
@@ -91,7 +157,9 @@ fn contacts(
 ///     >>> print(f"Calculated SASA for {len(chain_sasa)} chains")
 #[pyfunction]
 #[pyo3(signature = (input_file, level="atom", probe_radius=1.4, n_points=100, model_num=0, chains="", num_threads=1))]
+#[allow(clippy::too_many_arguments)]
 fn sasa(
+    py: Python<'_>,
     input_file: String,
     level: &str,
     probe_radius: f32,
@@ -101,44 +169,35 @@ fn sasa(
     num_threads: usize,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
-    let (pdb, _warnings) = crate::load_model(&input_file);
+    let pdb = load_for_python(py, &input_file)?;
 
-    // Get SASA based on level and convert to PyDataFrame for Python
-    crate::run_with_threads(num_threads as isize, || {
-        match level.to_lowercase().as_str() {
-            "atom" => Ok(PyDataFrame(crate::get_atom_sasa(
-                &pdb,
-                probe_radius,
-                n_points,
-                model_num,
-                true,
-                chains,
-            ))),
-            "residue" => Ok(PyDataFrame(crate::get_residue_sasa(
-                &pdb,
-                probe_radius,
-                n_points,
-                model_num,
-                chains,
-            ))),
-            "chain" => Ok(PyDataFrame(crate::get_chain_sasa(
-                &pdb,
-                probe_radius,
-                n_points,
-                model_num,
-                chains,
-            ))),
-            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid level '{}'. Must be one of: 'atom', 'residue', 'chain'",
-                level
-            ))),
-        }
-    })
+    let level = level.to_ascii_lowercase();
+    if !matches!(level.as_str(), "atom" | "residue" | "chain") {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "Invalid level '{level}'. Must be one of: 'atom', 'residue', 'chain'"
+        )));
+    }
+    let analysis = py
+        .detach(|| {
+            crate::run_with_threads(num_threads as isize, || match level.as_str() {
+                "atom" => {
+                    crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num, true, chains)
+                }
+                "residue" => {
+                    crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, chains)
+                }
+                "chain" => crate::get_chain_sasa(&pdb, probe_radius, n_points, model_num, chains),
+                _ => unreachable!(),
+            })
+        })
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(PyDataFrame(analysis.value))
 }
 
 /// Load a PDB or mmCIF file and calculate buried surface area at the interface between chain groups.
 ///
-/// The buried surface area (dSASA) is calculated as:
+/// The two-sided buried surface area (dSASA) is calculated as:
 /// dSASA = SASA_group1 + SASA_group2 - SASA_complex
 ///
 /// Args:
@@ -160,6 +219,7 @@ fn sasa(
 #[pyfunction]
 #[pyo3(signature = (input_file, groups, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
 fn dsasa(
+    py: Python<'_>,
     input_file: String,
     groups: &str,
     probe_radius: f32,
@@ -168,24 +228,48 @@ fn dsasa(
     num_threads: usize,
 ) -> PyResult<f32> {
     // Load the PDB file
-    let (pdb, _warnings) = crate::load_model(&input_file);
+    let pdb = load_for_python(py, &input_file)?;
 
     // Use the library function to calculate dSASA
-    let result = crate::run_with_threads(num_threads as isize, || {
-        crate::get_dsasa(&pdb, groups, probe_radius, n_points, model_num)
-    });
+    let result = py
+        .detach(|| {
+            crate::run_with_threads(num_threads as isize, || {
+                crate::get_dsasa_components(&pdb, groups, probe_radius, n_points, model_num)
+            })
+        })
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    emit_python_warnings(py, result.warnings)?;
+    Ok(result.value.dsasa)
+}
 
-    if result <= 0.0 {
-        // dSASA can be 0 for non-interacting groups, but we should warn about potential issues
-        // A negative dSASA would indicate an error in the calculation
-        if result < 0.0 {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Negative dSASA calculated. Please check the input file and chain groups.",
-            ));
-        }
-    }
-
-    Ok(result)
+/// Return two-sided dSASA and polar, hydrophobic, and unclassified partitions.
+#[pyfunction]
+#[pyo3(signature = (input_file, groups, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
+fn dsasa_components(
+    py: Python<'_>,
+    input_file: String,
+    groups: &str,
+    probe_radius: f32,
+    n_points: usize,
+    model_num: usize,
+    num_threads: usize,
+) -> PyResult<(f32, f32, f32, f32)> {
+    let pdb = load_for_python(py, &input_file)?;
+    let result = py
+        .detach(|| {
+            crate::run_with_threads(num_threads as isize, || {
+                crate::get_dsasa_components(&pdb, groups, probe_radius, n_points, model_num)
+            })
+        })
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    emit_python_warnings(py, result.warnings)?;
+    let result = result.value;
+    Ok((
+        result.dsasa,
+        result.polar_dsasa,
+        result.hydrophobic_dsasa,
+        result.unclassified_dsasa,
+    ))
 }
 
 /// Load a PDB or mmCIF file and extract sequences for all chains.
@@ -202,14 +286,24 @@ fn dsasa(
 ///     >>> for chain_id, seq in sequences:
 ///     ...     print(f"Chain {chain_id}: {seq}")
 #[pyfunction]
-fn seq(input_file: String) -> PyResult<std::vec::Vec<(String, String)>> {
+fn seq(py: Python<'_>, input_file: String) -> PyResult<std::vec::Vec<(String, String)>> {
     // Load the PDB file
-    let (pdb, _warnings) = crate::load_model(&input_file);
+    let pdb = load_for_python(py, &input_file)?;
 
     // Get sequences
-    let seqs = crate::get_sequences(&pdb);
+    let seqs = py.detach(|| crate::get_sequences(&pdb));
 
     Ok(seqs)
+}
+
+/// Return declared PDB SEQRES or mmCIF entity-polymer sequences by chain.
+#[pyfunction]
+fn seqres(py: Python<'_>, input_file: String) -> PyResult<Vec<(String, String)>> {
+    let analysis = py
+        .detach(|| crate::get_seqres(input_file))
+        .map_err(python_error)?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(analysis.value)
 }
 
 /// Load a PDB or mmCIF file and calculate relative SASA (RSA) for each residue.
@@ -228,7 +322,8 @@ fn seq(input_file: String) -> PyResult<std::vec::Vec<(String, String)>> {
 ///
 /// Returns:
 ///     polars.DataFrame: A DataFrame with relative SASA values for each residue with columns:
-///         - chain, resn, resi, insertion, altloc, sasa, is_polar, relative_sasa
+///         - chain, resn, resi, insertion, sasa, polar_sasa,
+///           hydrophobic_sasa, unclassified_sasa, relative_sasa
 ///
 /// Example:
 ///     >>> import arpeggia
@@ -241,6 +336,7 @@ fn seq(input_file: String) -> PyResult<std::vec::Vec<(String, String)>> {
 #[pyfunction]
 #[pyo3(signature = (input_file, probe_radius=1.4, n_points=100, model_num=0, chains="", num_threads=1))]
 fn relative_sasa(
+    py: Python<'_>,
     input_file: String,
     probe_radius: f32,
     n_points: usize,
@@ -249,15 +345,20 @@ fn relative_sasa(
     num_threads: usize,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
-    let (pdb, _warnings) = crate::load_model(&input_file);
+    let pdb = load_for_python(py, &input_file)?;
 
     // Get relative SASA
-    let df = crate::run_with_threads(num_threads as isize, || {
-        crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, chains)
-    });
+    let analysis = py
+        .detach(|| {
+            crate::run_with_threads(num_threads as isize, || {
+                crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, chains)
+            })
+        })
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    emit_python_warnings(py, analysis.warnings)?;
 
     // Convert to PyDataFrame for Python
-    Ok(PyDataFrame(df))
+    Ok(PyDataFrame(analysis.value))
 }
 
 /// Load a PDB or mmCIF file and calculate Spatial Aggregation Propensity (SAP) scores.
@@ -292,7 +393,8 @@ fn relative_sasa(
 /// Returns:
 ///     polars.DataFrame: A DataFrame with SAP scores. Columns depend on the level:
 ///         - atom: chain, resn, resi, insertion, atomn, atomi, sasa, sap_score
-///         - residue: chain, resn, resi, insertion, sasa, sap_score
+///         - residue: chain, resn, resi, insertion, sc_sasa, sap_score,
+///           max_sc_asa, relative_sc_sasa
 ///
 /// Example:
 ///     >>> import arpeggia
@@ -307,6 +409,7 @@ fn relative_sasa(
 #[pyo3(signature = (input_file, level="residue", probe_radius=1.4, n_points=100, model_num=0, sap_radius=5.0, chains="", num_threads=1))]
 #[allow(clippy::too_many_arguments)]
 fn sap_score(
+    py: Python<'_>,
     input_file: String,
     level: &str,
     probe_radius: f32,
@@ -317,33 +420,39 @@ fn sap_score(
     num_threads: usize,
 ) -> PyResult<PyDataFrame> {
     // Load the PDB file
-    let (pdb, _warnings) = crate::load_model(&input_file);
+    let pdb = load_for_python(py, &input_file)?;
 
-    // Get SAP scores based on level and convert to PyDataFrame for Python
-    crate::run_with_threads(num_threads as isize, || {
-        match level.to_lowercase().as_str() {
-            "atom" => Ok(PyDataFrame(crate::get_per_atom_sap_score(
-                &pdb,
-                probe_radius,
-                n_points,
-                model_num,
-                sap_radius,
-                chains,
-            ))),
-            "residue" => Ok(PyDataFrame(crate::get_per_residue_sap_score(
-                &pdb,
-                probe_radius,
-                n_points,
-                model_num,
-                sap_radius,
-                chains,
-            ))),
-            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid level '{}'. Must be one of: 'atom', 'residue'",
-                level
-            ))),
-        }
-    })
+    let level = level.to_ascii_lowercase();
+    if !matches!(level.as_str(), "atom" | "residue") {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "Invalid level '{level}'. Must be one of: 'atom', 'residue'"
+        )));
+    }
+    let analysis = py
+        .detach(|| {
+            crate::run_with_threads(num_threads as isize, || match level.as_str() {
+                "atom" => crate::get_per_atom_sap_score(
+                    &pdb,
+                    probe_radius,
+                    n_points,
+                    model_num,
+                    sap_radius,
+                    chains,
+                ),
+                "residue" => crate::get_per_residue_sap_score(
+                    &pdb,
+                    probe_radius,
+                    n_points,
+                    model_num,
+                    sap_radius,
+                    chains,
+                ),
+                _ => unreachable!(),
+            })
+        })
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(PyDataFrame(analysis.value))
 }
 
 /// Calculate Shape Complementarity (SC) between two chain groups.
@@ -361,7 +470,7 @@ fn sap_score(
 ///     num_threads (int, optional): Number of threads for parallel calculations (0 for auto). Defaults to 0.
 ///
 /// Returns:
-///     float: The shape complementarity score (0-1), or -1.0 if calculation fails.
+///     float: The shape complementarity score (0-1).
 ///
 /// Example:
 ///     >>> import arpeggia
@@ -369,16 +478,26 @@ fn sap_score(
 ///     >>> print(f"SC Score: {sc:.3f}")
 #[pyfunction]
 #[pyo3(signature = (input_file, groups, model_num=0, num_threads=0))]
-fn sc(input_file: String, groups: &str, model_num: usize, num_threads: usize) -> PyResult<f64> {
+fn sc(
+    py: Python<'_>,
+    input_file: String,
+    groups: &str,
+    model_num: usize,
+    num_threads: usize,
+) -> PyResult<f64> {
     // Load the PDB file; SC applies shared structure preparation internally.
-    let (pdb, _warnings) = crate::load_model(&input_file);
+    let pdb = load_for_python(py, &input_file)?;
 
     // Calculate SC
-    crate::run_with_threads(num_threads as isize, || {
-        crate::get_sc(&pdb, groups, model_num).map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("SC calculation failed: {}", e))
+    let analysis = py.detach(|| {
+        crate::run_with_threads(num_threads as isize, || {
+            crate::get_sc(&pdb, groups, model_num).map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("SC calculation failed: {}", e))
+            })
         })
-    })
+    })?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(analysis.value)
 }
 
 /// Python module for protein structure analysis.
@@ -390,9 +509,11 @@ fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(contacts, m)?)?;
     m.add_function(wrap_pyfunction!(sasa, m)?)?;
     m.add_function(wrap_pyfunction!(dsasa, m)?)?;
+    m.add_function(wrap_pyfunction!(dsasa_components, m)?)?;
     m.add_function(wrap_pyfunction!(relative_sasa, m)?)?;
     m.add_function(wrap_pyfunction!(sap_score, m)?)?;
     m.add_function(wrap_pyfunction!(sc, m)?)?;
     m.add_function(wrap_pyfunction!(seq, m)?)?;
+    m.add_function(wrap_pyfunction!(seqres, m)?)?;
     Ok(())
 }

@@ -11,6 +11,8 @@
 //! to various output formats or used directly in Python via `PyO3` bindings.
 
 mod contacts;
+mod diagnostics;
+mod metadata;
 mod sap;
 mod sasa;
 mod sc;
@@ -20,19 +22,20 @@ mod utils;
 
 // Re-export key public types
 pub use contacts::residues::{Plane, ResidueExt, ResidueId};
-pub use contacts::{InteractingEntity, Interaction, Interactions, ResultEntry};
+pub use contacts::{InteractingEntity, Interaction, Interactions, ProtonationMode, ResultEntry};
+pub use diagnostics::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
+pub use metadata::{BondEndpoint, StructureMetadata, get_seqres, read_metadata};
 pub use structure::{load_model, parse_groups};
-pub use utils::{
-    DataFrameFileType, prepare_df_output_dir, run_with_threads, sum_float_col, write_df_to_file,
-};
+pub use utils::{DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file};
 
 // Re-export public functions from modules
-pub use contacts::get_contacts;
+pub use contacts::{analyze_contacts, get_contacts, get_contacts_with_metadata};
 pub use sap::{get_per_atom_sap_score, get_per_residue_sap_score};
 pub use sasa::{
-    get_atom_sasa, get_chain_sasa, get_dsasa, get_max_asa, get_relative_sasa, get_residue_sasa,
+    DsasaResult, get_atom_sasa, get_chain_sasa, get_dsasa, get_dsasa_components, get_max_asa,
+    get_relative_sasa, get_residue_sasa,
 };
-pub use sc::get_sc;
+pub use sc::{ScResult, get_sc, get_sc_details};
 pub use sequences::get_sequences;
 
 // Python bindings module (only compiled when python feature is enabled)

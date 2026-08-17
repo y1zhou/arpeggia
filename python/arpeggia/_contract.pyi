@@ -4,7 +4,9 @@ from typing import Final, Literal, TypeAlias
 
 SasaLevel: TypeAlias = Literal["atom", "residue", "chain"]
 SapLevel: TypeAlias = Literal["atom", "residue"]
+ProtonationMode: TypeAlias = Literal["all-charged", "heuristic", "explicit-only"]
 SequenceList: TypeAlias = list[tuple[str, str]]
+DsasaComponents: TypeAlias = tuple[float, float, float, float]
 
 EXPORTED_FUNCTIONS: Final[tuple[str, ...]]
 SASA_LEVELS: Final[tuple[SasaLevel, ...]]

@@ -1,7 +1,7 @@
-use arpeggia::{load_model, run_with_threads};
+use arpeggia::{ArpeggiaResult, run_with_threads};
 use clap::Parser;
 use std::path::{Path, PathBuf};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
@@ -25,36 +25,18 @@ pub(crate) struct Args {
     num_threads: usize,
 }
 
-pub(crate) fn run(args: &Args) {
+pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     trace!("{args:?}");
-
-    // Make sure `input` exists
-    let input_path = match Path::new(&args.input).canonicalize() {
-        Ok(path) => path,
-        Err(e) => {
-            error!("Failed to retrieve input file: {}", e);
-            return;
-        }
-    };
-    let input_file: String = input_path.to_str().unwrap().parse().unwrap();
 
     // Validate groups
     if !args.groups.contains('/') {
-        error!("Groups must be specified as 'A,B/C,D' with both surfaces defined");
-        return;
+        return Err(arpeggia::ArpeggiaError::InvalidArgument(
+            "groups must be specified as 'A,B/C,D' with both surfaces defined".into(),
+        ));
     }
 
     // Load file as complex structure
-    let (pdb, pdb_warnings) = load_model(&input_file);
-    if !pdb_warnings.is_empty() {
-        for e in &pdb_warnings {
-            match e.level() {
-                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-                _ => warn!("{e}"),
-            }
-        }
-    }
+    let pdb = super::load_input(Path::new(&args.input))?;
 
     // Calculate SC
     let sc = run_with_threads(args.num_threads as isize, || {
@@ -63,11 +45,15 @@ pub(crate) fn run(args: &Args) {
     });
 
     match sc {
-        Ok(score) => {
-            info!("SC: {:.4}", score);
+        Ok(analysis) => {
+            for warning in analysis.warnings {
+                tracing::warn!("{warning}");
+            }
+            info!("SC: {:.4}", analysis.value);
         }
         Err(e) => {
-            error!("SC calculation failed: {}", e);
+            return Err(arpeggia::ArpeggiaError::InvalidArgument(e.to_string()));
         }
     }
+    Ok(())
 }
