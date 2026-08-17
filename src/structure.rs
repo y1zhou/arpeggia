@@ -1,6 +1,7 @@
 //! Shared structure loading and preparation for calculations.
 
 use crate::contacts::residues::ResidueExt;
+use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use pdbtbx::*;
 use std::collections::HashSet;
 
@@ -13,36 +14,134 @@ const ION_RESIDUES: &[&str] = &[
     "ACE", "NH2",
 ];
 
-/// Open an atomic data file with [`pdbtbx::open`] and remove non-protein residues.
-pub fn load_model(input_file: &str) -> (PDB, Vec<PDBError>) {
-    let (mut pdb, errors) = pdbtbx::ReadOptions::default()
+/// Open an atomic data file and remove unsupported residues.
+pub fn load_model(input_file: &str) -> ArpeggiaResult<Analysis<PDB>> {
+    if !std::path::Path::new(input_file).try_exists()? {
+        return Err(ArpeggiaError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("input file does not exist: {input_file}"),
+        )));
+    }
+    let (mut pdb, diagnostics) = pdbtbx::ReadOptions::default()
         .set_only_atomic_coords(true)
         .set_level(pdbtbx::StrictnessLevel::Loose)
         .read(input_file)
-        .unwrap();
+        .map_err(|errors| ArpeggiaError::Parse(format_pdb_errors(&errors)))?;
+
+    let invalidating: Vec<_> = diagnostics
+        .iter()
+        .filter(|error| {
+            matches!(
+                error.level(),
+                ErrorLevel::BreakingError | ErrorLevel::InvalidatingError
+            )
+        })
+        .collect();
+    if !invalidating.is_empty() {
+        return Err(ArpeggiaError::Parse(
+            invalidating
+                .into_iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; "),
+        ));
+    }
 
     pdb.remove_residues_by(|res| res.resn().is_none());
 
-    (pdb, errors)
+    let mut warnings = diagnostics
+        .into_iter()
+        .map(|error| AnalysisWarning::new(WarningCode::Parser, error.to_string()))
+        .collect::<Vec<_>>();
+    warnings.extend(select_conformers(&mut pdb));
+    Ok(Analysis::new(pdb, warnings))
+}
+
+fn format_pdb_errors(errors: &[PDBError]) -> String {
+    errors
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+pub(crate) fn select_conformers(pdb: &mut PDB) -> Vec<AnalysisWarning> {
+    let mut warnings = Vec::new();
+    for model in pdb.models_mut() {
+        let model_number = model.serial_number();
+        for chain in model.chains_mut() {
+            let chain_id = chain.id().to_string();
+            for residue in chain.residues_mut() {
+                let choices = residue
+                    .conformers()
+                    .filter_map(|conformer| {
+                        let location = conformer.alternative_location()?;
+                        let atom_count = conformer.atom_count();
+                        (atom_count > 0).then(|| {
+                            let mean_occupancy =
+                                conformer.atoms().map(Atom::occupancy).sum::<f64>()
+                                    / atom_count as f64;
+                            (location.to_string(), mean_occupancy)
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                if choices.len() < 2 {
+                    continue;
+                }
+                // [WARNING] Selecting one highest-occupancy conformer is deterministic but does
+                // not model conformational ensembles or their population-weighted observables.
+                let Some(selected) = choices
+                    .iter()
+                    .max_by(
+                        |(left_name, left_occupancy), (right_name, right_occupancy)| {
+                            left_occupancy.total_cmp(right_occupancy).then_with(|| {
+                                conformer_tie_rank(right_name).cmp(&conformer_tie_rank(left_name))
+                            })
+                        },
+                    )
+                    .map(|(name, _)| name.clone())
+                else {
+                    continue;
+                };
+                residue.remove_conformers_by(|conformer| {
+                    conformer
+                        .alternative_location()
+                        .is_some_and(|location| location != selected)
+                });
+                warnings.push(AnalysisWarning::new(
+                    WarningCode::ConformerSelected,
+                    format!(
+                        "selected alternate conformer {selected} for model {model_number}, chain \
+                         {chain_id}, residue {}{}",
+                        residue.serial_number(),
+                        residue.insertion_code().unwrap_or("")
+                    ),
+                ));
+            }
+        }
+    }
+    warnings
+}
+
+fn conformer_tie_rank(name: &str) -> (bool, &str) {
+    (name != "A", name)
 }
 
 /// Parse the chain groups from the input string.
 ///
-/// Only checks the first two fields separated by `/`. If one of the groups is
-/// unspecified, all remaining chains from `all_chains` are used.
-///
-/// # Panics
-/// This function will panic if the input format is invalid or if one of the
-/// groups ends up empty.
+/// Exactly one `/` is required. If one side is unspecified, all remaining
+/// chains from `all_chains` are used. Invalid or empty selections return a
+/// typed argument error.
 pub fn parse_groups(
     all_chains: &HashSet<String>,
     groups: &str,
-) -> (HashSet<String>, HashSet<String>) {
+) -> ArpeggiaResult<(HashSet<String>, HashSet<String>)> {
     let sel_vec: Vec<&str> = groups.split('/').collect();
-    assert!(
-        (sel_vec.len() >= 2),
-        "Invalid chain groups format! Use '/' for all-to-all comparisons."
-    );
+    if sel_vec.len() != 2 {
+        return Err(ArpeggiaError::InvalidArgument(
+            "chain groups must contain exactly one '/'; use '/' for all-to-all comparisons".into(),
+        ));
+    }
     let ligand_chains = sel_vec.first().unwrap_or(&"");
     let receptor_chains = sel_vec.get(1).unwrap_or(&"");
 
@@ -58,7 +157,7 @@ pub fn parse_groups(
         .collect();
 
     if ligand.is_empty() && receptor.is_empty() {
-        return (all_chains.clone(), all_chains.clone());
+        return Ok((all_chains.clone(), all_chains.clone()));
     }
 
     if ligand.is_empty() {
@@ -67,12 +166,24 @@ pub fn parse_groups(
         receptor = all_chains.difference(&ligand).cloned().collect();
     }
 
-    assert!(
-        !(ligand.is_empty() || receptor.is_empty()),
-        "Empty chain groups!"
-    );
+    if ligand.is_empty() || receptor.is_empty() {
+        return Err(ArpeggiaError::InvalidArgument(
+            "chain selection produced an empty group".into(),
+        ));
+    }
+    let unknown = ligand
+        .union(&receptor)
+        .filter(|chain| !all_chains.contains(*chain))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unknown.is_empty() {
+        return Err(ArpeggiaError::InvalidArgument(format!(
+            "unknown chain identifiers: {}",
+            unknown.join(",")
+        )));
+    }
 
-    (ligand, receptor)
+    Ok((ligand, receptor))
 }
 
 /// Structure preparation policy shared by SASA, SAP, dSASA, and SC.
@@ -114,6 +225,7 @@ impl StructurePreparation {
 
     pub(crate) fn prepare(&self, pdb: &PDB) -> PDB {
         let mut pdb_prepared = filter_pdb_by_model(pdb, self.model_num);
+        select_conformers(&mut pdb_prepared);
         assert!(
             pdb_prepared.model_count() > 0,
             "No models exist after preparation step; check `model_num`"
@@ -211,6 +323,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn missing_input_is_a_typed_error() {
+        let error = load_model("this-file-does-not-exist.pdb").unwrap_err();
+        assert!(matches!(error, ArpeggiaError::Io(_)));
+    }
+
+    #[test]
+    fn load_selects_highest_occupancy_conformer_with_a_tie_break() {
+        let input =
+            b"ATOM      1  CB AALA A   1       0.000   0.000   0.000  0.50 20.00           C  \n\
+ATOM      2  CB BALA A   1       1.000   0.000   0.000  0.50 20.00           C  \n\
+ATOM      3  CB AALA A   2       2.000   0.000   0.000  0.30 20.00           C  \n\
+ATOM      4  CB BALA A   2       3.000   0.000   0.000  0.70 20.00           C  \n\
+END                                                                             \n";
+        let path =
+            std::env::temp_dir().join(format!("arpeggia-conformers-{}.pdb", std::process::id()));
+        std::fs::write(&path, input).unwrap();
+        let analysis = load_model(path.to_str().unwrap()).unwrap();
+        std::fs::remove_file(path).unwrap();
+
+        let altlocs = analysis
+            .value
+            .atoms_with_hierarchy()
+            .map(|entity| {
+                entity
+                    .conformer()
+                    .alternative_location()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(altlocs, ["A", "B"]);
+        assert_eq!(
+            analysis
+                .warnings
+                .iter()
+                .filter(|warning| warning.code == WarningCode::ConformerSelected)
+                .count(),
+            2
+        );
+    }
+
+    #[test]
     fn good_group_splits() {
         let chains: HashSet<String> = HashSet::from(["A", "B", "C", "D"].map(|c| c.to_string()));
 
@@ -219,7 +373,7 @@ mod tests {
                 HashSet::from(["A", "B"].map(|c| c.to_string())),
                 HashSet::from(["C", "D"].map(|c| c.to_string()))
             ),
-            parse_groups(&chains, "A,B/C,D")
+            parse_groups(&chains, "A,B/C,D").unwrap()
         );
 
         assert_eq!(
@@ -227,7 +381,7 @@ mod tests {
                 HashSet::from(["A"].map(|c| c.to_string())),
                 HashSet::from(["C", "D"].map(|c| c.to_string()))
             ),
-            parse_groups(&chains, "A/C,D")
+            parse_groups(&chains, "A/C,D").unwrap()
         );
 
         assert_eq!(
@@ -235,30 +389,31 @@ mod tests {
                 HashSet::from(["A", "B"].map(|c| c.to_string())),
                 HashSet::from(["C", "D"].map(|c| c.to_string()))
             ),
-            parse_groups(&chains, "/C,D")
+            parse_groups(&chains, "/C,D").unwrap()
         );
         assert_eq!(
             (
                 HashSet::from(["C"].map(|c| c.to_string())),
                 HashSet::from(["A", "B", "D"].map(|c| c.to_string()))
             ),
-            parse_groups(&chains, "C/")
+            parse_groups(&chains, "C/").unwrap()
         );
-        assert_eq!((chains.clone(), chains.clone()), parse_groups(&chains, "/"));
+        assert_eq!(
+            (chains.clone(), chains.clone()),
+            parse_groups(&chains, "/").unwrap()
+        );
     }
 
     #[test]
-    #[should_panic(expected = "Invalid chain groups format! Use '/' for all-to-all comparisons.")]
     fn empty_group_splits() {
         let chains: HashSet<String> = HashSet::from(["A", "B", "C", "D"].map(|c| c.to_string()));
-        parse_groups(&chains, "");
+        assert!(parse_groups(&chains, "").is_err());
     }
 
     #[test]
-    #[should_panic(expected = "Empty chain groups!")]
     fn missing_groups_in_split() {
         let chains: HashSet<String> = HashSet::from(["A", "B", "C"].map(|c| c.to_string()));
-        parse_groups(&chains, "A,B,C/");
+        assert!(parse_groups(&chains, "A,B,C/").is_err());
     }
 
     #[test]
@@ -266,7 +421,7 @@ mod tests {
         let root = env!("CARGO_MANIFEST_DIR");
         let path = format!("{}/{}", root, "test-data/1ubq.pdb");
 
-        let (mut pdb, _) = load_model(&path);
+        let mut pdb = load_model(&path).unwrap().value;
         let initial_atom_count = pdb.atom_count();
 
         pdb.remove_atoms_by(|atom| atom.occupancy() == 0.0);

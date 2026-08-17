@@ -129,7 +129,7 @@ pub trait ResidueExt {
 
 impl ResidueExt for Residue {
     fn resn(&self) -> Option<&str> {
-        let aa_code = match self.name().unwrap().to_uppercase().as_str() {
+        let aa_code = match self.name()?.to_uppercase().as_str() {
             "ALA" => "A",
             "ARG" => "R",
             "ASN" => "N",
@@ -138,11 +138,11 @@ impl ResidueExt for Residue {
             "GLN" => "Q",
             "GLU" => "E",
             "GLY" => "G",
-            "HIS" => "H",
+            "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => "H",
             "ILE" => "I",
             "LEU" => "L",
             "LYS" => "K",
-            "MET" => "M",
+            "MET" | "MSE" => "M",
             "PHE" => "F",
             "PRO" => "P",
             "SER" => "S",
@@ -150,7 +150,8 @@ impl ResidueExt for Residue {
             "TRP" => "W",
             "TYR" => "Y",
             "VAL" => "V",
-            "HOH" => "O", // water
+            "SEC" => "U",
+            "PYL" => "O",
             _ => "X",
         };
 
@@ -164,7 +165,7 @@ impl ResidueExt for Residue {
         let res_name = self.name().unwrap_or(""); // Some conformers have different names
 
         match res_name {
-            "HIS" => self
+            "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => self
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "ND1" | "CE1" | "NE2" | "CD2"))
                 .collect(),
@@ -213,7 +214,7 @@ impl ResidueExt for Residue {
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "CD" | "OE1" | "NE2"))
                 .collect(),
-            "HIS" => self
+            "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => self
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "ND1" | "CE1" | "NE2" | "CD2"))
                 .collect(),
@@ -336,7 +337,7 @@ mod tests {
         let root = env!("CARGO_MANIFEST_DIR");
         let path = format!("{}/{}", root, "test-data/1ubq.pdb");
 
-        let (pdb, _) = load_model(&path);
+        let pdb = load_model(&path).unwrap().value;
 
         // First Met has no rings
         let residue = pdb.residues().next().unwrap();

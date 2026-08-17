@@ -1,3 +1,4 @@
+use crate::{ArpeggiaError, ArpeggiaResult};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -14,35 +15,14 @@ where
         f()
     } else {
         // Create a scoped pool with limited threads
-        let pool = rayon::ThreadPoolBuilder::new()
+        match rayon::ThreadPoolBuilder::new()
             .num_threads(n_threads)
             .build()
-            .unwrap_or_else(|_| {
-                // Fallback to global pool if creation fails
-                rayon::ThreadPoolBuilder::new()
-                    .build()
-                    .expect("Failed to create thread pool")
-            });
-        pool.install(f)
+        {
+            Ok(pool) => pool.install(f),
+            Err(_) => f(),
+        }
     }
-}
-
-/// Sum the SASA column of a `DataFrame`.
-///
-/// # Arguments
-///
-/// * `df` - `DataFrame` containing a "sasa" column
-///
-/// # Returns
-///
-/// The sum of all SASA values, or 0.0 if the column is empty or doesn't exist.
-pub fn sum_float_col(df: &DataFrame, colname: &str) -> f32 {
-    df.column(colname)
-        .unwrap()
-        .f32()
-        .unwrap()
-        .sum()
-        .unwrap_or(0.0)
 }
 
 /// Prepare output directory for `DataFrame` output
@@ -60,49 +40,73 @@ pub fn prepare_df_output_dir(
     output: &PathBuf,
     filename: &str,
     output_format: DataFrameFileType,
-) -> PathBuf {
-    let output_path = match std::path::absolute(output) {
-        Ok(path) => path,
-        Err(e) => {
-            panic!("Failed to resolve the output directory: {}", e);
-        }
-    };
-    let _ = std::fs::create_dir_all(&output_path);
-
-    if output_path.is_dir() {
-        output_path.join(filename)
-    } else {
-        output_path.canonicalize().unwrap()
+) -> ArpeggiaResult<PathBuf> {
+    let mut components = Path::new(filename).components();
+    let valid_filename = matches!(components.next(), Some(std::path::Component::Normal(_)))
+        && components.next().is_none();
+    if !valid_filename {
+        return Err(ArpeggiaError::InvalidArgument(
+            "output filename must be one normal path component".into(),
+        ));
     }
-    .with_extension(output_format.to_string())
+    let output_path = std::path::absolute(output)?;
+    std::fs::create_dir_all(&output_path)?;
+    Ok(output_path
+        .join(filename)
+        .with_extension(output_format.to_string()))
 }
 
 /// Write a `DataFrame` to a CSV file
 ///
-/// # Panics
-/// This function will panic if the file cannot be created or written to.
-pub fn write_df_to_file(df: &mut DataFrame, file_path: &Path, file_type: DataFrameFileType) {
+pub fn write_df_to_file(
+    df: &mut DataFrame,
+    file_path: &Path,
+    file_type: DataFrameFileType,
+) -> ArpeggiaResult<()> {
     let file_suffix = file_type.to_string();
-    let mut file = std::fs::File::create(file_path.with_extension(file_suffix)).unwrap();
+    let mut file = std::fs::File::create(file_path.with_extension(file_suffix))?;
     match file_type {
         DataFrameFileType::Csv => {
-            CsvWriter::new(&mut file).finish(df).unwrap();
+            CsvWriter::new(&mut file)
+                .finish(df)
+                .map_err(|error| ArpeggiaError::Io(error.into()))?;
         }
         DataFrameFileType::Parquet => {
-            ParquetWriter::new(&mut file).finish(df).unwrap();
+            ParquetWriter::new(&mut file)
+                .finish(df)
+                .map_err(|error| ArpeggiaError::Io(error.into()))?;
         }
         DataFrameFileType::Json => {
             JsonWriter::new(&mut file)
                 .with_json_format(JsonFormat::Json)
                 .finish(df)
-                .unwrap();
+                .map_err(|error| ArpeggiaError::Io(error.into()))?;
         }
         DataFrameFileType::NDJson => {
             JsonWriter::new(&mut file)
                 .with_json_format(JsonFormat::JsonLines)
                 .finish(df)
-                .unwrap();
+                .map_err(|error| ArpeggiaError::Io(error.into()))?;
         }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_filename_cannot_escape_the_output_directory() {
+        let output = std::env::temp_dir().join("arpeggia-output-path-test");
+        assert!(prepare_df_output_dir(&output, "../escape", DataFrameFileType::Csv).is_err());
+        assert!(prepare_df_output_dir(&output, "nested/name", DataFrameFileType::Csv).is_err());
+        assert_eq!(
+            prepare_df_output_dir(&output, "contacts", DataFrameFileType::Csv)
+                .unwrap()
+                .file_name(),
+            Some(std::ffi::OsStr::new("contacts.csv"))
+        );
     }
 }
 
