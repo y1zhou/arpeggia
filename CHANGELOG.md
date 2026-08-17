@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-14
+
+### Scientific corrections
+
+- Restored both directional SC surfaces after fixing the inverted atom-2
+  toroidal-surface branch and model-local plane traversal. Ringless structures
+  are valid; absolute parity with the pinned `sc-rs` CLI remains explicitly
+  documented in the regression test.
+- Split explicit `Covalent` evidence from distance-inferred
+  `PotentialCovalent`, and named steric clash, van der Waals clash, and van der
+  Waals contact regions separately.
+- Associated hydrogen geometry with the specific donor rather than every
+  hydrogen in its residue, and added missing-hydrogen diagnostics.
+- Added `AllCharged`, `Heuristic`, and `ExplicitOnly` histidine policies with
+  potential ionic and cation-pi categories for inferred charge.
+- Applied deterministic highest-occupancy alternate-conformer selection with an
+  `A` tie-break and visible warnings across analyses.
+- Unified standard atom, residue, and chain SASA over one selected atom
+  population with ProtOr/fallback radii. Added Rosetta `SasaFilter` atom
+  polarity and additive polar, hydrophobic, and unclassified areas.
+- Kept SAP's separately calibrated elemental-radius exposure calculation while
+  fixing residue output to retain complete side-chain SASA and eligible
+  zero/nonpositive-score residues.
+- Kept dSASA as the established two-sided buried area, corrected its docs,
+  required disjoint groups, and added polarity components.
+- Fixed coordinate-observed `seq` output to omit solvent and added `seqres` for
+  PDB `SEQRES` and mmCIF entity-polymer declarations.
+
+### API and schema changes
+
+- Rust parsing and analysis entry points now return typed errors and successful
+  `Analysis<T>` values with stable warning codes instead of panicking.
+- Python emits `UserWarning`, `ValueError`, or `OSError` while retaining direct
+  DataFrame/scalar/list results. CPU-bound parsing and calculations release the
+  GIL.
+- Contact interaction labels and SASA/RSA columns changed as described above.
+  Model/atom identifiers in contact and surface DataFrames are unsigned 64-bit
+  integers and residue identifiers are signed 64-bit integers. Python adds
+  `dsasa_components()` and `seqres()`.
+- `get_contacts` now accepts protonation mode and pH. dSASA component results
+  and detailed directional SC results are public typed records.
+
+### Performance and security
+
+- Prepare dSASA structures once, avoid debug-only DataFrame work unless debug
+  logging is enabled, and remove an arbitrary SC sampling ceiling.
+- Restrict output filenames to a single normal path component.
+- Pin release-critical GitHub Actions to immutable commits, track Cargo and uv
+  lockfiles, and use locked/frozen CI and release commands.
+
+### Simplified
+
+- Replaced dynamic SC radii with static data, deleted duplicate geometry and
+  sequence abstractions, removed redundant SAP maps/wrappers and unused Cargo
+  features, centralized CLI input diagnostics, and replaced stale build notes.
+
 ## [0.8.1] - 2026-06-23
 
 ### Changed
@@ -104,7 +160,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `arpeggia` Python package for easy installation and usage
 - GitHub Actions workflow for building and testing the Python package
 
-
 ## [0.4.2] - 2025-03-17
 
 ### Added
@@ -122,7 +177,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Better logging messages and documentation of methods
-
 
 ## [0.4.1] - 2025-02-19
 
@@ -159,7 +213,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance/memory footprint improvement by switching from 64-bit numbers to 32-bit
 - Logging is now less verbose
 
-
 ## [0.3.1]
 
 ### Fixed
@@ -170,7 +223,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Defaults to searching for all intra- and inter-chain interactions when `-g '/'` is passed to `contacts`
-
 
 ## [0.3.0] - 2024-08-14
 
@@ -203,7 +255,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - As a consequence of the `pdbtbx` update, only atomic coordinates are now parsed
 
-
 ## [0.1.0] - 2024-05-09
 
 ### Added
@@ -211,7 +262,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.9.0
 [0.8.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.1
 [0.8.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.0
 [0.7.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.7.0

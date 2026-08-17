@@ -22,8 +22,7 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   - [x] Ionic interactions
   - [x] Hydrogen bonds
   - [x] Weak hydrogen bonds
-  - [x] Disulfide bonds
-  - [x] Covalent bonds
+  - [x] Explicit covalent bonds and distance-inferred potential covalent contacts
 - [x] Calculate SASA (Solvent Accessible Surface Area) at atom, residue, and chain levels
 - [x] Calculate relative SASA (RSA) normalized by MaxASA values
 - [x] Calculate SAP (Spatial Aggregation Propensity) scores for aggregation prediction
@@ -32,6 +31,31 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 - [x] Output results in various formats (e.g., JSON, CSV, Parquet)
 - [x] Python bindings via PyO3
 - [x] Returns Polars DataFrames for efficient data manipulation
+
+## Scientific conventions
+
+- Contact rows use `Covalent` only for bonds declared by PDB `SSBOND`, `LINK`,
+  or `CONECT`, or mmCIF `_struct_conn`. The prior distance rule now produces
+  `PotentialCovalent`. Clash and van der Waals regions are separately named.
+- Explicit hydrogen-bond geometry uses only hydrogens associated with the donor
+  atom. Missing donor hydrogens produce warnings; Arpeggia does not protonate
+  input structures.
+- Histidines use `AllCharged` by default for Arpeggio-compatible
+  positive-ionisable typing. `Heuristic` applies explicit evidence followed by
+  a pH-dependent intrinsic-pKa prior, while `ExplicitOnly` never guesses.
+  Inferred histidine charge produces potential ionic, repulsion, and cation-pi
+  labels rather than definitive ones.
+- All analyses deterministically choose the highest-occupancy alternate
+  conformer, with `A` as the tie-breaker, and warn when selection occurs.
+- Standard atom, residue, and chain SASA use one atom population and ProtOr
+  radii with elemental fallback. Polar/hydrophobic columns follow Rosetta's
+  legacy `SasaFilter` atom partition; numerical areas remain Shrake–Rupley.
+- dSASA is the two-sided buried area
+  `SASA(group 1) + SASA(group 2) - SASA(complex)`. Divide by two only when a
+  one-sided interface-area convention is required.
+- SAP retains its Rosetta-calibrated elemental-radius exposure scale and sums
+  positive score contributions while reporting complete side-chain SASA.
+  Monomers without a Rosetta calibration are omitted with a warning.
 
 ## Installation
 
@@ -48,8 +72,8 @@ Or install from source using maturin:
 ```bash
 git clone https://github.com/y1zhou/arpeggia.git
 cd arpeggia
-pip install maturin
-maturin develop -v --release --features python
+uv sync --frozen --all-extras
+uv run maturin develop --uv --release --features python --locked
 ```
 
 ### Rust Binary
@@ -78,6 +102,8 @@ contacts_df = arpeggia.contacts(
     vdw_comp=0.1,                 # VdW radii compensation
     dist_cutoff=6.5,              # Distance cutoff in Ångströms
     ignore_zero_occupancy=False   # Set True to ignore zero occupancy atoms
+    protonation="all-charged",    # Or "heuristic" / "explicit-only"
+    ph=7.4,
 )
 print(f"Found {len(contacts_df)} contacts")
 print(contacts_df.head())
@@ -111,6 +137,11 @@ print(f"Calculated SAP for H and L chains")
 bsa = arpeggia.dsasa("structure.pdb", groups="A,B/C,D")
 print(f"Buried surface area: {bsa:.2f} Å²")
 
+# Additive two-sided polarity components
+total, polar, hydrophobic, unknown = arpeggia.dsasa_components(
+    "structure.pdb", groups="A,B/C,D"
+)
+
 # Calculate Shape Complementarity at an interface
 sc_score = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
 print(f"Shape Complementarity: {sc_score:.3f}")  # Typical values: 0.5-0.7
@@ -119,6 +150,9 @@ print(f"Shape Complementarity: {sc_score:.3f}")  # Typical values: 0.5-0.7
 sequences = arpeggia.seq("structure.pdb")
 for chain_id, seq in sequences:
     print(f"Chain {chain_id}: {seq}")
+
+# Extract declared SEQRES/entity-polymer sequences, including missing coordinates
+declared_sequences = arpeggia.seqres("structure.pdb")
 ```
 
 The functions return [Polars](https://pola.rs/) DataFrames for efficient data manipulation. You can easily convert to pandas if needed:
@@ -170,6 +204,9 @@ arpeggia sc -i antibody_antigen.pdb -g "H,L/A"
 
 # Extract sequences
 arpeggia seq structure.pdb
+
+# Extract declared SEQRES/entity-polymer sequences
+arpeggia seqres structure.pdb
 ```
 
 To see all available options:
@@ -183,25 +220,28 @@ arpeggia contacts --help
 
 The `groups` parameter allows you to specify which chains interact with each other:
 
-- `"/"` - All chains interact with all chains (including self)
+- `"/"` - All chains interact with all chains (including self) for contacts
 - `"A,B/C,D"` - Chains A,B interact with chains C,D
 - `"A/"` - Chain A interacts with all other chains
 - `"A,B/"` - Chains A,B interact with all remaining chains
+
+dSASA and SC require two disjoint, non-empty groups; `"/"` is therefore
+invalid for those calculations.
 
 ## Development
 
 To build the Python package in development mode:
 
 ```bash
-pip install maturin polars
-maturin develop -v --release --features python
-python python/test_arpeggia.py
+uv sync --frozen --all-extras
+uv run maturin develop --uv --features python --locked
+uv run pytest
 ```
 
 To run Rust tests:
 
 ```bash
-cargo test
+cargo test --locked
 ```
 
 ## License
