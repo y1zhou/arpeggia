@@ -88,6 +88,33 @@ Arpeggia's Shrake–Rupley atom SASA partitioned by Rosetta `SasaFilter` atom
 polarity. It reproduces the polarity scheme, not Rosetta's LeGrand SASA method.
 _Avoid_: Rosetta SASA, LeGrand-compatible SASA
 
+**Prepared Full-Atom Structure**:
+A caller-supplied structure containing the hydrogens, heavy atoms, termini, and
+residue variants required by the selected reference calculation. Arpeggia does
+not reconstruct missing chemistry for numerical-compatibility calculations.
+_Avoid_: Raw structure, automatically completed structure
+
+**Rosetta-Numeric Compatibility**:
+Agreement with a pinned Rosetta calculation within the accepted error bounds
+when both programs receive the same Prepared Full-Atom Structure. It does not
+require algorithm or implementation parity.
+_Avoid_: Rosetta method parity, approximate correlation
+
+**Canonical Compatibility Set**:
+A fixed set of Prepared Full-Atom Structures containing supported canonical
+proteins, used to evaluate Rosetta-Numeric Compatibility claims.
+_Avoid_: Training set, heterogeneous corpus, holdout set
+
+**Prepared-Input Diagnostic**:
+A conservative warning that detects obvious evidence of absent or inconsistent
+full-atom preparation without claiming to prove chemical completeness.
+_Avoid_: Preparation validation, structure completion
+
+**Definition-Derived Calculation**:
+A deterministic calculation whose empirical parameters come from a named
+scientific or reference definition rather than being fitted to benchmark output.
+_Avoid_: First-principles calculation, trained model
+
 **Polar SASA**:
 The sum of SASA assigned to Rosetta donor, acceptor, or polar-hydrogen atoms.
 _Avoid_: SASA of polar residues
