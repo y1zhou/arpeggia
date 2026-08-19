@@ -2,9 +2,11 @@
 
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::fs::File;
+#[cfg(test)]
+use std::io::Cursor;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
-
-type CifLoop = (Vec<String>, Vec<Vec<String>>);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct ResidueBoundary {
@@ -102,16 +104,10 @@ impl StructureMetadata {
 /// Read only connectivity and polymer-sequence metadata from PDB or mmCIF.
 pub fn read_metadata(path: impl AsRef<Path>) -> ArpeggiaResult<Analysis<StructureMetadata>> {
     let path = path.as_ref();
-    let input = std::fs::read_to_string(path)?;
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(str::to_ascii_lowercase);
-    let is_cif = matches!(extension.as_deref(), Some("cif" | "mmcif"))
-        || input.trim_start().starts_with("data_");
-    let (metadata, warnings) = if is_cif {
-        parse_mmcif(&input)?
+    let (metadata, warnings) = if is_mmcif(path)? {
+        parse_mmcif_reader(BufReader::new(File::open(path)?))?
     } else {
+        let input = std::fs::read_to_string(path)?;
         parse_pdb(&input)?
     };
     Ok(Analysis::new(metadata, warnings))
@@ -120,20 +116,30 @@ pub fn read_metadata(path: impl AsRef<Path>) -> ArpeggiaResult<Analysis<Structur
 /// Return declared PDB `SEQRES` or mmCIF entity-polymer sequences by chain.
 pub fn get_seqres(path: impl AsRef<Path>) -> ArpeggiaResult<Analysis<Vec<(String, String)>>> {
     let path = path.as_ref();
-    let input = std::fs::read_to_string(path)?;
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(str::to_ascii_lowercase);
-    if matches!(extension.as_deref(), Some("cif" | "mmcif"))
-        || input.trim_start().starts_with("data_")
-    {
-        let (metadata, warnings) = parse_mmcif(&input)?;
+    if is_mmcif(path)? {
+        let (metadata, warnings) = parse_mmcif_reader(BufReader::new(File::open(path)?))?;
         return Ok(Analysis::new(metadata.declared_sequences, warnings));
     }
+    let input = std::fs::read_to_string(path)?;
     let sequences = pdb_declared_sequences(&input);
     let (metadata, warnings) = metadata_with_sequences(HashSet::new(), HashSet::new(), sequences);
     Ok(Analysis::new(metadata.declared_sequences, warnings))
+}
+
+fn is_mmcif(path: &Path) -> ArpeggiaResult<bool> {
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| matches!(extension.to_ascii_lowercase().as_str(), "cif" | "mmcif"))
+    {
+        return Ok(true);
+    }
+    let mut reader = BufReader::new(File::open(path)?);
+    let prefix = reader.fill_buf()?;
+    Ok(std::str::from_utf8(prefix)
+        .unwrap_or("")
+        .trim_start()
+        .starts_with("data_"))
 }
 
 fn parse_pdb(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarning>)> {
@@ -264,63 +270,125 @@ fn pdb_declared_sequences(input: &str) -> Vec<(String, Vec<String>)> {
     sequences
 }
 
+#[cfg(test)]
 fn parse_mmcif(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarning>)> {
-    let loops = cif_loops(input)?;
+    parse_mmcif_reader(Cursor::new(input))
+}
+
+fn parse_mmcif_reader(
+    reader: impl BufRead,
+) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarning>)> {
+    let mut tokens = CifTokens::new(reader);
+    let mut pending = None;
     let mut bonds = HashSet::new();
     let mut entities = BTreeMap::<String, BTreeMap<usize, String>>::new();
     let mut chain_entities = Vec::<(String, String)>::new();
 
-    for (tags, rows) in loops {
+    while let Some(token) = next_cif_token(&mut tokens, &mut pending, true)? {
+        if !token.is_keyword("loop_") {
+            continue;
+        }
+        let mut tags = Vec::new();
+        while let Some(token) = tokens.next(true)? {
+            if token.bare && token.value.starts_with('_') {
+                tags.push(token.value);
+            } else {
+                pending = Some(token);
+                break;
+            }
+        }
+        if tags.is_empty() {
+            continue;
+        }
         let columns: HashMap<&str, usize> = tags
             .iter()
             .enumerate()
             .map(|(index, tag)| (tag.as_str(), index))
             .collect();
-        if tags.iter().any(|tag| tag.starts_with("_struct_conn.")) {
-            for row in &rows {
-                let kind = value(row, &columns, "_struct_conn.conn_type_id").unwrap_or("");
-                if !(kind.starts_with("covale") || kind.starts_with("disulf")) {
-                    continue;
-                }
-                if let (Some(first), Some(second)) = (
-                    cif_endpoint(row, &columns, 1),
-                    cif_endpoint(row, &columns, 2),
-                ) {
-                    bonds.insert(ordered_bond(first, second));
-                }
-            }
+        let target = if tags.iter().any(|tag| tag.starts_with("_struct_conn.")) {
+            CifTarget::StructConn
         } else if tags.iter().any(|tag| tag.starts_with("_entity_poly_seq.")) {
-            for row in &rows {
-                if let (Some(entity), Some(number), Some(monomer)) = (
-                    value(row, &columns, "_entity_poly_seq.entity_id"),
-                    value(row, &columns, "_entity_poly_seq.num")
-                        .and_then(|number| number.parse::<usize>().ok()),
-                    value(row, &columns, "_entity_poly_seq.mon_id"),
-                ) {
-                    entities
-                        .entry(entity.to_string())
-                        .or_default()
-                        .insert(number, monomer.to_string());
-                }
-            }
+            CifTarget::EntityPolySeq
         } else if tags
             .iter()
             .any(|tag| tag.starts_with("_pdbx_poly_seq_scheme."))
         {
-            for row in &rows {
-                if let (Some(chain), Some(entity)) = (
-                    value(row, &columns, "_pdbx_poly_seq_scheme.pdb_strand_id")
-                        .or_else(|| value(row, &columns, "_pdbx_poly_seq_scheme.asym_id")),
-                    value(row, &columns, "_pdbx_poly_seq_scheme.entity_id"),
-                ) {
-                    for chain in chain.split(',') {
-                        let chain = clean(chain).to_string();
-                        if !chain_entities.iter().any(|(known, _)| known == &chain) {
-                            chain_entities.push((chain, entity.to_string()));
+            CifTarget::PolySeqScheme
+        } else {
+            CifTarget::Ignore
+        };
+        let mut row = Vec::with_capacity(if target == CifTarget::Ignore {
+            0
+        } else {
+            tags.len()
+        });
+        let mut value_count = 0;
+
+        while let Some(token) =
+            next_cif_token(&mut tokens, &mut pending, target != CifTarget::Ignore)?
+        {
+            if token.is_control() {
+                pending = Some(token);
+                break;
+            }
+            value_count += 1;
+            if target != CifTarget::Ignore {
+                row.push(token.value);
+            }
+            if value_count % tags.len() != 0 {
+                continue;
+            }
+
+            match target {
+                CifTarget::StructConn => {
+                    let kind = value(&row, &columns, "_struct_conn.conn_type_id").unwrap_or("");
+                    if (kind.starts_with("covale") || kind.starts_with("disulf"))
+                        && let (Some(first), Some(second)) = (
+                            cif_endpoint(&row, &columns, 1),
+                            cif_endpoint(&row, &columns, 2),
+                        )
+                    {
+                        bonds.insert(ordered_bond(first, second));
+                    }
+                }
+                CifTarget::EntityPolySeq => {
+                    if let (Some(entity), Some(number), Some(monomer)) = (
+                        value(&row, &columns, "_entity_poly_seq.entity_id"),
+                        value(&row, &columns, "_entity_poly_seq.num")
+                            .and_then(|number| number.parse::<usize>().ok()),
+                        value(&row, &columns, "_entity_poly_seq.mon_id"),
+                    ) {
+                        entities
+                            .entry(entity.to_string())
+                            .or_default()
+                            .insert(number, monomer.to_string());
+                    }
+                }
+                CifTarget::PolySeqScheme => {
+                    if let (Some(chain), Some(entity)) = (
+                        value(&row, &columns, "_pdbx_poly_seq_scheme.pdb_strand_id")
+                            .or_else(|| value(&row, &columns, "_pdbx_poly_seq_scheme.asym_id")),
+                        value(&row, &columns, "_pdbx_poly_seq_scheme.entity_id"),
+                    ) {
+                        for chain in chain.split(',') {
+                            let chain = clean(chain).to_string();
+                            if !chain_entities.iter().any(|(known, _)| known == &chain) {
+                                chain_entities.push((chain, entity.to_string()));
+                            }
                         }
                     }
                 }
+                CifTarget::Ignore => {}
             }
+
+            row.clear();
+        }
+        if value_count % tags.len() != 0 {
+            return Err(ArpeggiaError::Parse(format!(
+                "mmCIF loop has {} values for {} columns",
+                value_count,
+                tags.len()
+            )));
         }
     }
 
@@ -393,106 +461,176 @@ fn cif_endpoint(
     BondEndpoint::new(chain, residue, insertion, atom)
 }
 
-fn cif_loops(input: &str) -> ArpeggiaResult<Vec<CifLoop>> {
-    let tokens = cif_tokens(input)?;
-    let mut loops = Vec::new();
-    let mut index = 0;
-    while index < tokens.len() {
-        if tokens[index] != "loop_" {
-            index += 1;
-            continue;
-        }
-        index += 1;
-        let mut tags = Vec::new();
-        while index < tokens.len() && tokens[index].starts_with('_') {
-            tags.push(tokens[index].clone());
-            index += 1;
-        }
-        if tags.is_empty() {
-            continue;
-        }
-        let mut values = Vec::new();
-        while index < tokens.len()
-            && tokens[index] != "loop_"
-            && tokens[index] != "stop_"
-            && !tokens[index].starts_with("data_")
-            && !tokens[index].starts_with('_')
-        {
-            values.push(tokens[index].clone());
-            index += 1;
-        }
-        if values.len() % tags.len() != 0 {
-            return Err(ArpeggiaError::Parse(format!(
-                "mmCIF loop has {} values for {} columns",
-                values.len(),
-                tags.len()
-            )));
-        }
-        loops.push((
-            tags.clone(),
-            values.chunks(tags.len()).map(<[String]>::to_vec).collect(),
-        ));
-    }
-    Ok(loops)
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CifTarget {
+    Ignore,
+    StructConn,
+    EntityPolySeq,
+    PolySeqScheme,
 }
 
-fn cif_tokens(input: &str) -> ArpeggiaResult<Vec<String>> {
-    let mut tokens = Vec::new();
-    let mut lines = input.lines();
-    while let Some(line) = lines.next() {
-        if line.starts_with(';') {
-            let mut text = String::new();
-            loop {
-                let next = lines.next().ok_or_else(|| {
-                    ArpeggiaError::Parse("unterminated mmCIF multiline value".into())
-                })?;
-                if next.starts_with(';') {
-                    break;
-                }
-                if !text.is_empty() {
-                    text.push('\n');
-                }
-                text.push_str(next);
-            }
-            tokens.push(text);
-            continue;
+#[derive(Debug)]
+struct CifToken {
+    value: String,
+    bare: bool,
+}
+
+impl CifToken {
+    fn is_keyword(&self, keyword: &str) -> bool {
+        self.bare && self.value.eq_ignore_ascii_case(keyword)
+    }
+
+    fn is_control(&self) -> bool {
+        self.bare && is_cif_control(&self.value)
+    }
+}
+
+fn is_cif_control(value: &str) -> bool {
+    value.starts_with('_')
+        || value.eq_ignore_ascii_case("loop_")
+        || value.eq_ignore_ascii_case("stop_")
+        || has_ascii_prefix(value, "data_")
+        || has_ascii_prefix(value, "save_")
+        || value.eq_ignore_ascii_case("global_")
+}
+
+fn has_ascii_prefix(value: &str, prefix: &str) -> bool {
+    value
+        .get(..prefix.len())
+        .is_some_and(|candidate| candidate.eq_ignore_ascii_case(prefix))
+}
+
+struct CifTokens<R> {
+    reader: R,
+    line: String,
+    offset: usize,
+}
+
+impl<R: BufRead> CifTokens<R> {
+    fn new(reader: R) -> Self {
+        Self {
+            reader,
+            line: String::new(),
+            offset: 0,
         }
-        let mut chars = line.char_indices().peekable();
-        while let Some((start, ch)) = chars.next() {
+    }
+
+    fn next(&mut self, capture: bool) -> ArpeggiaResult<Option<CifToken>> {
+        loop {
+            if let Some(token) = self.line_token(capture)? {
+                return Ok(Some(token));
+            }
+            self.line.clear();
+            self.offset = 0;
+            if self.reader.read_line(&mut self.line)? == 0 {
+                return Ok(None);
+            }
+            if self.line.starts_with(';') {
+                return self.multiline_value(capture).map(Some);
+            }
+        }
+    }
+
+    fn line_token(&mut self, capture: bool) -> ArpeggiaResult<Option<CifToken>> {
+        let mut chars = self.line[self.offset..].char_indices().peekable();
+        while let Some((relative_start, ch)) = chars.next() {
+            let start = self.offset + relative_start;
             if ch.is_whitespace() {
                 continue;
             }
             if ch == '#' {
-                break;
+                self.offset = self.line.len();
+                return Ok(None);
             }
             if ch == '\'' || ch == '"' {
                 let quote = ch;
                 let value_start = start + ch.len_utf8();
-                let mut end = line.len();
-                for (position, next) in chars.by_ref() {
-                    if next == quote {
-                        end = position;
-                        break;
+                for (relative_end, next) in chars.by_ref() {
+                    let end = self.offset + relative_end;
+                    let after_quote = end + next.len_utf8();
+                    if next == quote
+                        && self.line[after_quote..]
+                            .chars()
+                            .next()
+                            .is_none_or(|next| next.is_whitespace() || next == '#')
+                    {
+                        self.offset = after_quote;
+                        return Ok(Some(CifToken {
+                            value: if capture {
+                                self.line[value_start..end].to_string()
+                            } else {
+                                String::new()
+                            },
+                            bare: false,
+                        }));
                     }
                 }
-                tokens.push(line[value_start..end].to_string());
-            } else {
-                let mut end = line.len();
-                while let Some(&(position, next)) = chars.peek() {
-                    if next.is_whitespace() || next == '#' {
-                        end = position;
-                        break;
-                    }
-                    chars.next();
-                }
-                tokens.push(line[start..end].to_string());
-                if chars.peek().is_some_and(|(_, next)| *next == '#') {
+                return Err(ArpeggiaError::Parse(
+                    "unterminated quoted mmCIF value".into(),
+                ));
+            }
+
+            let mut end = self.line.len();
+            while let Some(&(relative_end, next)) = chars.peek() {
+                if next.is_whitespace() {
+                    end = self.offset + relative_end;
                     break;
                 }
+                chars.next();
+            }
+            self.offset = end;
+            let value = self.line[start..end].trim_end_matches(['\r', '\n']);
+            let control = is_cif_control(value);
+            return Ok(Some(CifToken {
+                value: if capture || control {
+                    value.to_string()
+                } else {
+                    String::new()
+                },
+                bare: true,
+            }));
+        }
+        self.offset = self.line.len();
+        Ok(None)
+    }
+
+    fn multiline_value(&mut self, capture: bool) -> ArpeggiaResult<CifToken> {
+        let mut value = if capture {
+            self.line[1..].trim_end_matches(['\r', '\n']).to_string()
+        } else {
+            String::new()
+        };
+        loop {
+            self.line.clear();
+            if self.reader.read_line(&mut self.line)? == 0 {
+                return Err(ArpeggiaError::Parse(
+                    "unterminated mmCIF multiline value".into(),
+                ));
+            }
+            if self.line.starts_with(';') {
+                self.offset = self.line.len();
+                return Ok(CifToken { value, bare: false });
+            }
+            if capture {
+                if !value.is_empty() {
+                    value.push('\n');
+                }
+                value.push_str(self.line.trim_end_matches(['\r', '\n']));
             }
         }
     }
-    Ok(tokens)
+}
+
+fn next_cif_token<R: BufRead>(
+    tokens: &mut CifTokens<R>,
+    pending: &mut Option<CifToken>,
+    capture: bool,
+) -> ArpeggiaResult<Option<CifToken>> {
+    if pending.is_some() {
+        Ok(pending.take())
+    } else {
+        tokens.next(capture)
+    }
 }
 
 fn value<'a>(row: &'a [String], columns: &HashMap<&str, usize>, name: &str) -> Option<&'a str> {
@@ -633,6 +771,27 @@ covale A 1 NZ B 2 C1\nmetalc A 3 ND1 B 4 ZN\n";
             &BondEndpoint::from_parts("A", 3, "", "ND1"),
             &BondEndpoint::from_parts("B", 4, "", "ZN")
         ));
+    }
+
+    #[test]
+    fn mmcif_quoted_reserved_value_is_not_loop_syntax() {
+        let input = "data_test\n\
+loop_\n_entity_poly_seq.entity_id\n_entity_poly_seq.num\n_entity_poly_seq.mon_id\n\
+1 1 '_UNK'\n\
+loop_\n_pdbx_poly_seq_scheme.asym_id\n_pdbx_poly_seq_scheme.entity_id\n\
+A 1\n";
+        let path = std::env::temp_dir().join(format!(
+            "arpeggia-quoted-cif-value-{}.cif",
+            std::process::id()
+        ));
+        std::fs::write(&path, input).unwrap();
+
+        let sequences = get_seqres(&path);
+        std::fs::remove_file(path).unwrap();
+
+        let analysis = sequences.unwrap();
+        assert_eq!(analysis.value, vec![("A".into(), "X".into())]);
+        assert_eq!(analysis.warnings[0].code, WarningCode::UnsupportedMonomer);
     }
 
     #[test]
