@@ -22,6 +22,13 @@ Accepted Deviation. It may change numerical or tabular output in a minor release
 when the change and its expected effects are documented.
 _Avoid_: Breaking change, cleanup
 
+**v0.9 Release Gate**:
+The complete set of confirmed correctness, performance, security, packaging,
+documentation, and approved code-simplification work required before v0.9.0 is
+published. Passing tests alone does not close the gate while a recorded task is
+unfinished.
+_Avoid_: Critical bugs only, optional cleanup list
+
 **Feature Reference**:
 The named authoritative method for one public calculation. Published methods
 govern scientific semantics; their official implementations resolve details the
@@ -50,6 +57,18 @@ bonding evidence in the input structure. Its public interaction label is
 `PotentialCovalent`.
 _Avoid_: Covalent bond, inferred covalent bond
 
+**Peptide-Adjacent Residues**:
+Two residues in one selected chain whose peptide C--N geometry is continuous and
+not separated by an explicit chain break. Coordinate order or consecutive
+residue numbering alone does not establish adjacency.
+_Avoid_: Consecutive coordinate residues, neighboring residue numbers
+
+**Valid Explicit Chain Break**:
+A PDB `TER` record placed after a complete residue and identifying that same
+residue by name, chain, sequence number, and insertion code. A break inside a
+residue or identifying a different residue is invalid input, not a boundary.
+_Avoid_: Any TER record, implicit coordinate gap
+
 **Van der Waals Clash**:
 A nonbonded atomic contact inside the combined van der Waals envelope but outside
 the severe steric-clash and potential-covalent regions.
@@ -61,9 +80,10 @@ without overlapping the unmodified envelope.
 _Avoid_: Van der Waals clash
 
 **Observed Sequence**:
-The ordered polymer residues present in atomic coordinates for a chain. It omits
-solvent, ligands, and polymer residues without coordinates.
-_Avoid_: Complete sequence, declared sequence
+The ordered polymer residues present in atomic coordinates for a selected model
+and chain. Model `0` selects the first model; solvent, ligands, and polymer
+residues without coordinates are omitted.
+_Avoid_: Complete sequence, declared sequence, all-model sequence
 
 **Declared Sequence**:
 The polymer sequence declared by PDB `SEQRES` or mmCIF entity metadata, including
@@ -82,6 +102,13 @@ Arpeggio's unconditional positive-ionisable typing, `Heuristic` combines explici
 evidence with a documented pH-dependent estimate, and `ExplicitOnly` never
 guesses when input evidence is absent.
 _Avoid_: Legacy mode, strict mode
+
+**Histidine Tautomer Evidence**:
+An explicit HID/HSD, HIE/HSE, or HIP/HSP identity, or the corresponding HD1 and
+HE2 hydrogen pattern, that determines histidine H-bond donor and acceptor atoms.
+Hydrogen-free plain HIS remains ambiguous and cannot prove a geometric hydrogen
+bond.
+_Avoid_: Histidine charge mode, all-ring donor/acceptor typing
 
 **Rosetta-Partitioned SASA**:
 Arpeggia's Shrake–Rupley atom SASA partitioned by Rosetta `SasaFilter` atom
@@ -109,6 +136,13 @@ _Avoid_: Training set, heterogeneous corpus, holdout set
 A conservative warning that detects obvious evidence of absent or inconsistent
 full-atom preparation without claiming to prove chemical completeness.
 _Avoid_: Preparation validation, structure completion
+
+**Calculation Failure**:
+A validly requested analysis for which Arpeggia cannot produce a scientifically
+meaningful complete value. Rust returns a typed error, Python raises an
+exception, and the CLI exits unsuccessfully; no null or partial scalar is
+reported.
+_Avoid_: Missing result, nullable score, partial success
 
 **Definition-Derived Calculation**:
 A deterministic calculation whose empirical parameters come from a named

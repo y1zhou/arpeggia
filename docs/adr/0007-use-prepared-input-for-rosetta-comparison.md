@@ -81,11 +81,15 @@ a public API; experimental combinations are not published speculatively.
 Compatibility applies only to the selected default parameters.
 
 The factorial ends at a review checkpoint before production calculations
-change. Its durable evidence consists of a human-readable HTML report and a
-machine-readable result file containing source and prepared hashes, atom counts,
-parameters, Rosetta revision, per-structure metrics, warnings, failures,
-timings, and summary statistics. Generated prepared structures stay outside Git
-except for deliberately selected regression fixtures.
+change. Its only durable generated evidence is one human-readable HTML report
+containing the source and prepared hashes, atom counts, parameters, Rosetta
+revision, per-structure metrics, warnings, failures, timings, and summary
+statistics needed to audit the decision. Machine-readable results, generated
+prepared structures, and intermediate reports are not selected for the release
+branch except for deliberately chosen regression fixtures. Existing experiment
+artifacts may remain in feature-branch history. The final HTML is documentation
+and is excluded from Rust and Python packages. Future local benchmarks use the
+same one-final-report policy.
 
 The canonical compatibility set is evaluated as one fixed corpus rather than
 split into development and holdout subsets. Candidate formulas are deterministic

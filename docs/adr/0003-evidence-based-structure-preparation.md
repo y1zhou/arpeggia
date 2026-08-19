@@ -33,6 +33,15 @@ narrow metadata layer reads PDB `SSBOND`, `LINK`, `CONECT`, and `SEQRES`, plus
 mmCIF `_struct_conn`, `_entity_poly_seq`, and `_pdbx_poly_seq_scheme`, while
 `pdbtbx` remains the coordinate parser.
 
+The narrow PDB metadata layer also records valid `TER` boundaries for peptide
+adjacency. A valid `TER` follows a complete residue and identifies that residue
+by name, chain, sequence number, and insertion code. A mid-residue or mismatched
+`TER` invalidates coordinate-aware metadata analysis rather than silently
+suppressing contacts; TER serial number irregularities remain parser diagnostics
+because they do not establish the scientific boundary. `seqres` parses sequence
+declarations independently and ignores malformed `TER` records because they do
+not affect the declared sequence.
+
 `seqres` remains chain-oriented like `seq`: it returns one declared sequence per
 chain in declaration order, repeats a shared mmCIF entity sequence for each
 mapped chain, and includes declared chains without coordinates. Unrecognized
