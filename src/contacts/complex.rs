@@ -4,7 +4,7 @@ use super::{
     find_ionic_repulsion_with_protonation, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond,
     residues::{Plane, ResidueExt, ResidueId},
 };
-use crate::{BondEndpoint, StructureMetadata, structure::parse_groups};
+use crate::{StructureMetadata, structure::parse_groups};
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -118,15 +118,7 @@ impl<'a> InteractionComplex<'a> {
         let Some(metadata) = self.metadata else {
             return false;
         };
-        let endpoint = |entity: &AtomConformerResidueChainModel| {
-            BondEndpoint::from_parts(
-                entity.chain().id(),
-                entity.residue().serial_number(),
-                entity.residue().insertion_code().unwrap_or(""),
-                entity.atom().name(),
-            )
-        };
-        metadata.has_bond(&endpoint(first), &endpoint(second))
+        metadata.has_entity_bond(first, second)
     }
 
     /// Determine if two entities need to be checked for interactions or not.
@@ -189,10 +181,6 @@ impl<'a> InteractionComplex<'a> {
         }
     }
 
-    pub(crate) fn get_sc_plane<'b>(&'b self, r: &ResidueId<'b>) -> Option<&'b Plane> {
-        self.sc_planes.get(r)
-    }
-
     pub(crate) fn collect_sc_stats(
         &'_ self,
         contacts: &'a [ResultEntry],
@@ -208,26 +196,20 @@ impl<'a> InteractionComplex<'a> {
                     contact.ligand.altloc.as_str(),
                     contact.ligand.resn.as_str(),
                 );
-                if let Some(res1_plane) = self.get_sc_plane(&res1) {
-                    let res2 = ResidueId::new(
-                        contact.model,
-                        contact.receptor.chain.as_str(),
-                        contact.receptor.resi,
-                        contact.receptor.insertion.as_str(),
-                        contact.receptor.altloc.as_str(),
-                        contact.receptor.resn.as_str(),
-                    );
-                    if let Some(res2_plane) = self.get_sc_plane(&res2) {
-                        let centroid_dist = res1_plane.point_vec_dist(&res2_plane.center);
-                        let dihedral = res1_plane.dihedral(res2_plane);
-                        let centroid_angle = res1_plane.point_vec_angle(&res2_plane.center);
-                        Some(((res1, res2), (centroid_dist, dihedral, centroid_angle)))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+                let res1_plane = self.sc_planes.get(&res1)?;
+                let res2 = ResidueId::new(
+                    contact.model,
+                    contact.receptor.chain.as_str(),
+                    contact.receptor.resi,
+                    contact.receptor.insertion.as_str(),
+                    contact.receptor.altloc.as_str(),
+                    contact.receptor.resn.as_str(),
+                );
+                let res2_plane = self.sc_planes.get(&res2)?;
+                let centroid_dist = res1_plane.point_vec_dist(&res2_plane.center);
+                let dihedral = res1_plane.dihedral(res2_plane);
+                let centroid_angle = res1_plane.point_vec_angle(&res2_plane.center);
+                Some(((res1, res2), (centroid_dist, dihedral, centroid_angle)))
             })
             .collect::<HashMap<(ResidueId, ResidueId), (f64, f64, f64)>>()
     }
@@ -273,26 +255,30 @@ impl Interactions for InteractionComplex<'_> {
 
         ligand_neighbors
             .par_iter()
-            .filter_map(|(e1, e2)| {
+            .map(|(e1, e2)| {
                 let mut atomic_contacts: Vec<ResultEntry> = vec![];
                 let model_id = e1.model().serial_number();
                 let dist = e1.atom().distance(e2.atom());
+                let make_entry = |interaction| ResultEntry {
+                    model: model_id,
+                    interaction,
+                    ligand: InteractingEntity::from_hier(e1),
+                    receptor: InteractingEntity::from_hier(e2),
+                    distance: dist,
+                };
 
                 // Clashes and VdW contacts
                 let vdw =
                     find_vdw_contact(e1, e2, self.vdw_comp_factor, self.has_explicit_bond(e1, e2))
-                        .map(|intxn| ResultEntry {
-                            model: model_id,
-                            interaction: intxn,
-                            ligand: InteractingEntity::from_hier(e1),
-                            receptor: InteractingEntity::from_hier(e2),
-                            distance: dist,
-                        });
-                atomic_contacts.extend(vdw.clone());
+                        .map(&make_entry);
+                let steric_clash = vdw
+                    .as_ref()
+                    .is_some_and(|entry| entry.interaction == Interaction::StericClash);
+                atomic_contacts.extend(vdw);
 
                 // Skip checking for other interactions if there is a clash
-                if vdw.is_some_and(|x| x.interaction == Interaction::StericClash) {
-                    return Some(atomic_contacts);
+                if steric_clash {
+                    return atomic_contacts;
                 }
 
                 // Ionic bonds, Hydrogen bonds and polar contacts
@@ -310,53 +296,26 @@ impl Interactions for InteractionComplex<'_> {
                     (None, Some(hbond)) => Some(hbond),
                     _ => None,
                 }
-                .map(|intxn| ResultEntry {
-                    model: model_id,
-                    interaction: intxn,
-                    ligand: InteractingEntity::from_hier(e1),
-                    receptor: InteractingEntity::from_hier(e2),
-                    distance: dist,
-                });
+                .map(&make_entry);
                 atomic_contacts.extend(electrostatic);
 
                 // C-H...O bonds
                 let weak_hbonds =
-                    find_weak_hydrogen_bond(e1, e2, self.vdw_comp_factor, self.metadata).map(
-                        |intxn| ResultEntry {
-                            model: model_id,
-                            interaction: intxn,
-                            ligand: InteractingEntity::from_hier(e1),
-                            receptor: InteractingEntity::from_hier(e2),
-                            distance: dist,
-                        },
-                    );
+                    find_weak_hydrogen_bond(e1, e2, self.vdw_comp_factor, self.metadata)
+                        .map(&make_entry);
                 atomic_contacts.extend(weak_hbonds);
 
                 // Charge-charge repulsions
                 let charge_repulsions =
-                    find_ionic_repulsion_with_protonation(e1, e2, self.protonation, self.ph).map(
-                        |intxn| ResultEntry {
-                            model: model_id,
-                            interaction: intxn,
-                            ligand: InteractingEntity::from_hier(e1),
-                            receptor: InteractingEntity::from_hier(e2),
-                            distance: dist,
-                        },
-                    );
+                    find_ionic_repulsion_with_protonation(e1, e2, self.protonation, self.ph)
+                        .map(&make_entry);
                 atomic_contacts.extend(charge_repulsions);
 
                 // Hydrophobic contacts
-                let hydrophobic_contacts =
-                    find_hydrophobic_contact(e1, e2).map(|intxn| ResultEntry {
-                        model: model_id,
-                        interaction: intxn,
-                        ligand: InteractingEntity::from_hier(e1),
-                        receptor: InteractingEntity::from_hier(e2),
-                        distance: dist,
-                    });
+                let hydrophobic_contacts = find_hydrophobic_contact(e1, e2).map(&make_entry);
                 atomic_contacts.extend(hydrophobic_contacts);
 
-                Some(atomic_contacts)
+                atomic_contacts
             })
             .flatten()
             .collect::<Vec<ResultEntry>>()
@@ -387,7 +346,7 @@ impl Interactions for InteractionComplex<'_> {
         // Find ring-atom interactions
         ring_atom_neighbors
             .par_iter()
-            .filter_map(|(k, ring, y)| {
+            .map(|(k, ring, y)| {
                 let mut ring_contacts = Vec::new();
 
                 // Cation-pi interactions
@@ -410,7 +369,7 @@ impl Interactions for InteractionComplex<'_> {
                     });
                 ring_contacts.extend(cation_pi_contacts);
 
-                Some(ring_contacts)
+                ring_contacts
             })
             .flatten()
             .collect::<Vec<ResultEntry>>()

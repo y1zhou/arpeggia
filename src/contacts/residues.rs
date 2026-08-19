@@ -119,38 +119,37 @@ pub trait ResidueExt {
     fn center_and_normal(&self, atoms: Option<Vec<&Atom>>) -> Option<Plane>;
 }
 
+pub(crate) fn one_letter_code(name: &str) -> Option<&'static str> {
+    Some(match name.trim().to_ascii_uppercase().as_str() {
+        "ALA" => "A",
+        "ARG" => "R",
+        "ASN" => "N",
+        "ASP" => "D",
+        "CYS" => "C",
+        "GLN" => "Q",
+        "GLU" => "E",
+        "GLY" => "G",
+        "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => "H",
+        "ILE" => "I",
+        "LEU" => "L",
+        "LYS" => "K",
+        "MET" | "MSE" => "M",
+        "PHE" => "F",
+        "PRO" => "P",
+        "SER" => "S",
+        "THR" => "T",
+        "TRP" => "W",
+        "TYR" => "Y",
+        "VAL" => "V",
+        "SEC" => "U",
+        "PYL" => "O",
+        _ => return None,
+    })
+}
+
 impl ResidueExt for Residue {
     fn resn(&self) -> Option<&str> {
-        let aa_code = match self.name()?.to_uppercase().as_str() {
-            "ALA" => "A",
-            "ARG" => "R",
-            "ASN" => "N",
-            "ASP" => "D",
-            "CYS" => "C",
-            "GLN" => "Q",
-            "GLU" => "E",
-            "GLY" => "G",
-            "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => "H",
-            "ILE" => "I",
-            "LEU" => "L",
-            "LYS" => "K",
-            "MET" | "MSE" => "M",
-            "PHE" => "F",
-            "PRO" => "P",
-            "SER" => "S",
-            "THR" => "T",
-            "TRP" => "W",
-            "TYR" => "Y",
-            "VAL" => "V",
-            "SEC" => "U",
-            "PYL" => "O",
-            _ => "X",
-        };
-
-        match aa_code {
-            "X" => None,
-            _ => Some(aa_code),
-        }
+        one_letter_code(self.name()?)
     }
 
     fn ring_atoms(&self) -> Vec<&Atom> {

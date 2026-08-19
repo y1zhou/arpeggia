@@ -1,5 +1,5 @@
 use super::structs::Interaction;
-use crate::{BondEndpoint, StructureMetadata};
+use crate::StructureMetadata;
 
 use pdbtbx::*;
 use rayon::prelude::*;
@@ -47,17 +47,8 @@ pub fn find_hydrogen_bond(
                             donor.conformer().name(),
                             donor.atom().name(),
                             atom.name(),
-                        ) || metadata.is_some_and(|metadata| {
-                            metadata.has_bond(
-                                &endpoint_for_entity(donor),
-                                &BondEndpoint::from_parts(
-                                    donor.chain().id(),
-                                    donor.residue().serial_number(),
-                                    donor.residue().insertion_code().unwrap_or(""),
-                                    atom.name(),
-                                ),
-                            )
-                        }))
+                        ) || metadata
+                            .is_some_and(|metadata| metadata.has_entity_atom_bond(donor, atom)))
                 })
                 .collect();
 
@@ -102,17 +93,8 @@ pub fn find_weak_hydrogen_bond(
                 .filter(|atom| {
                     atom.element() == Some(&Element::H)
                         && (is_hydrogen_for_carbon(donor.atom().name(), atom.name())
-                            || metadata.is_some_and(|metadata| {
-                                metadata.has_bond(
-                                    &endpoint_for_entity(donor),
-                                    &BondEndpoint::from_parts(
-                                        donor.chain().id(),
-                                        donor.residue().serial_number(),
-                                        donor.residue().insertion_code().unwrap_or(""),
-                                        atom.name(),
-                                    ),
-                                )
-                            }))
+                            || metadata
+                                .is_some_and(|metadata| metadata.has_entity_atom_bond(donor, atom)))
                 })
                 .collect();
 
@@ -132,15 +114,6 @@ pub fn find_weak_hydrogen_bond(
         }
     }
     None
-}
-
-fn endpoint_for_entity(entity: &AtomConformerResidueChainModel) -> BondEndpoint {
-    BondEndpoint::from_parts(
-        entity.chain().id(),
-        entity.residue().serial_number(),
-        entity.residue().insertion_code().unwrap_or(""),
-        entity.atom().name(),
-    )
 }
 
 /// Determine if the two entities are a valid hydrogen bond donor-acceptor pair
@@ -201,9 +174,14 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str, residue: &Residue) -> b
 
 /// Determine if the atom in the residue is a hydrogen donor
 fn is_hydrogen_donor(res_name: &str, atom_name: &str, residue: &Residue) -> bool {
-    // All amide niteogens in the main chain except proline
-    if atom_name == "N" && res_name != "PRO" {
-        return true;
+    // Backbone amide nitrogens donate; proline does so only when the input
+    // explicitly supplies a terminal N-bound hydrogen.
+    if atom_name == "N" {
+        return res_name != "PRO"
+            || residue.atoms().any(|atom| {
+                atom.element() == Some(&Element::H)
+                    && is_hydrogen_for_donor(res_name, atom_name, atom.name())
+            });
     }
     if crate::contacts::ionic::is_histidine(res_name) && matches!(atom_name, "ND1" | "NE2") {
         return match histidine_tautomer(res_name, residue) {
@@ -289,15 +267,7 @@ pub(crate) fn count_donors_without_explicit_hydrogen(
                     atom.element() == Some(&Element::H)
                         && (is_hydrogen_for_donor(residue_name, donor_name, atom.name())
                             || metadata.is_some_and(|metadata| {
-                                metadata.has_bond(
-                                    &endpoint_for_entity(entity),
-                                    &BondEndpoint::from_parts(
-                                        entity.chain().id(),
-                                        entity.residue().serial_number(),
-                                        entity.residue().insertion_code().unwrap_or(""),
-                                        atom.name(),
-                                    ),
-                                )
+                                metadata.has_entity_atom_bond(entity, atom)
                             }))
                 })
         })
@@ -324,11 +294,11 @@ fn is_weak_donor_acceptor_pair<'a>(
     let e1_atom = entity1.atom().name();
     let e2_atom = entity2.atom().name();
 
-    if is_weak_hydrogen_donor(entity1.atom())
+    if is_weak_hydrogen_donor(e1_conformer, entity1.atom())
         && is_hydrogen_acceptor(e2_conformer, e2_atom, entity2.residue())
     {
         Some((entity1, entity2))
-    } else if is_weak_hydrogen_donor(entity2.atom())
+    } else if is_weak_hydrogen_donor(e2_conformer, entity2.atom())
         && is_hydrogen_acceptor(e1_conformer, e1_atom, entity1.residue())
     {
         Some((entity2, entity1))
@@ -338,7 +308,56 @@ fn is_weak_donor_acceptor_pair<'a>(
 }
 
 /// Determine if the atom is a weak hydrogen donor
-fn is_weak_hydrogen_donor(atom: &Atom) -> bool {
-    // All the non-carbonyl carbon atoms
-    (atom.element() == Some(&Element::C)) && atom.name() != "C"
+fn is_weak_hydrogen_donor(residue: &str, atom: &Atom) -> bool {
+    atom.element() == Some(&Element::C)
+        && matches!(
+            (residue, atom.name()),
+            (
+                "ALA"
+                    | "ARG"
+                    | "ASN"
+                    | "ASP"
+                    | "CYS"
+                    | "GLN"
+                    | "GLU"
+                    | "GLY"
+                    | "HIS"
+                    | "HID"
+                    | "HIE"
+                    | "HIP"
+                    | "HSD"
+                    | "HSE"
+                    | "HSP"
+                    | "ILE"
+                    | "LEU"
+                    | "LYS"
+                    | "MET"
+                    | "MSE"
+                    | "PHE"
+                    | "PRO"
+                    | "SER"
+                    | "THR"
+                    | "TRP"
+                    | "TYR"
+                    | "VAL",
+                "CA"
+            ) | ("ALA", "CB")
+                | ("ARG", "CB" | "CG" | "CD")
+                | ("ASN" | "ASP" | "CYS" | "SER", "CB")
+                | ("GLN" | "GLU", "CB" | "CG")
+                | (
+                    "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP",
+                    "CB" | "CD2" | "CE1"
+                )
+                | ("ILE", "CB" | "CG1" | "CG2" | "CD1")
+                | ("LEU", "CB" | "CG" | "CD1" | "CD2")
+                | ("LYS", "CB" | "CG" | "CD" | "CE")
+                | ("MET" | "MSE", "CB" | "CG" | "CE")
+                | ("PHE", "CB" | "CD1" | "CD2" | "CE1" | "CE2" | "CZ")
+                | ("PRO", "CB" | "CG" | "CD")
+                | ("THR", "CB" | "CG2")
+                | ("TRP", "CB" | "CD1" | "CE3" | "CZ2" | "CZ3" | "CH2")
+                | ("TYR", "CB" | "CD1" | "CD2" | "CE1" | "CE2")
+                | ("VAL", "CB" | "CG1" | "CG2")
+        )
 }

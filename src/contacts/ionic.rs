@@ -127,6 +127,12 @@ pub(crate) enum PositiveCharge {
     Potential,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum HistidinePreparationIssue {
+    Unresolved,
+    Inconsistent,
+}
+
 pub(crate) fn positive_charge(
     entity: &AtomConformerResidueChainModel,
     mode: ProtonationMode,
@@ -140,16 +146,23 @@ pub(crate) fn positive_charge(
     if !is_pos_ionizable(residue_name, atom_name) {
         return None;
     }
-    match explicit_histidine_charge(entity.residue()) {
-        Some(true) => Some(PositiveCharge::Definite),
+    let explicit = explicit_histidine_charge(entity.residue());
+    if explicit == Some(true) {
+        return Some(PositiveCharge::Definite);
+    }
+    if mode == ProtonationMode::AllCharged {
+        return Some(PositiveCharge::Potential);
+    }
+    match explicit {
         Some(false) => None,
         None => match mode {
-            ProtonationMode::AllCharged => Some(PositiveCharge::Potential),
+            ProtonationMode::AllCharged => unreachable!(),
             // [WARNING] An intrinsic-pKa threshold is a population prior, not a
             // per-residue structure-based protonation prediction.
             ProtonationMode::Heuristic => (ph <= 6.0).then_some(PositiveCharge::Potential),
             ProtonationMode::ExplicitOnly => None,
         },
+        Some(true) => unreachable!(),
     }
 }
 
@@ -179,6 +192,33 @@ pub(crate) fn explicit_histidine_charge(residue: &Residue) -> Option<bool> {
         (true, true) => Some(true),
         (true, false) | (false, true) => Some(false),
         (false, false) => None,
+    }
+}
+
+pub(crate) fn histidine_preparation_issue(residue: &Residue) -> Option<HistidinePreparationIssue> {
+    let name = residue.name().unwrap_or("");
+    if !is_histidine(name) {
+        return None;
+    }
+    let hd1 = residue.atoms().any(|atom| atom.name() == "HD1");
+    let he2 = residue.atoms().any(|atom| atom.name() == "HE2");
+    let inconsistent = match name {
+        "HID" | "HSD" => !hd1 || he2,
+        "HIE" | "HSE" => hd1 || !he2,
+        "HIP" | "HSP" => {
+            !hd1 || !he2
+                || residue
+                    .atoms()
+                    .any(|atom| atom.element() == Some(&Element::P))
+        }
+        _ => false,
+    };
+    if inconsistent {
+        Some(HistidinePreparationIssue::Inconsistent)
+    } else if name == "HIS" && !hd1 && !he2 {
+        Some(HistidinePreparationIssue::Unresolved)
+    } else {
+        None
     }
 }
 

@@ -86,15 +86,25 @@ pub fn analyze_contacts(
 fn protonation_warnings(pdb: &PDB, mode: ProtonationMode) -> Vec<crate::AnalysisWarning> {
     pdb.residues()
         .filter(|residue| ionic::is_histidine(residue.name().unwrap_or("")))
-        .filter(|residue| ionic::explicit_histidine_charge(residue).is_none())
-        .map(|residue| {
-            crate::AnalysisWarning::new(
-                crate::WarningCode::UnresolvedHistidine,
-                format!(
-                    "histidine {} has no explicit protonation evidence; policy {mode:?} applied",
-                    residue.serial_number()
+        .filter_map(|residue| {
+            let issue = ionic::histidine_preparation_issue(residue)?;
+            let (code, message) = match issue {
+                ionic::HistidinePreparationIssue::Unresolved => (
+                    crate::WarningCode::UnresolvedHistidine,
+                    format!(
+                        "histidine {} has no explicit protonation evidence; policy {mode:?} applied",
+                        residue.serial_number()
+                    ),
                 ),
-            )
+                ionic::HistidinePreparationIssue::Inconsistent => (
+                    crate::WarningCode::InconsistentHistidine,
+                    format!(
+                        "histidine {} residue name and ring hydrogens disagree",
+                        residue.serial_number()
+                    ),
+                ),
+            };
+            Some(crate::AnalysisWarning::new(code, message))
         })
         .collect()
 }
@@ -477,6 +487,56 @@ CONECT    1    2\nEND                                                           
     }
 
     #[test]
+    fn discarded_altloc_connectivity_does_not_apply_to_selected_atoms() {
+        let input =
+            b"ATOM      1  SG ACYS A   1       0.000   0.000   0.000  0.60 20.00           S  \n\
+ATOM      2  SG BCYS A   1      20.000   0.000   0.000  0.40 20.00           S  \n\
+ATOM      3  SG ACYS B   2       2.030   0.000   0.000  0.60 20.00           S  \n\
+ATOM      4  SG BCYS B   2      22.030   0.000   0.000  0.40 20.00           S  \n\
+LINK         SG BCYS A   1                 SG BCYS B   2     1555   1555  2.03\n\
+END                                                                             \n";
+        let mut pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        crate::structure::select_conformers(&mut pdb);
+        let path = std::env::temp_dir().join(format!(
+            "arpeggia-altloc-connectivity-{}.pdb",
+            std::process::id()
+        ));
+        std::fs::write(&path, input).unwrap();
+        let metadata = crate::read_metadata(&path).unwrap().value;
+        std::fs::remove_file(path).unwrap();
+
+        let contacts = get_contacts_with_metadata(
+            &pdb,
+            &metadata,
+            "A/B",
+            0.1,
+            6.5,
+            ProtonationMode::AllCharged,
+            7.4,
+        )
+        .unwrap()
+        .value;
+        let interactions = contacts.column("interaction").unwrap().str().unwrap();
+        assert!(
+            interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialCovalent")
+        );
+        assert!(
+            !interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "Covalent")
+        );
+    }
+
+    #[test]
     fn histidine_protonation_modes_separate_potential_and_explicit_charge() {
         let input =
             b"ATOM      1  CG  HIS A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
@@ -552,6 +612,64 @@ END                                                                             
         )
         .unwrap();
         assert!(interactions(&explicit).contains(&"IonicBond".into()));
+    }
+
+    #[test]
+    fn all_charged_overrides_neutral_histidine_aliases() {
+        let input =
+            b"ATOM      1  ND1 HID A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      2  OD1 ASP B   1       3.800   0.000   0.000  1.00 20.00           O  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let interactions = default_contacts(&pdb, "A/B", 0.1, 6.5);
+
+        assert!(
+            interactions
+                .column("interaction")
+                .unwrap()
+                .str()
+                .unwrap()
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialIonicBond")
+        );
+    }
+
+    #[test]
+    fn inconsistent_histidine_alias_emits_a_warning() {
+        let input =
+            b"ATOM      1  ND1 HID A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      2  HE2 HID A   1       1.000   0.000   0.000  1.00 20.00           H  \n\
+ATOM      3  OD1 ASP B   1       3.800   0.000   0.000  1.00 20.00           O  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let analysis = analyze_contacts(
+            &pdb,
+            None,
+            "A/B",
+            0.1,
+            6.5,
+            ProtonationMode::AllCharged,
+            7.4,
+        )
+        .unwrap();
+
+        assert!(
+            analysis
+                .warnings
+                .iter()
+                .any(|warning| warning.code == crate::WarningCode::InconsistentHistidine)
+        );
     }
 
     #[test]
@@ -761,6 +879,59 @@ END                                                                             
                 .iter()
                 .flatten()
                 .any(|value| value == "WeakPolarContact")
+        );
+    }
+
+    #[test]
+    fn carbon_without_hydrogen_is_not_a_weak_donor() {
+        let input =
+            b"ATOM      1  CG  ASN A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  OD1 ASP B   1       3.000   0.000   0.000  1.00 20.00           O  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let interactions = default_contacts(&pdb, "A/B", 0.1, 6.5);
+
+        assert!(
+            !interactions
+                .column("interaction")
+                .unwrap()
+                .str()
+                .unwrap()
+                .iter()
+                .flatten()
+                .any(|value| matches!(value, "WeakHydrogenBond" | "WeakPolarContact"))
+        );
+    }
+
+    #[test]
+    fn terminal_proline_with_explicit_hydrogen_can_donate() {
+        let input =
+            b"ATOM      1  N   PRO A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      2  H1  PRO A   1       1.000   0.000   0.000  1.00 20.00           H  \n\
+ATOM      3  OD1 ASP B   1       2.500   0.000   0.000  1.00 20.00           O  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let interactions = default_contacts(&pdb, "A/B", 0.1, 6.5);
+
+        assert!(
+            interactions
+                .column("interaction")
+                .unwrap()
+                .str()
+                .unwrap()
+                .iter()
+                .flatten()
+                .any(|value| value == "HydrogenBond")
         );
     }
 }
