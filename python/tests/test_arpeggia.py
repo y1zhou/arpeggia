@@ -268,6 +268,8 @@ def test_python_errors_and_conformer_warning(tmp_path):
     )
     with pytest.raises(RuntimeError, match="van der Waals radius"):
         arpeggia.sc(str(unsupported_sc), groups="A/B")
+    with pytest.raises(RuntimeError, match="van der Waals radius"):
+        arpeggia.sasa(str(unsupported_sc))
 
 
 def test_seqres_is_declared_and_seq_is_observed(tmp_path):

@@ -117,7 +117,7 @@ fn contacts(
                 )
             })
         })
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
 
     // Convert to PyDataFrame for Python
@@ -192,7 +192,7 @@ fn sasa(
                 _ => unreachable!(),
             })
         })
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(PyDataFrame(analysis.value))
 }
@@ -239,7 +239,7 @@ fn dsasa(
                 crate::get_dsasa_components(&pdb, groups, probe_radius, n_points, model_num)
             })
         })
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        .map_err(python_error)?;
     emit_python_warnings(py, result.warnings)?;
     Ok(result.value.dsasa)
 }
@@ -263,7 +263,7 @@ fn dsasa_components(
                 crate::get_dsasa_components(&pdb, groups, probe_radius, n_points, model_num)
             })
         })
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        .map_err(python_error)?;
     emit_python_warnings(py, result.warnings)?;
     let result = result.value;
     Ok((
@@ -363,7 +363,7 @@ fn relative_sasa(
                 crate::get_relative_sasa(&pdb, probe_radius, n_points, model_num, chains)
             })
         })
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
 
     // Convert to PyDataFrame for Python
@@ -459,7 +459,7 @@ fn sap_score(
                 _ => unreachable!(),
             })
         })
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(PyDataFrame(analysis.value))
 }
