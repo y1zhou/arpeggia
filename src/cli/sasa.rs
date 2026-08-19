@@ -87,7 +87,6 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
                 args.probe_radius,
                 args.n_points,
                 args.model_num,
-                true,
                 &args.chains,
             ),
             SasaLevel::Residue => arpeggia::get_residue_sasa(

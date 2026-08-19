@@ -101,7 +101,6 @@ pub struct DsasaResult {
 /// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
-/// * `remove_hydrogens` - Whether to remove hydrogen atoms before calculation
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
 ///
 /// # Returns
@@ -119,29 +118,22 @@ pub struct DsasaResult {
 /// let pdb = load_model(&input_file).unwrap().value;
 ///
 /// // Calculate SASA for all chains
-/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0, true, "").unwrap().value;
+/// let sasa_df = get_atom_sasa(&pdb, 1.4, 100, 0, "").unwrap().value;
 /// println!("Calculated SASA for {} atoms", sasa_df.height());
 ///
 /// // Calculate SASA for only chains A and B
-/// let sasa_ab = get_atom_sasa(&pdb, 1.4, 100, 0, true, "A,B").unwrap().value;
+/// let sasa_ab = get_atom_sasa(&pdb, 1.4, 100, 0, "A,B").unwrap().value;
 /// ```
 pub fn get_atom_sasa(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
     model_num: usize,
-    remove_hydrogens: bool,
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
     let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let records = calculate_atom_sasa_records(
-        &analysis.value,
-        probe_radius,
-        n_points,
-        model_num,
-        remove_hydrogens,
-        chains,
-    )?;
+    let records =
+        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&records, &mut warnings);
     Ok(crate::Analysis::new(
@@ -170,7 +162,6 @@ pub(crate) fn calculate_atom_sasa_records(
     probe_radius: f32,
     n_points: usize,
     model_num: usize,
-    remove_hydrogens: bool,
     chains: &str,
 ) -> crate::ArpeggiaResult<Vec<AtomSasaRecord>> {
     calculate_atom_sasa_records_with_scheme(
@@ -178,7 +169,7 @@ pub(crate) fn calculate_atom_sasa_records(
         probe_radius,
         n_points,
         model_num,
-        remove_hydrogens,
+        true,
         chains,
         RadiusScheme::StandardProtor,
     )
@@ -397,7 +388,7 @@ fn rosetta_sasa_filter_polarity(entity: &AtomConformerResidueChainModel) -> Atom
             )
     } else {
         matches!(atom, "O" | "OXT")
-            || (atom == "N" && residue != "PRO")
+            || (atom == "N" && (residue != "PRO" || is_n_terminal(entity)))
             || matches!(
                 (residue, atom),
                 ("ARG", "NE" | "NH1" | "NH2")
@@ -421,6 +412,13 @@ fn rosetta_sasa_filter_polarity(entity: &AtomConformerResidueChainModel) -> Atom
     } else {
         AtomPolarity::Hydrophobic
     }
+}
+
+fn is_n_terminal(entity: &AtomConformerResidueChainModel) -> bool {
+    entity.chain().residues().next().is_some_and(|residue| {
+        residue.serial_number() == entity.residue().serial_number()
+            && residue.insertion_code() == entity.residue().insertion_code()
+    })
 }
 
 pub(crate) fn atom_sasa_records_to_dataframe(records: &[AtomSasaRecord]) -> DataFrame {
@@ -481,14 +479,8 @@ pub fn get_residue_sasa(
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
     let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let atom_records = calculate_atom_sasa_records(
-        &analysis.value,
-        probe_radius,
-        n_points,
-        model_num,
-        true,
-        chains,
-    )?;
+    let atom_records =
+        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&atom_records, &mut warnings);
     Ok(crate::Analysis::new(
@@ -583,14 +575,8 @@ pub fn get_chain_sasa(
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
     let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let atom_records = calculate_atom_sasa_records(
-        &analysis.value,
-        probe_radius,
-        n_points,
-        model_num,
-        true,
-        chains,
-    )?;
+    let atom_records =
+        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&atom_records, &mut warnings);
     Ok(crate::Analysis::new(
@@ -832,14 +818,8 @@ pub fn get_relative_sasa(
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
     let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let atom_records = calculate_atom_sasa_records(
-        &analysis.value,
-        probe_radius,
-        n_points,
-        model_num,
-        true,
-        chains,
-    )?;
+    let atom_records =
+        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&atom_records, &mut warnings);
     let residue_records = aggregate_residue_records(atom_records);
@@ -961,7 +941,7 @@ mod tests {
     #[test]
     fn test_get_atom_sasa_returns_data() {
         let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, true, ""));
+        let df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, ""));
         let df = df.unwrap().value;
 
         // Check that we get results
@@ -1003,9 +983,54 @@ mod tests {
     }
 
     #[test]
+    fn standard_atom_sasa_is_heavy_only() {
+        let input =
+            b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  HB1 ALA A   1       1.000   0.000   0.000  1.00 20.00           H  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let df = get_atom_sasa(&pdb, 1.4, 20, 0, "").unwrap().value;
+        assert_eq!(df.height(), 1);
+        assert_eq!(
+            df.column("atomn").unwrap().str().unwrap().get(0),
+            Some("CB")
+        );
+    }
+
+    #[test]
+    fn only_n_terminal_proline_nitrogen_is_polar() {
+        let input =
+            b"ATOM      1  N   PRO A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      2  N   PRO A   2       4.000   0.000   0.000  1.00 20.00           N  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let df = get_atom_sasa(&pdb, 1.4, 20, 0, "").unwrap().value;
+        assert_eq!(
+            df.column("polarity")
+                .unwrap()
+                .str()
+                .unwrap()
+                .iter()
+                .flatten()
+                .collect::<Vec<_>>(),
+            ["polar", "hydrophobic"]
+        );
+    }
+
+    #[test]
     fn test_get_atom_sasa_values_reasonable() {
         let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, true, ""));
+        let df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, ""));
         let df = df.unwrap().value;
 
         // Get the SASA column and check values are non-negative
@@ -1031,7 +1056,7 @@ mod tests {
             .read_raw(std::io::BufReader::new(input.as_slice()))
             .unwrap()
             .0;
-        let analysis = get_atom_sasa(&pdb, 1.4, 100, 0, true, "").unwrap();
+        let analysis = get_atom_sasa(&pdb, 1.4, 100, 0, "").unwrap();
         assert_eq!(analysis.value.height(), 1);
         assert_eq!(
             analysis
@@ -1061,7 +1086,7 @@ mod tests {
             .unwrap()
             .0;
         assert!(matches!(
-            get_atom_sasa(&pdb, 1.4, 100, 0, true, ""),
+            get_atom_sasa(&pdb, 1.4, 100, 0, ""),
             Err(crate::ArpeggiaError::InvalidArgument(message))
                 if message.contains("van der Waals radius")
         ));
@@ -1116,7 +1141,7 @@ mod tests {
     #[test]
     fn test_get_residue_sasa_aggregation() {
         let pdb = load_ubiquitin();
-        let atom_df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, true, ""));
+        let atom_df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, ""));
         let atom_df = atom_df.unwrap().value;
         let residue_df = run_with_threads(1, || get_residue_sasa(&pdb, 1.4, 100, 0, ""));
         let residue_df = residue_df.unwrap().value;

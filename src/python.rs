@@ -180,9 +180,7 @@ fn sasa(
     let analysis = py
         .detach(|| {
             crate::run_with_threads(num_threads as isize, || match level.as_str() {
-                "atom" => {
-                    crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num, true, chains)
-                }
+                "atom" => crate::get_atom_sasa(&pdb, probe_radius, n_points, model_num, chains),
                 "residue" => {
                     crate::get_residue_sasa(&pdb, probe_radius, n_points, model_num, chains)
                 }
