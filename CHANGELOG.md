@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin release-critical GitHub Actions to immutable commits, track Cargo and uv
   lockfiles, use locked/frozen CI and release commands, and smoke-test every
   built wheel before upload.
+- Updated locked `h2` metadata to 0.4.16 for RUSTSEC-2026-0258. The optional
+  dependency is not compiled by Arpeggia, but the release lock remains clean.
 - Stream the narrow mmCIF metadata parser and discard unrelated loop values
   without allocating them.
 
