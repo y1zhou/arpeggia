@@ -665,9 +665,6 @@ name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "equivalent"
@@ -1334,12 +1331,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
-name = "iter-read"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "071ed4cc1afd86650602c7b11aa2e1ce30762a1c27193201cb5cee9c6ebb1294"
-
-[[package]]
 name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1534,21 +1525,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ndarray"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "520080814a7a6b4a6e9070823bb24b4531daac8c4627e08ba5de8c5ef2f2752d"
-dependencies = [
- "matrixmultiply",
- "num-complex",
- "num-integer",
- "num-traits",
- "portable-atomic",
- "portable-atomic-util",
- "rawpointer",
-]
-
-[[package]]
 name = "now"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1634,23 +1610,6 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
-]
-
-[[package]]
-name = "numpy"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a5b15d63a5ff39e378daed0e1340d3a5964703ea9712eb09a0dc66fade996f4"
-dependencies = [
- "half",
- "libc",
- "ndarray",
- "num-complex",
- "num-integer",
- "num-traits",
- "pyo3",
- "pyo3-build-config",
- "rustc-hash",
 ]
 
 [[package]]
@@ -1848,7 +1807,6 @@ dependencies = [
  "polars-io",
  "polars-lazy",
  "polars-ops",
- "polars-plan",
  "polars-sql",
  "polars-time",
  "polars-utils",
@@ -2247,7 +2205,6 @@ dependencies = [
  "rayon",
  "regex",
  "regex-syntax",
- "serde",
  "serde_json",
  "strum_macros",
  "unicode-normalization",
@@ -2323,17 +2280,14 @@ dependencies = [
  "polars-config",
  "polars-core",
  "polars-error",
- "polars-ffi",
  "polars-io",
  "polars-json",
  "polars-ops",
  "polars-time",
  "polars-utils",
- "pyo3",
  "rayon",
  "recursive",
  "regex",
- "serde",
  "sha2",
  "slotmap",
  "strum_macros",
@@ -2454,7 +2408,6 @@ dependencies = [
  "polars-utils",
  "rayon",
  "regex",
- "serde",
  "strum_macros",
 ]
 
@@ -2480,10 +2433,8 @@ dependencies = [
  "memmap2",
  "num-derive",
  "num-traits",
- "numpy",
  "polars-config",
  "polars-error",
- "pyo3",
  "rand",
  "raw-cpuid",
  "rayon",
@@ -2505,15 +2456,6 @@ name = "portable-atomic"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
-
-[[package]]
-name = "portable-atomic-util"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2a106d1259c23fac8e543272398ae0e3c0b8d33c88ed73d0cc71b0f1d902618"
-dependencies = [
- "portable-atomic",
-]
 
 [[package]]
 name = "potential_utf"
@@ -2646,27 +2588,8 @@ dependencies = [
  "polars-core",
  "polars-error",
  "polars-ffi",
- "polars-plan",
  "pyo3",
- "pyo3-polars-derive",
- "serde",
- "serde-pickle",
  "thiserror",
-]
-
-[[package]]
-name = "pyo3-polars-derive"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ec01b2f29641899a0286ac3b48aafe8ee3375510b1bfbe322c88d30f71d1bc7"
-dependencies = [
- "polars-arrow",
- "polars-core",
- "polars-ffi",
- "polars-plan",
- "proc-macro2 1.0.106",
- "quote 1.0.46",
- "syn",
 ]
 
 [[package]]
@@ -3164,19 +3087,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-pickle"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b641fdc8bcf2781ee78b30c599700d64ad4f412976143e4c5d0b9df906bb4843"
-dependencies = [
- "byteorder",
- "iter-read",
- "num-bigint",
- "num-traits",
- "serde",
-]
-
-[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3337,7 +3247,6 @@ version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
 dependencies = [
- "serde",
  "version_check",
 ]
 

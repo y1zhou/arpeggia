@@ -69,6 +69,9 @@ Install using pip:
 pip install arpeggia
 ```
 
+Published wheels support CPython 3.10–3.14 on x86-64 Linux and Windows, and
+Arm64 Linux and macOS.
+
 Or install from source using maturin:
 
 ```bash

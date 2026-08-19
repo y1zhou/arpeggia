@@ -19,7 +19,7 @@ jobs:
             { os: windows, runs-on: windows-latest },
             { os: macos, runs-on: macos-latest },
           ]
-        interpreter: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.14t"]
+        interpreter: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         target: [x86_64, aarch64]
 
         exclude:
@@ -32,9 +32,6 @@ jobs:
           - platform:
               os: windows
             target: aarch64
-          - platform:
-              os: windows
-            interpreter: "3.14t" # not supported
           - platform:
               os: macos
             target: x86_64 # too slow on GitHub runners
