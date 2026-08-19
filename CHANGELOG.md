@@ -27,8 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified standard atom, residue, and chain SASA over one selected atom
   population with ProtOr/fallback radii. Added Rosetta `SasaFilter` atom
   polarity and additive polar, hydrophobic, and unclassified areas.
-- Kept SAP's separately calibrated elemental-radius exposure calculation while
-  fixing residue output to retain complete side-chain SASA and eligible
+- Aligned SAP with Rosetta's full-atom Reduce-radius exposure definition,
+  1.1 Å probe, precise hydrophobicities, and runtime maximum side-chain areas.
+  Residue output retains complete side-chain SASA and eligible
   zero/nonpositive-score residues.
 - Kept dSASA as the established two-sided buried area, corrected its docs,
   required disjoint groups, and added polarity components.

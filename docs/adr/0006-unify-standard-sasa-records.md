@@ -23,7 +23,7 @@ LeGrand implementation is measured on a small canonical benchmark and reported
 as an error distribution; it is not guaranteed, inferred from correlation, or
 enforced by broad golden-test tolerances.
 
-SAP deliberately retains its separately calibrated elemental-radius exposure
-model until direct Rosetta benchmarks support changing it. The residue SAP fix
-preserves positive-only score accumulation while aggregating complete side-chain
-SASA and retaining eligible zero/nonpositive-score residues.
+SAP's provisional elemental-radius decision was superseded by the prepared-input
+benchmark in ADR 0007, which selected the full-atom Reduce-radius definition.
+The residue SAP fix preserves positive-only score accumulation while aggregating
+complete side-chain SASA and retaining eligible zero/nonpositive-score residues.

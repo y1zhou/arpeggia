@@ -53,8 +53,10 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 - dSASA is the two-sided buried area
   `SASA(group 1) + SASA(group 2) - SASA(complex)`. Divide by two only when a
   one-sided interface-area convention is required.
-- SAP retains its Rosetta-calibrated elemental-radius exposure scale and sums
-  positive score contributions while reporting complete side-chain SASA.
+- SAP uses the Rosetta-compatible full-atom Reduce-radius exposure definition
+  with a 1.1 Å default probe and sums positive score contributions while
+  reporting complete side-chain SASA. Arpeggia does not add missing atoms, so
+  direct Rosetta comparison requires the same caller-prepared full-atom input.
   Monomers without a Rosetta calibration are omitted with a warning.
 
 ## Installation
