@@ -12,8 +12,12 @@ pub enum WarningCode {
     ConformerSelected,
     /// A donor had no directly associated explicit hydrogen.
     MissingDonorHydrogen,
+    /// A full-atom reference calculation received no hydrogen atoms.
+    HydrogenFreeInput,
     /// Histidine charge could not be resolved from the selected policy.
     UnresolvedHistidine,
+    /// Histidine naming and explicit ring hydrogens disagree.
+    InconsistentHistidine,
     /// A declared polymer monomer could not be mapped to a sequence letter.
     UnsupportedMonomer,
     /// An atom could not be classified by the selected SASA polarity scheme.
@@ -28,7 +32,9 @@ impl Display for WarningCode {
             Self::Parser => "PARSER",
             Self::ConformerSelected => "CONFORMER_SELECTED",
             Self::MissingDonorHydrogen => "MISSING_DONOR_HYDROGEN",
+            Self::HydrogenFreeInput => "HYDROGEN_FREE_INPUT",
             Self::UnresolvedHistidine => "UNRESOLVED_HISTIDINE",
+            Self::InconsistentHistidine => "INCONSISTENT_HISTIDINE",
             Self::UnsupportedMonomer => "UNSUPPORTED_MONOMER",
             Self::UnsupportedPolarity => "UNSUPPORTED_POLARITY",
             Self::IncompleteGeometry => "INCOMPLETE_GEOMETRY",

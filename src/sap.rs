@@ -210,6 +210,7 @@ pub fn get_per_atom_sap_score(
     )?;
     let mut warnings = analysis.warnings;
     append_unsupported_monomer_warning(&unsupported, &mut warnings);
+    append_prepared_input_warnings(&analysis.value, model_num, chains, &mut warnings);
     Ok(crate::Analysis::new(
         atom_sap_records_to_dataframe(&records),
         warnings,
@@ -321,6 +322,83 @@ fn append_unsupported_monomer_warning(
     }
 }
 
+fn append_prepared_input_warnings(
+    pdb: &PDB,
+    model_num: usize,
+    chains: &str,
+    warnings: &mut Vec<crate::AnalysisWarning>,
+) {
+    let requested = chains
+        .split(',')
+        .map(str::trim)
+        .filter(|chain| !chain.is_empty())
+        .collect::<HashSet<_>>();
+    let Some(model) = (if model_num == 0 {
+        pdb.models().next()
+    } else {
+        pdb.models()
+            .find(|model| model.serial_number() == model_num)
+    }) else {
+        return;
+    };
+    let selected_chains = model
+        .chains()
+        .filter(|chain| requested.is_empty() || requested.contains(chain.id()))
+        .collect::<Vec<_>>();
+    if selected_chains
+        .iter()
+        .flat_map(|chain| chain.atoms())
+        .all(|atom| atom.element() != Some(&Element::H))
+    {
+        warnings.push(crate::AnalysisWarning::new(
+            crate::WarningCode::HydrogenFreeInput,
+            "SAP numerical compatibility requires a caller-prepared full-atom structure, but the selected input contains no hydrogens",
+        ));
+    }
+
+    let mut unresolved = 0;
+    let mut inconsistent = 0;
+    for residue in selected_chains.iter().flat_map(|chain| chain.residues()) {
+        let name = residue.name().unwrap_or("");
+        if !crate::contacts::ionic::is_histidine(name) {
+            continue;
+        }
+        let hd1 = residue.atoms().any(|atom| atom.name() == "HD1");
+        let he2 = residue.atoms().any(|atom| atom.name() == "HE2");
+        match name {
+            "HIS" if !hd1 && !he2 => unresolved += 1,
+            "HID" | "HSD" if !hd1 || he2 => inconsistent += 1,
+            "HIE" | "HSE" if hd1 || !he2 => inconsistent += 1,
+            "HIP" | "HSP"
+                if !hd1
+                    || !he2
+                    || residue
+                        .atoms()
+                        .any(|atom| atom.element() == Some(&Element::P)) =>
+            {
+                inconsistent += 1;
+            }
+            _ => {}
+        }
+    }
+    if unresolved > 0 {
+        warnings.push(crate::AnalysisWarning::new(
+            crate::WarningCode::UnresolvedHistidine,
+            format!(
+                "{unresolved} histidine residues have no explicit tautomer or ring-hydrogen evidence"
+            ),
+        ));
+    }
+    if inconsistent > 0 {
+        warnings.push(crate::AnalysisWarning::new(
+            crate::WarningCode::InconsistentHistidine,
+            format!(
+                "{inconsistent} histidine residues have names inconsistent with their explicit ring hydrogens"
+            ),
+        ));
+    }
+}
+
 fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
     df!(
         "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
@@ -395,6 +473,7 @@ pub fn get_per_residue_sap_score(
     )?;
     let mut warnings = analysis.warnings;
     append_unsupported_monomer_warning(&unsupported, &mut warnings);
+    append_prepared_input_warnings(&analysis.value, model_num, chains, &mut warnings);
     Ok(crate::Analysis::new(
         residue_sap_records_to_dataframe(&records),
         warnings,
@@ -410,6 +489,29 @@ fn calculate_per_residue_sap_records(
     chains: &str,
 ) -> crate::ArpeggiaResult<(Vec<ResidueSapRecord>, BTreeSet<String>)> {
     let mut grouped: BTreeMap<(String, String, i64, String), (f32, f32)> = BTreeMap::new();
+
+    let prepared = prepare_structure(pdb, model_num, false, chains);
+    for model in prepared.models() {
+        for chain in model.chains() {
+            for residue in chain.residues() {
+                let Some(resn) = residue
+                    .name()
+                    .filter(|name| canonical_sap_residue(name).is_some())
+                else {
+                    continue;
+                };
+                grouped.insert(
+                    (
+                        chain.id().to_string(),
+                        resn.to_string(),
+                        residue.serial_number() as i64,
+                        residue.insertion_code().unwrap_or("").to_string(),
+                    ),
+                    (0.0, 0.0),
+                );
+            }
+        }
+    }
 
     let (atom_records, unsupported) =
         calculate_per_atom_sap_records(pdb, probe_radius, n_points, model_num, sap_radius, chains)?;
@@ -638,6 +740,68 @@ END                                                                             
     }
 
     #[test]
+    fn residue_sap_includes_zero_valued_glycines() {
+        let pdb = load_ubiquitin();
+        let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.1, 100, 0, 5.0, ""))
+            .unwrap()
+            .value;
+        assert_eq!(df.height(), 76);
+
+        let glycine = df
+            .filter(&df.column("resn").unwrap().str().unwrap().equal("GLY"))
+            .unwrap();
+        assert_eq!(glycine.height(), 6);
+        for column in ["sc_sasa", "sap_score", "max_sc_asa", "relative_sc_sasa"] {
+            assert!(
+                glycine
+                    .column(column)
+                    .unwrap()
+                    .f32()
+                    .unwrap()
+                    .iter()
+                    .flatten()
+                    .all(|value| value == 0.0),
+                "{column} should be zero for GLY"
+            );
+        }
+    }
+
+    #[test]
+    fn sap_warns_about_unprepared_full_atom_input() {
+        let ubiquitin = get_per_atom_sap_score(&load_ubiquitin(), 1.1, 20, 0, 5.0, "").unwrap();
+        assert!(
+            ubiquitin
+                .warnings
+                .iter()
+                .any(|warning| warning.code == WarningCode::HydrogenFreeInput)
+        );
+
+        let input =
+            b"ATOM      1  ND1 HIS A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      2  ND1 HID A   2       4.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      3  HE2 HID A   2       5.000   0.000   0.000  1.00 20.00           H  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+        let analysis = get_per_atom_sap_score(&pdb, 1.1, 20, 0, 5.0, "").unwrap();
+        assert!(
+            analysis
+                .warnings
+                .iter()
+                .any(|warning| warning.code == WarningCode::UnresolvedHistidine)
+        );
+        assert!(
+            analysis
+                .warnings
+                .iter()
+                .any(|warning| warning.code == WarningCode::InconsistentHistidine)
+        );
+    }
+
+    #[test]
     fn residue_sap_keeps_complete_sidechain_sasa() {
         let pdb = load_ubiquitin();
         let atom = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
@@ -694,7 +858,7 @@ END                                                                             
                 .max(0.0);
         }
 
-        assert_eq!(residue.height(), expected.len());
+        assert!(residue.height() >= expected.len());
         for row in 0..residue.height() {
             let key = (
                 residue
@@ -729,7 +893,10 @@ END                                                                             
                     .unwrap()
                     .to_string(),
             );
-            let (expected_sasa, expected_score) = expected[&key];
+            let Some(&(expected_sasa, expected_score)) = expected.get(&key) else {
+                assert_eq!(key.1, "GLY");
+                continue;
+            };
             let actual_sasa = residue
                 .column("sc_sasa")
                 .unwrap()
