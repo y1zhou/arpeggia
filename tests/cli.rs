@@ -133,3 +133,27 @@ fn seq_selects_an_explicit_model() {
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).contains("A: G"));
 }
+
+#[test]
+fn sc_calculation_failure_exits_without_a_score() {
+    let input = std::env::temp_dir().join(format!(
+        "arpeggia-cli-unsupported-radius-{}.pdb",
+        std::process::id()
+    ));
+    std::fs::write(
+        &input,
+        "ATOM      1  QQ  ALA A   1       0.000   0.000   0.000  1.00 20.00          RN  \n\
+         ATOM      2  CB  ALA B   1       3.000   0.000   0.000  1.00 20.00           C  \n\
+         END\n",
+    )
+    .unwrap();
+    let output = arpeggia()
+        .args(["sc", "--input", input.to_str().unwrap(), "--groups", "A/B"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("van der Waals radius"));
+    assert!(!stderr.contains("INFO arpeggia::cli::sc: SC:"));
+}

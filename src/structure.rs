@@ -306,6 +306,16 @@ pub(crate) fn filter_pdb_by_model(pdb: &PDB, model_num: usize) -> PDB {
     pdb_filtered
 }
 
+pub(crate) fn selected_model(pdb: &PDB, model_num: usize) -> ArpeggiaResult<&Model> {
+    if model_num == 0 {
+        pdb.models().next()
+    } else {
+        pdb.models()
+            .find(|model| model.serial_number() == model_num)
+    }
+    .ok_or_else(|| ArpeggiaError::InvalidArgument(format!("model {model_num} does not exist")))
+}
+
 fn parse_chain_string(chains: &str) -> HashSet<String> {
     if chains.is_empty() {
         HashSet::new()

@@ -19,6 +19,15 @@ use std::collections::HashSet;
 
 pub use surface_generator::SurfaceCalculatorError;
 
+impl From<SurfaceCalculatorError> for crate::ArpeggiaError {
+    fn from(error: SurfaceCalculatorError) -> Self {
+        match error {
+            SurfaceCalculatorError::InvalidInput(message) => Self::InvalidArgument(message),
+            error => Self::Calculation(error.to_string()),
+        }
+    }
+}
+
 /// Combined and directional shape-complementarity medians.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScResult {
@@ -62,7 +71,7 @@ pub fn get_sc(
     pdb: &PDB,
     groups: &str,
     model_num: usize,
-) -> Result<crate::Analysis<f64>, SurfaceCalculatorError> {
+) -> crate::ArpeggiaResult<crate::Analysis<f64>> {
     Ok(get_sc_details(pdb, groups, model_num)?.map(|result| result.sc))
 }
 
@@ -71,26 +80,20 @@ pub fn get_sc_details(
     pdb: &PDB,
     groups: &str,
     model_num: usize,
-) -> Result<crate::Analysis<ScResult>, SurfaceCalculatorError> {
-    let models = pdb
-        .models()
-        .map(|model| model.serial_number())
-        .collect::<Vec<_>>();
-    if models.is_empty() || (model_num != 0 && !models.contains(&model_num)) {
-        return Err(SurfaceCalculatorError::InvalidInput(format!(
-            "model {model_num} does not exist"
-        )));
-    }
+) -> crate::ArpeggiaResult<crate::Analysis<ScResult>> {
+    let selected_model = crate::structure::selected_model(pdb, model_num)?;
     let mut pdb = pdb.clone();
     let warnings = crate::structure::select_conformers(&mut pdb);
     // Get all chains in the PDB
-    let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
+    let all_chains: HashSet<String> = selected_model
+        .chains()
+        .map(|chain| chain.id().to_string())
+        .collect();
 
     // Parse groups
-    let (group1_chains, group2_chains) = parse_groups(&all_chains, groups)
-        .map_err(|error| SurfaceCalculatorError::InvalidInput(error.to_string()))?;
+    let (group1_chains, group2_chains) = parse_groups(&all_chains, groups)?;
     if !group1_chains.is_disjoint(&group2_chains) {
-        return Err(SurfaceCalculatorError::InvalidInput(
+        return Err(crate::ArpeggiaError::InvalidArgument(
             "SC chain groups must be disjoint".into(),
         ));
     }
@@ -174,7 +177,7 @@ mod tests {
         let pdb = load_multi_chain();
         assert!(matches!(
             get_sc(&pdb, "H/H", 0),
-            Err(SurfaceCalculatorError::InvalidInput(_))
+            Err(crate::ArpeggiaError::InvalidArgument(_))
         ));
     }
 
@@ -214,6 +217,49 @@ mod tests {
     fn chains_without_interface_return_an_error() {
         let pdb = load_multi_chain();
         let result = run_with_threads(1, || get_sc(&pdb, "H/B", 0));
-        assert!(matches!(result, Err(SurfaceCalculatorError::NoInterface)));
+        assert!(matches!(result, Err(crate::ArpeggiaError::Calculation(_))));
+    }
+
+    #[test]
+    fn missing_radius_is_a_public_calculation_error() {
+        let input =
+            b"ATOM      1  QQ  ALA A   1       0.000   0.000   0.000  1.00 20.00          RN  \n\
+ATOM      2  CB  ALA B   1       3.000   0.000   0.000  1.00 20.00           C  \n\
+END                                                                             \n";
+        let pdb = pdbtbx::ReadOptions::default()
+            .set_format(pdbtbx::Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+
+        assert!(matches!(
+            get_sc(&pdb, "A/B", 0),
+            Err(crate::ArpeggiaError::Calculation(message))
+                if message.contains("van der Waals radius")
+        ));
+    }
+
+    #[test]
+    fn sc_validates_chains_in_the_selected_model() {
+        let input = b"MODEL        7\n\
+ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  CB  ALA C   1       3.000   0.000   0.000  1.00 20.00           C  \n\
+ENDMDL\n\
+MODEL        9\n\
+ATOM      1  CB  ALA B   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  CB  ALA D   1       3.000   0.000   0.000  1.00 20.00           C  \n\
+ENDMDL\nEND\n";
+        let pdb = pdbtbx::ReadOptions::default()
+            .set_format(pdbtbx::Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+
+        assert!(matches!(
+            get_sc(&pdb, "B/D", 7),
+            Err(crate::ArpeggiaError::InvalidArgument(_))
+        ));
     }
 }

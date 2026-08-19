@@ -260,6 +260,15 @@ def test_python_errors_and_conformer_warning(tmp_path):
     with pytest.warns(UserWarning, match="CONFORMER_SELECTED"):
         assert arpeggia.seq(str(alternate)) == [("A", "A")]
 
+    unsupported_sc = tmp_path / "unsupported-sc-radius.pdb"
+    unsupported_sc.write_text(
+        "ATOM      1  QQ  ALA A   1       0.000   0.000   0.000  1.00 20.00          RN  \n"
+        "ATOM      2  CB  ALA B   1       3.000   0.000   0.000  1.00 20.00           C  \n"
+        "END\n"
+    )
+    with pytest.raises(RuntimeError, match="van der Waals radius"):
+        arpeggia.sc(str(unsupported_sc), groups="A/B")
+
 
 def test_seqres_is_declared_and_seq_is_observed(tmp_path):
     """Keep coordinate-observed and declared polymer sequences distinct."""

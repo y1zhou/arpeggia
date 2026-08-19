@@ -13,6 +13,9 @@ fn python_error(error: crate::ArpeggiaError) -> PyErr {
         crate::ArpeggiaError::Parse(message) | crate::ArpeggiaError::InvalidArgument(message) => {
             pyo3::exceptions::PyValueError::new_err(message)
         }
+        crate::ArpeggiaError::Calculation(message) => {
+            pyo3::exceptions::PyRuntimeError::new_err(message)
+        }
     }
 }
 
@@ -495,13 +498,13 @@ fn sc(
     let pdb = load_for_python(py, &input_file)?;
 
     // Calculate SC
-    let analysis = py.detach(|| {
-        crate::run_with_threads(num_threads as isize, || {
-            crate::get_sc(&pdb, groups, model_num).map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!("SC calculation failed: {}", e))
+    let analysis = py
+        .detach(|| {
+            crate::run_with_threads(num_threads as isize, || {
+                crate::get_sc(&pdb, groups, model_num)
             })
         })
-    })?;
+        .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(analysis.value)
 }

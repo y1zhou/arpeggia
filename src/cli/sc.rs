@@ -39,21 +39,13 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     let pdb = super::load_input(Path::new(&args.input))?;
 
     // Calculate SC
-    let sc = run_with_threads(args.num_threads as isize, || {
+    let analysis = run_with_threads(args.num_threads as isize, || {
         debug!("Using {} thread(s)", rayon::current_num_threads());
         arpeggia::get_sc(&pdb, &args.groups, args.model_num)
-    });
-
-    match sc {
-        Ok(analysis) => {
-            for warning in analysis.warnings {
-                tracing::warn!("{warning}");
-            }
-            info!("SC: {:.4}", analysis.value);
-        }
-        Err(e) => {
-            return Err(arpeggia::ArpeggiaError::InvalidArgument(e.to_string()));
-        }
+    })?;
+    for warning in analysis.warnings {
+        tracing::warn!("{warning}");
     }
+    info!("SC: {:.4}", analysis.value);
     Ok(())
 }

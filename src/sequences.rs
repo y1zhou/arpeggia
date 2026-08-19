@@ -30,15 +30,7 @@ use pdbtbx::*;
 /// }
 /// ```
 pub fn get_sequences(pdb: &PDB, model_num: usize) -> crate::ArpeggiaResult<Vec<(String, String)>> {
-    let model = if model_num == 0 {
-        pdb.models().next()
-    } else {
-        pdb.models()
-            .find(|model| model.serial_number() == model_num)
-    }
-    .ok_or_else(|| {
-        crate::ArpeggiaError::InvalidArgument(format!("model {model_num} does not exist"))
-    })?;
+    let model = crate::structure::selected_model(pdb, model_num)?;
     Ok(model
         .chains()
         .map(|chain| {

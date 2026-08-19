@@ -99,6 +99,8 @@ pub enum ArpeggiaError {
     Parse(String),
     /// A public argument was invalid.
     InvalidArgument(String),
+    /// A valid request could not produce a complete scientific value.
+    Calculation(String),
 }
 
 impl Display for ArpeggiaError {
@@ -107,6 +109,7 @@ impl Display for ArpeggiaError {
             Self::Io(error) => write!(f, "I/O error: {error}"),
             Self::Parse(message) => write!(f, "structure parse error: {message}"),
             Self::InvalidArgument(message) => write!(f, "invalid argument: {message}"),
+            Self::Calculation(message) => write!(f, "calculation failed: {message}"),
         }
     }
 }
@@ -115,7 +118,7 @@ impl std::error::Error for ArpeggiaError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
-            Self::Parse(_) | Self::InvalidArgument(_) => None,
+            Self::Parse(_) | Self::InvalidArgument(_) | Self::Calculation(_) => None,
         }
     }
 }

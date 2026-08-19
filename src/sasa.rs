@@ -238,7 +238,7 @@ fn calculate_prepared_atom_sasa_records(
                 RadiusScheme::SapReduce => sap_reduce_radius(x),
             }
             .ok_or_else(|| {
-                crate::ArpeggiaError::InvalidArgument(format!(
+                crate::ArpeggiaError::Calculation(format!(
                     "atom {} ({}) has no usable van der Waals radius",
                     x.atom().serial_number(),
                     x.atom().name()
@@ -664,7 +664,10 @@ pub fn get_dsasa_components(
     let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, "")?;
     let pdb = &analysis.value;
     // Get all chains in the PDB
-    let all_chains: HashSet<String> = pdb.chains().map(|c| c.id().to_string()).collect();
+    let all_chains: HashSet<String> = crate::structure::selected_model(pdb, model_num)?
+        .chains()
+        .map(|chain| chain.id().to_string())
+        .collect();
 
     // Parse groups
     let (group1_chains, group2_chains) = parse_groups(&all_chains, groups)?;
@@ -869,16 +872,8 @@ pub(crate) fn validate_sasa_input(
             "n_points must be positive".into(),
         ));
     }
-    let models = pdb
-        .models()
-        .map(|model| model.serial_number())
-        .collect::<Vec<_>>();
-    if models.is_empty() || (model_num != 0 && !models.contains(&model_num)) {
-        return Err(crate::ArpeggiaError::InvalidArgument(format!(
-            "model {model_num} does not exist"
-        )));
-    }
-    let available = pdb
+    let model = crate::structure::selected_model(pdb, model_num)?;
+    let available = model
         .chains()
         .map(|chain| chain.id().to_string())
         .collect::<HashSet<_>>();
@@ -1087,8 +1082,29 @@ END                                                                             
             .0;
         assert!(matches!(
             get_atom_sasa(&pdb, 1.4, 100, 0, ""),
-            Err(crate::ArpeggiaError::InvalidArgument(message))
+            Err(crate::ArpeggiaError::Calculation(message))
                 if message.contains("van der Waals radius")
+        ));
+    }
+
+    #[test]
+    fn sasa_validates_chains_in_the_selected_model() {
+        let input = b"MODEL        7\n\
+ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ENDMDL\n\
+MODEL        9\n\
+ATOM      1  CB  ALA B   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ENDMDL\nEND\n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+
+        assert!(matches!(
+            get_atom_sasa(&pdb, 1.4, 20, 7, "B"),
+            Err(crate::ArpeggiaError::InvalidArgument(_))
         ));
     }
 

@@ -36,7 +36,7 @@ impl ScCalculator {
         let max_radius_sq =
             self.base.settings.separation_cutoff * self.base.settings.separation_cutoff;
 
-        let atoms: Vec<ScAtom> = pdb
+        let atoms = pdb
             .atoms_with_hierarchy()
             .filter_map(|hier| {
                 let chain_id = hier.chain().id().to_string();
@@ -66,7 +66,13 @@ impl ScCalculator {
                             .and_then(|element| element.atomic_radius().van_der_waals)
                         {
                             Some(r) => r,
-                            None => return None, // Skip if no radius info
+                            None => {
+                                return Some(Err(SurfaceCalculatorError::MissingRadius(format!(
+                                    "atom {} ({}) has no usable van der Waals radius",
+                                    atom.serial_number(),
+                                    atom.name()
+                                ))));
+                            }
                         }
                     }
                 };
@@ -109,7 +115,7 @@ impl ScCalculator {
                     }
                 };
 
-                Some(ScAtom {
+                Some(Ok(ScAtom {
                     atomi: atom.serial_number(),
                     molecule,
                     radius: atom_radius,
@@ -125,9 +131,9 @@ impl ScCalculator {
                         .collect::<HashMap<usize, f64>>(),
                     neighbor_indices: Vec::new(),
                     buried_by_indices: Vec::new(),
-                })
+                }))
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Add atoms to calculator
         self.base.run.results.n_atoms = atoms.len();

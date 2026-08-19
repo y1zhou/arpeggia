@@ -19,6 +19,8 @@ pub enum SurfaceCalculatorError {
     NoAtoms,
     /// Failed to read radii
     Io(std::io::Error),
+    /// An atom has no usable radius.
+    MissingRadius(String),
     /// Overlapping atoms detected
     Coincident(String),
     /// The selected groups do not form a sampled interface.
@@ -32,6 +34,7 @@ impl fmt::Display for SurfaceCalculatorError {
         match self {
             SurfaceCalculatorError::NoAtoms => write!(f, "No atoms defined"),
             SurfaceCalculatorError::Io(e) => write!(f, "Failed to read radii: {e}"),
+            SurfaceCalculatorError::MissingRadius(message) => f.write_str(message),
             SurfaceCalculatorError::Coincident(msg) => {
                 write!(f, "Overlapping atoms detected: {msg}")
             }
