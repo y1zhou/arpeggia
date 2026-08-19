@@ -31,7 +31,7 @@ enum Commands {
     /// Print the sequences of all chains in a PDB or mmCIF file
     Seq(crate::cli::pdb2seq::Args),
     /// Print declared SEQRES/entity-polymer sequences
-    Seqres(crate::cli::pdb2seq::Args),
+    Seqres(crate::cli::pdb2seq::DeclaredArgs),
 }
 
 /// Entry to the CLI tool. Verbosity can be controlled with the `RUST_LOG` environment variable.

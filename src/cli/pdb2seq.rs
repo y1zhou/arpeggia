@@ -5,6 +5,17 @@ use std::path::{Path, PathBuf};
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
 pub(crate) struct Args {
+    /// Model number to select (0 selects the first model)
+    #[arg(short = 'm', long = "model", default_value_t = 0)]
+    model_num: usize,
+
+    /// Path to the PDB or mmCIF file to be analyzed
+    input: Vec<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone)]
+#[command(version, about)]
+pub(crate) struct DeclaredArgs {
     /// Path to the PDB or mmCIF file to be analyzed
     input: Vec<PathBuf>,
 }
@@ -15,7 +26,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         let input_path = Path::new(f).canonicalize()?;
         let input_file = input_path.to_string_lossy();
         let pdb = super::load_input(&input_path)?;
-        let sequences = arpeggia::get_sequences(&pdb);
+        let sequences = arpeggia::get_sequences(&pdb, args.model_num)?;
 
         println!("File: {input_file}");
         for (chain_id, seq) in sequences {
@@ -26,7 +37,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     Ok(())
 }
 
-pub(crate) fn run_declared(args: &Args) -> ArpeggiaResult<()> {
+pub(crate) fn run_declared(args: &DeclaredArgs) -> ArpeggiaResult<()> {
     for input in &args.input {
         let input = input.canonicalize()?;
         let analysis = arpeggia::get_seqres(&input)?;

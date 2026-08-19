@@ -108,3 +108,28 @@ fn conformer_selection_is_warned_on_stderr() {
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("CONFORMER_SELECTED"));
 }
+
+#[test]
+fn seq_selects_an_explicit_model() {
+    let input = std::env::temp_dir().join(format!(
+        "arpeggia-cli-sequence-model-{}.pdb",
+        std::process::id()
+    ));
+    std::fs::write(
+        &input,
+        "MODEL        7\n\
+         ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+         ENDMDL\n\
+         MODEL        9\n\
+         ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+         ENDMDL\nEND\n",
+    )
+    .unwrap();
+    let output = arpeggia()
+        .args(["seq", "--model", "9", input.to_str().unwrap()])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("A: G"));
+}

@@ -49,6 +49,7 @@ fn protonation_mode(value: &str) -> PyResult<crate::ProtonationMode> {
 ///
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
+///     model_num (int, optional): Model number to select (0 for first). Defaults to 0.
 ///     groups (str, optional): Chain groups specification. Defaults to "/" (all-to-all).
 ///         Examples: "A,B/C,D" for chains A,B vs C,D; "A/" for chain A vs all others.
 ///     vdw_comp (float, optional): VdW radii compensation factor. Defaults to 0.1.
@@ -284,12 +285,19 @@ fn dsasa_components(
 ///     >>> for chain_id, seq in sequences:
 ///     ...     print(f"Chain {chain_id}: {seq}")
 #[pyfunction]
-fn seq(py: Python<'_>, input_file: String) -> PyResult<std::vec::Vec<(String, String)>> {
+#[pyo3(signature = (input_file, model_num=0))]
+fn seq(
+    py: Python<'_>,
+    input_file: String,
+    model_num: usize,
+) -> PyResult<std::vec::Vec<(String, String)>> {
     // Load the PDB file
     let pdb = load_for_python(py, &input_file)?;
 
     // Get sequences
-    let seqs = py.detach(|| crate::get_sequences(&pdb));
+    let seqs = py
+        .detach(|| crate::get_sequences(&pdb, model_num))
+        .map_err(python_error)?;
 
     Ok(seqs)
 }

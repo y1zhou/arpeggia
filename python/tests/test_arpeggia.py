@@ -35,7 +35,7 @@ def test_stub_consumes_python_contract():
     assert "ProtonationMode" in stub_text
     assert "level: SasaLevel = ..." in stub_text
     assert "level: SapLevel = ..." in stub_text
-    assert "def seq(input_file: str) -> SequenceList" in stub_text
+    assert "def seq(input_file: str, model_num: int = ...) -> SequenceList" in stub_text
 
 
 def test_contacts(test_pdb_file):
@@ -202,6 +202,25 @@ def test_seq(test_pdb_file):
         assert seq.startswith(expected_start), (
             f"Sequence should start with {expected_start}, got {seq[:10]}"
         )
+
+
+def test_seq_selects_one_model(tmp_path):
+    """Select observed sequence from one explicit model."""
+    import arpeggia
+
+    structure = tmp_path / "models.pdb"
+    structure.write_text(
+        "MODEL        7\n"
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "ENDMDL\n"
+        "MODEL        9\n"
+        "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "ENDMDL\nEND\n"
+    )
+    assert arpeggia.seq(str(structure)) == [("A", "A")]
+    assert arpeggia.seq(str(structure), model_num=9) == [("A", "G")]
+    with pytest.raises(ValueError, match="model 3 does not exist"):
+        arpeggia.seq(str(structure), model_num=3)
 
 
 def test_sequences_validity(test_pdb_file):
