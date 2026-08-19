@@ -53,6 +53,7 @@ impl std::error::Error for SurfaceCalculatorError {}
 /// Type alias for parallel neighbor computation results
 type NeighborResult = Result<Vec<(Vec<usize>, Vec<usize>, bool)>, SurfaceCalculatorError>;
 
+#[derive(Default)]
 pub struct SurfaceGenerator {
     pub(crate) run: RunState,
 }
@@ -66,19 +67,7 @@ pub(crate) struct RunState {
     pub results: Results,
 }
 
-impl Default for SurfaceGenerator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl SurfaceGenerator {
-    pub fn new() -> Self {
-        Self {
-            run: RunState::default(),
-        }
-    }
-
     pub fn get_atom_radius(resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
         let resn = if crate::contacts::ionic::is_histidine(resn) {
             "HIS"

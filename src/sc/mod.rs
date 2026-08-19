@@ -107,7 +107,7 @@ pub fn get_sc_details(
         group1_chains.union(&group2_chains).cloned().collect();
     let pdb_filtered = prepare_structure_with_chains(&pdb, model_num, true, &all_selected_chains);
 
-    let mut calc = ScCalculator::new();
+    let mut calc = ScCalculator::default();
 
     // Load atoms from PDB into the calculator
     // Each contains a `molecule_id` that is 0 for group1, 1 for group2

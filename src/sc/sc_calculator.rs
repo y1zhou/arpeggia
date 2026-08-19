@@ -16,17 +16,12 @@ use rstar::{PointDistance, RTree};
 const DOT_PRODUCT_CLAMP_MIN: f64 = -0.999;
 const DOT_PRODUCT_CLAMP_MAX: f64 = 0.999;
 
+#[derive(Default)]
 pub struct ScCalculator {
     pub base: SurfaceGenerator,
 }
 
 impl ScCalculator {
-    pub fn new() -> Self {
-        Self {
-            base: SurfaceGenerator::new(),
-        }
-    }
-
     pub fn add_atoms(
         &mut self,
         pdb: &PDB,
@@ -269,7 +264,7 @@ mod tests {
         let pdb = load_model(&path).unwrap().value;
         let group1 = HashSet::from(["H".to_string()]);
         let group2 = HashSet::from(["L".to_string()]);
-        let mut calculator = ScCalculator::new();
+        let mut calculator = ScCalculator::default();
 
         calculator.add_atoms(&pdb, &group1, &group2).unwrap();
 
