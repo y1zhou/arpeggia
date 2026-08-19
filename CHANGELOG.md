@@ -17,9 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PotentialCovalent`, and named steric clash, van der Waals clash, and van der
   Waals contact regions separately.
 - Associated hydrogen geometry with the specific donor rather than every
-  hydrogen in its residue, and added missing-hydrogen diagnostics.
+  hydrogen in its residue, restricted weak donors to carbon sites bearing
+  hydrogen, restored explicitly protonated terminal-Pro donation, and added
+  missing-hydrogen diagnostics.
 - Added `AllCharged`, `Heuristic`, and `ExplicitOnly` histidine policies with
-  potential ionic and cation-pi categories for inferred charge.
+  potential ionic and cation-pi categories for inferred charge, including
+  consistent treatment of histidine aliases and contradictory-input warnings.
+- Preserved model, alternate-location, residue-name, and mmCIF label identity
+  when applying explicit connectivity to selected atoms.
 - Applied deterministic highest-occupancy alternate-conformer selection with an
   `A` tie-break and visible warnings across analyses.
 - Unified standard atom, residue, and chain SASA over one selected atom
@@ -27,8 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   polarity and additive polar, hydrophobic, and unclassified areas.
 - Aligned SAP with Rosetta's full-atom Reduce-radius exposure definition,
   1.1 Å probe, precise hydrophobicities, and runtime maximum side-chain areas.
-  Residue output retains complete side-chain SASA and eligible
-  zero/nonpositive-score residues.
+  Exposure ratios remain unclamped; residue output retains complete side-chain
+  SASA and eligible zero/nonpositive-score residues.
 - Kept dSASA as the established two-sided buried area, corrected its docs,
   required disjoint groups, and added polarity components.
 - Fixed coordinate-observed `seq` output to omit solvent and added `seqres` for
@@ -38,9 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rust parsing and analysis entry points now return typed errors and successful
   `Analysis<T>` values with stable warning codes instead of panicking.
-- Python emits `UserWarning`, `ValueError`, or `OSError` while retaining direct
-  DataFrame/scalar/list results. CPU-bound parsing and calculations release the
-  GIL.
+- Python emits `UserWarning`, `ValueError`, `RuntimeError`, or `OSError` while
+  retaining direct DataFrame/scalar/list results. CPU-bound parsing and
+  calculations release the GIL.
 - Contact interaction labels and SASA/RSA columns changed as described above.
   Model/atom identifiers in contact and surface DataFrames are unsigned 64-bit
   integers and residue identifiers are signed 64-bit integers. Python adds
@@ -56,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin release-critical GitHub Actions to immutable commits, track Cargo and uv
   lockfiles, use locked/frozen CI and release commands, and smoke-test every
   built wheel before upload.
+- Lock Python artifacts to official PyPI and publish only the CPython/platform
+  combinations supported by the release dependencies.
 - Updated locked `h2` metadata to 0.4.16 for RUSTSEC-2026-0258. The optional
   dependency is not compiled by Arpeggia, but the release lock remains clean.
 - Stream the narrow mmCIF metadata parser and discard unrelated loop values
