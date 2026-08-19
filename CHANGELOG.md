@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-08-14
-
 ### Scientific corrections
 
 - Restored both directional SC surfaces after fixing the inverted atom-2
@@ -56,13 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   logging is enabled, and remove an arbitrary SC sampling ceiling.
 - Restrict output filenames to a single normal path component.
 - Pin release-critical GitHub Actions to immutable commits, track Cargo and uv
-  lockfiles, and use locked/frozen CI and release commands.
+  lockfiles, use locked/frozen CI and release commands, and smoke-test every
+  built wheel before upload.
+- Stream the narrow mmCIF metadata parser and discard unrelated loop values
+  without allocating them.
 
 ### Simplified
 
 - Replaced dynamic SC radii with static data, deleted duplicate geometry and
   sequence abstractions, removed redundant SAP maps/wrappers and unused Cargo
-  features, centralized CLI input diagnostics, and replaced stale build notes.
+  features, removed write-only SC surface state, centralized CLI input
+  diagnostics, and replaced stale build notes.
 
 ## [0.8.1] - 2026-06-23
 
@@ -263,8 +265,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.0...HEAD
-[0.9.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.9.0
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...HEAD
 [0.8.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.1
 [0.8.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.0
 [0.7.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.7.0
