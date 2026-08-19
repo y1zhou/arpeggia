@@ -137,8 +137,9 @@ mod tests {
             Err(e) => panic!("Error calculating SC: {:?}", e),
         };
 
-        // [WARNING] These corrected-port regression values are not an independent
-        // absolute reference: pinned sc-rs reports 0.714361 for this input.
+        // The pinned sc-rs core reproduces these values when given the same atom
+        // population. Its stock CLI reports 0.714361 because its name-based
+        // hydrogen filter also removes the oxygen atom named `OH` in tyrosine.
         let expected_sc = 0.725407;
         assert!(
             (result.sc - expected_sc).abs() < 0.000_005,
