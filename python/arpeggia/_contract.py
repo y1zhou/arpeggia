@@ -48,7 +48,7 @@ DEFAULTS = {
     },
     "sap_score": {
         "level": "residue",
-        "probe_radius": 1.4,
+        "probe_radius": 1.1,
         "n_points": 100,
         "model_num": 0,
         "sap_radius": 5.0,

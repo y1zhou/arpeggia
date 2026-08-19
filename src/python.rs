@@ -373,7 +373,7 @@ fn relative_sasa(
 ///
 /// Where:
 /// - Neighbors are atoms/residues within radius R of atom/residue i
-/// - Hydrophobicity uses the Black & Mould (1991) scale, normalized so glycine = 0
+/// - Hydrophobicity uses Rosetta's Black & Mould-derived constants
 /// - SASA is the side-chain solvent accessible surface area
 /// - SASA_max is the maximum SASA for that residue type
 ///
@@ -382,7 +382,7 @@ fn relative_sasa(
 ///     level (str, optional): Aggregation level for SAP calculation. Options:
 ///         - "atom": Calculate SAP for each atom
 ///         - "residue": Aggregate SAP by residue (default)
-///     probe_radius (float, optional): Probe radius in Ångströms for SASA calculation. Defaults to 1.4.
+///     probe_radius (float, optional): Probe radius in Ångströms for SASA calculation. Defaults to 1.1.
 ///     n_points (int, optional): Number of points for SASA surface calculation. Defaults to 100.
 ///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
 ///     sap_radius (float, optional): Radius in Ångströms for neighbor search. Defaults to 5.0.
@@ -406,7 +406,7 @@ fn relative_sasa(
 ///     >>> sap_hl = arpeggia.sap_score("antibody.pdb", chains="H,L")
 ///     >>> print(f"Calculated SAP for {len(sap_hl)} residues")
 #[pyfunction]
-#[pyo3(signature = (input_file, level="residue", probe_radius=1.4, n_points=100, model_num=0, sap_radius=5.0, chains="", num_threads=1))]
+#[pyo3(signature = (input_file, level="residue", probe_radius=1.1, n_points=100, model_num=0, sap_radius=5.0, chains="", num_threads=1))]
 #[allow(clippy::too_many_arguments)]
 fn sap_score(
     py: Python<'_>,

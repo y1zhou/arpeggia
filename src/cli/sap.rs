@@ -48,7 +48,7 @@ pub(crate) struct Args {
     model_num: usize,
 
     /// Probe radius r for SASA calculation (smaller r detects more surface details)
-    #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
+    #[arg(short = 'r', long = "probe-radius", default_value_t = 1.1)]
     probe_radius: f32,
 
     /// Number of points on the sphere for SASA sampling

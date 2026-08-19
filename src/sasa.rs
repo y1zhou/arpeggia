@@ -30,7 +30,7 @@ impl AtomPolarity {
 #[derive(Clone, Copy)]
 enum RadiusScheme {
     StandardProtor,
-    SapElemental,
+    SapReduce,
 }
 
 #[derive(Clone, Debug)]
@@ -196,9 +196,9 @@ pub(crate) fn calculate_sap_atom_sasa_records(
         probe_radius,
         n_points,
         model_num,
-        true,
+        false,
         chains,
-        RadiusScheme::SapElemental,
+        RadiusScheme::SapReduce,
     )
 }
 
@@ -244,11 +244,7 @@ fn calculate_prepared_atom_sasa_records(
                         .van_der_waals
                         .map(|radius| radius as f32)
                 }),
-                RadiusScheme::SapElemental => x
-                    .atom()
-                    .element()
-                    .and_then(|element| element.atomic_radius().van_der_waals)
-                    .map(|radius| radius as f32),
+                RadiusScheme::SapReduce => sap_reduce_radius(x),
             }
             .ok_or_else(|| {
                 crate::ArpeggiaError::InvalidArgument(format!(
@@ -300,11 +296,54 @@ fn calculate_prepared_atom_sasa_records(
         .collect()
 }
 
+fn sap_reduce_radius(entity: &AtomConformerResidueChainModel) -> Option<f32> {
+    let residue = entity.conformer().name();
+    let atom = entity.atom();
+    let atom_name = atom.name();
+    Some(match atom.element()? {
+        Element::C if atom_name == "C" => {
+            if entity.residue().atoms().any(|atom| atom.name() == "OXT") {
+                1.75
+            } else {
+                1.65
+            }
+        }
+        Element::C => 1.75,
+        Element::N => 1.55,
+        Element::O => 1.4,
+        Element::S => 1.8,
+        Element::Se if residue == "MSE" => 1.8,
+        Element::H if reduce_unit_hydrogen(residue, atom_name) => 1.0,
+        Element::H => 1.17,
+        element => element.atomic_radius().van_der_waals? as f32,
+    })
+}
+
+fn reduce_unit_hydrogen(residue: &str, atom: &str) -> bool {
+    if matches!(atom, "H" | "HN" | "H1" | "H2" | "H3" | "1H" | "2H" | "3H") {
+        return true;
+    }
+    match residue {
+        "ARG" => atom == "HE" || atom.contains("HH"),
+        "ASN" => atom.contains("HD2"),
+        "CYS" => atom == "HG",
+        "GLN" => atom.contains("HE2"),
+        "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => {
+            matches!(atom, "HD1" | "HE2")
+        }
+        "LYS" => atom.contains("HZ"),
+        "PHE" | "TRP" | "TYR" => atom != "HA" && !atom.contains("HB"),
+        "SER" => atom == "HG",
+        "THR" => atom == "HG1",
+        _ => false,
+    }
+}
+
 fn rosetta_sasa_filter_polarity(entity: &AtomConformerResidueChainModel) -> AtomPolarity {
     // [ACCEPTED DEVIATION] This reproduces Rosetta SasaFilter's atom partition
     // while areas remain Shrake-Rupley/ProtOr rather than LeGrand atom-type SASA.
-    // [WARNING] Numerical equivalence to Rosetta's LeGrand areas has not yet
-    // been established on a curated cross-tool benchmark.
+    // [WARNING] Cross-tool benchmarking shows these Shrake-Rupley areas are not
+    // numerically equivalent to Rosetta's full-atom LeGrand areas.
     let residue = entity.conformer().name();
     let atom = entity.atom().name();
     if !matches!(
@@ -1444,5 +1483,11 @@ mod tests {
                 "Only A and B chains should be present, got: {chain_id}"
             );
         }
+    }
+
+    #[test]
+    fn reduce_histidine_hydrogen_radii_match_rosetta_types() {
+        assert!(reduce_unit_hydrogen("HIS", "HE2"));
+        assert!(!reduce_unit_hydrogen("HIS", "HD2"));
     }
 }
