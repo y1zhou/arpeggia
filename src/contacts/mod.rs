@@ -355,6 +355,78 @@ ENDMDL\nEND\n";
     }
 
     #[test]
+    fn coordinate_neighbors_without_a_peptide_bond_are_compared() {
+        let input =
+            b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  CB  ALA A  10       3.600   0.000   0.000  1.00 20.00           C  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+
+        let contacts = default_contacts(&pdb, "/", 0.1, 6.5);
+        assert!(
+            contacts
+                .column("interaction")
+                .unwrap()
+                .str()
+                .unwrap()
+                .iter()
+                .flatten()
+                .any(|value| value == "VanDerWaalsContact")
+        );
+    }
+
+    #[test]
+    fn peptide_bonded_neighbors_are_not_compared() {
+        let input =
+            b"ATOM      1  C   ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  N   ALA A   2       1.330   0.000   0.000  1.00 20.00           N  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+
+        assert_eq!(default_contacts(&pdb, "/", 0.1, 6.5).height(), 0);
+    }
+
+    #[test]
+    fn valid_ter_prevents_peptide_neighbor_suppression() {
+        let input =
+            b"ATOM      1  C   ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+TER       2      ALA A   1\n\
+ATOM      3  N   ALA A   2       1.330   0.000   0.000  1.00 20.00           N  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+        let path =
+            std::env::temp_dir().join(format!("arpeggia-valid-ter-{}.pdb", std::process::id()));
+        std::fs::write(&path, input).unwrap();
+        let metadata = crate::read_metadata(&path).unwrap().value;
+        std::fs::remove_file(path).unwrap();
+
+        let contacts = get_contacts_with_metadata(
+            &pdb,
+            &metadata,
+            "/",
+            0.1,
+            6.5,
+            ProtonationMode::AllCharged,
+            7.4,
+        )
+        .unwrap()
+        .value;
+        assert!(contacts.height() > 0);
+    }
+
+    #[test]
     fn distinguishes_contact_distance_regions() {
         for (distance, expected) in [
             (1.0, "StericClash"),

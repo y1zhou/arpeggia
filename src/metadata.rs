@@ -6,6 +6,27 @@ use std::path::Path;
 
 type CifLoop = (Vec<String>, Vec<Vec<String>>);
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct ResidueBoundary {
+    model: usize,
+    chain: String,
+    residue: isize,
+    insertion: String,
+    name: String,
+}
+
+impl ResidueBoundary {
+    fn from_pdb(model: usize, line: &str) -> Option<Self> {
+        Some(Self {
+            model,
+            chain: clean(field(line, 21, 22)).to_string(),
+            residue: clean(field(line, 22, 26)).parse().ok()?,
+            insertion: clean_unknown(field(line, 26, 27)).to_string(),
+            name: clean(field(line, 17, 20)).to_ascii_uppercase(),
+        })
+    }
+}
+
 /// An atom identifier used by explicit input connectivity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BondEndpoint {
@@ -44,6 +65,7 @@ impl BondEndpoint {
 #[derive(Clone, Debug, Default)]
 pub struct StructureMetadata {
     bonds: HashSet<(BondEndpoint, BondEndpoint)>,
+    chain_breaks: HashSet<ResidueBoundary>,
     declared_sequences: Vec<(String, String)>,
 }
 
@@ -57,6 +79,23 @@ impl StructureMetadata {
     /// Chain-oriented declared polymer sequences.
     pub fn declared_sequences(&self) -> &[(String, String)] {
         &self.declared_sequences
+    }
+
+    pub(crate) fn has_chain_break_after(
+        &self,
+        model: usize,
+        chain: &str,
+        residue: isize,
+        insertion: &str,
+        name: &str,
+    ) -> bool {
+        self.chain_breaks.contains(&ResidueBoundary {
+            model,
+            chain: chain.to_string(),
+            residue,
+            insertion: insertion.to_string(),
+            name: name.to_ascii_uppercase(),
+        })
     }
 }
 
@@ -73,25 +112,55 @@ pub fn read_metadata(path: impl AsRef<Path>) -> ArpeggiaResult<Analysis<Structur
     let (metadata, warnings) = if is_cif {
         parse_mmcif(&input)?
     } else {
-        parse_pdb(&input)
+        parse_pdb(&input)?
     };
     Ok(Analysis::new(metadata, warnings))
 }
 
 /// Return declared PDB `SEQRES` or mmCIF entity-polymer sequences by chain.
 pub fn get_seqres(path: impl AsRef<Path>) -> ArpeggiaResult<Analysis<Vec<(String, String)>>> {
-    Ok(read_metadata(path)?.map(|metadata| metadata.declared_sequences))
+    let path = path.as_ref();
+    let input = std::fs::read_to_string(path)?;
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase);
+    if matches!(extension.as_deref(), Some("cif" | "mmcif"))
+        || input.trim_start().starts_with("data_")
+    {
+        let (metadata, warnings) = parse_mmcif(&input)?;
+        return Ok(Analysis::new(metadata.declared_sequences, warnings));
+    }
+    let sequences = pdb_declared_sequences(&input);
+    let (metadata, warnings) = metadata_with_sequences(HashSet::new(), HashSet::new(), sequences);
+    Ok(Analysis::new(metadata.declared_sequences, warnings))
 }
 
-fn parse_pdb(input: &str) -> (StructureMetadata, Vec<AnalysisWarning>) {
+fn parse_pdb(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarning>)> {
     let mut bonds = HashSet::new();
+    let mut chain_breaks = HashSet::new();
     let mut atoms = HashMap::new();
     let mut conect = Vec::new();
-    let mut sequences = Vec::<(String, Vec<String>)>::new();
+    let mut current_model = 0;
+    let mut last_coordinate = None;
 
     for line in input.lines() {
         match field(line, 0, 6).trim() {
+            "MODEL" => {
+                current_model = clean(field(line, 10, 14)).parse().unwrap_or(current_model);
+                last_coordinate = None;
+            }
             "ATOM" | "HETATM" => {
+                let residue = ResidueBoundary::from_pdb(current_model, line).ok_or_else(|| {
+                    ArpeggiaError::Parse("invalid residue identity in coordinate record".into())
+                })?;
+                if chain_breaks.contains(&residue) {
+                    return Err(ArpeggiaError::Parse(format!(
+                        "TER occurs inside model {}, chain {}, residue {}{}",
+                        residue.model, residue.chain, residue.residue, residue.insertion
+                    )));
+                }
+                last_coordinate = Some(residue);
                 if let (Ok(serial), Some(endpoint)) = (
                     field(line, 6, 11).trim().parse::<usize>(),
                     BondEndpoint::new(
@@ -103,6 +172,17 @@ fn parse_pdb(input: &str) -> (StructureMetadata, Vec<AnalysisWarning>) {
                 ) {
                     atoms.insert(serial, endpoint);
                 }
+            }
+            "TER" => {
+                let residue = ResidueBoundary::from_pdb(current_model, line)
+                    .ok_or_else(|| ArpeggiaError::Parse("invalid TER residue identity".into()))?;
+                if last_coordinate.as_ref() != Some(&residue) {
+                    return Err(ArpeggiaError::Parse(format!(
+                        "TER does not identify the preceding complete residue in model {}, chain {}",
+                        current_model, residue.chain
+                    )));
+                }
+                chain_breaks.insert(residue);
             }
             "SSBOND" => {
                 if let (Some(first), Some(second)) = (
@@ -150,17 +230,6 @@ fn parse_pdb(input: &str) -> (StructureMetadata, Vec<AnalysisWarning>) {
                     conect.extend(rest.iter().map(|&second| (first, second)));
                 }
             }
-            "SEQRES" => {
-                let chain = field(line, 11, 12).trim().to_string();
-                let monomers = field(line, 19, line.len())
-                    .split_whitespace()
-                    .map(str::to_string);
-                if let Some((_, existing)) = sequences.iter_mut().find(|(id, _)| id == &chain) {
-                    existing.extend(monomers);
-                } else {
-                    sequences.push((chain, monomers.collect()));
-                }
-            }
             _ => {}
         }
     }
@@ -169,7 +238,30 @@ fn parse_pdb(input: &str) -> (StructureMetadata, Vec<AnalysisWarning>) {
             bonds.insert(ordered_bond(first.clone(), second.clone()));
         }
     }
-    metadata_with_sequences(bonds, sequences)
+    Ok(metadata_with_sequences(
+        bonds,
+        chain_breaks,
+        pdb_declared_sequences(input),
+    ))
+}
+
+fn pdb_declared_sequences(input: &str) -> Vec<(String, Vec<String>)> {
+    let mut sequences = Vec::<(String, Vec<String>)>::new();
+    for line in input
+        .lines()
+        .filter(|line| field(line, 0, 6).trim() == "SEQRES")
+    {
+        let chain = field(line, 11, 12).trim().to_string();
+        let monomers = field(line, 19, line.len())
+            .split_whitespace()
+            .map(str::to_string);
+        if let Some((_, existing)) = sequences.iter_mut().find(|(id, _)| id == &chain) {
+            existing.extend(monomers);
+        } else {
+            sequences.push((chain, monomers.collect()));
+        }
+    }
+    sequences
 }
 
 fn parse_mmcif(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarning>)> {
@@ -239,11 +331,12 @@ fn parse_mmcif(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWa
             Some((chain, monomers.values().cloned().collect::<Vec<_>>()))
         })
         .collect();
-    Ok(metadata_with_sequences(bonds, sequences))
+    Ok(metadata_with_sequences(bonds, HashSet::new(), sequences))
 }
 
 fn metadata_with_sequences(
     bonds: HashSet<(BondEndpoint, BondEndpoint)>,
+    chain_breaks: HashSet<ResidueBoundary>,
     sequences: Vec<(String, Vec<String>)>,
 ) -> (StructureMetadata, Vec<AnalysisWarning>) {
     let mut unsupported = BTreeSet::new();
@@ -277,6 +370,7 @@ fn metadata_with_sequences(
     (
         StructureMetadata {
             bonds,
+            chain_breaks,
             declared_sequences,
         },
         warnings,
@@ -468,7 +562,7 @@ mod tests {
 ATOM      1  SG  CYS A   1       0.000   0.000   0.000  1.00 20.00           S  \n\
 ATOM      2  SG  CYS B   2       2.000   0.000   0.000  1.00 20.00           S  \n\
 CONECT    1    2\nEND\n";
-        let (metadata, warnings) = parse_pdb(input);
+        let (metadata, warnings) = parse_pdb(input).unwrap();
         assert!(warnings.is_empty());
         let first = BondEndpoint::new("A", "1", "", "SG").unwrap();
         let second = BondEndpoint::new("B", "2", "", "SG").unwrap();
@@ -477,10 +571,29 @@ CONECT    1    2\nEND\n";
     }
 
     #[test]
+    fn malformed_ter_fails_metadata_but_not_seqres() {
+        let input = "SEQRES   1 A    1  ALA\n\
+ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+TER       2      ALA A   1\n\
+ATOM      3  CA  ALA A   1       1.400   0.000   0.000  1.00 20.00           C  \n\
+END\n";
+        let path =
+            std::env::temp_dir().join(format!("arpeggia-malformed-ter-{}.pdb", std::process::id()));
+        std::fs::write(&path, input).unwrap();
+
+        let metadata = read_metadata(&path);
+        let seqres = get_seqres(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+
+        assert!(matches!(metadata, Err(ArpeggiaError::Parse(_))));
+        assert_eq!(seqres.value, vec![("A".into(), "A".into())]);
+    }
+
+    #[test]
     fn pdb_ssbond_and_link_are_explicit_bonds() {
         let input = "SSBOND   1 CYS A    1    CYS B    2                          1555   1555  2.03\n\
 LINK         NZ  LYS A   3                 C1  LIG B   4     1555   1555  1.80\n";
-        let (metadata, warnings) = parse_pdb(input);
+        let (metadata, warnings) = parse_pdb(input).unwrap();
         assert!(warnings.is_empty());
         assert!(metadata.has_bond(
             &BondEndpoint::from_parts("A", 1, "", "SG"),
@@ -525,7 +638,7 @@ covale A 1 NZ B 2 C1\nmetalc A 3 ND1 B 4 ZN\n";
     #[test]
     fn declaration_order_and_unknown_monomer_warning_are_preserved() {
         let input = "SEQRES   1 B    1  UNK\nSEQRES   1 A    1  GLY\n";
-        let (metadata, warnings) = parse_pdb(input);
+        let (metadata, warnings) = parse_pdb(input).unwrap();
         assert_eq!(
             metadata.declared_sequences(),
             &[("B".into(), "X".into()), ("A".into(), "G".into())]

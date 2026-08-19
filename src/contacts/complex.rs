@@ -9,6 +9,36 @@ use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
+const MAX_PEPTIDE_C_N_DISTANCE: f64 = 1.8;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct ResiduePosition<'a> {
+    model: usize,
+    chain: &'a str,
+    residue: isize,
+    insertion: &'a str,
+}
+
+impl<'a> ResiduePosition<'a> {
+    fn from_id(residue: &'a ResidueId<'a>) -> Self {
+        Self {
+            model: residue.model,
+            chain: residue.chain,
+            residue: residue.resi,
+            insertion: residue.insertion,
+        }
+    }
+
+    fn from_residue(model: usize, chain: &'a str, residue: &'a Residue) -> Self {
+        Self {
+            model,
+            chain,
+            residue: residue.serial_number(),
+            insertion: residue.insertion_code().unwrap_or(""),
+        }
+    }
+}
+
 /// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex<'a> {
     /// All information present in the atomic model
@@ -27,6 +57,8 @@ pub struct InteractionComplex<'a> {
 
     /// Maps residue names to unique indices
     res2idx: HashMap<ResidueId<'a>, usize>,
+    /// Residue pairs connected by observed peptide-bond geometry.
+    peptide_neighbors: HashSet<(ResiduePosition<'a>, ResiduePosition<'a>)>,
     /// Maps ring residues to ring centers and normals
     rings: HashMap<ResidueId<'a>, Plane>,
     /// Map residues to side chain planes
@@ -71,6 +103,7 @@ impl<'a> InteractionComplex<'a> {
 
         // Build a mapping of residue names to indices
         let res2idx = build_residue_index(model);
+        let peptide_neighbors = build_peptide_neighbors(model, metadata);
 
         // Build a mapping of ring residue names to ring centers and normals
         let (rings, ring_err) = build_ring_positions(model);
@@ -89,6 +122,7 @@ impl<'a> InteractionComplex<'a> {
                 protonation,
                 ph,
                 res2idx,
+                peptide_neighbors,
                 rings,
                 sc_planes,
             },
@@ -152,18 +186,17 @@ impl<'a> InteractionComplex<'a> {
 
         // Ignore if they are neighboring residues in the same chain
         if r1.chain == r2.chain {
+            let r1_position = ResiduePosition::from_id(r1);
+            let r2_position = ResiduePosition::from_id(r2);
+            if r1_position == r2_position
+                || self.peptide_neighbors.contains(&(r1_position, r2_position))
+            {
+                return false;
+            }
             let e1_idx = self.res2idx[r1];
             let e2_idx = self.res2idx[r2];
 
-            if symmetric {
-                (e2_idx > 1) && (e1_idx < e2_idx - 1) // not immediate neighbors
-            } else {
-                let is_neighboring = match e1_idx {
-                    0 => (e2_idx == e1_idx) | (e2_idx == e1_idx + 1),
-                    _ => (e2_idx == e1_idx - 1) | (e2_idx == e1_idx) | (e2_idx == e1_idx + 1),
-                };
-                !is_neighboring
-            }
+            if symmetric { e1_idx < e2_idx } else { true }
         } else {
             // Across two chains, avoid duplicate comparisons when the chains exist on both sides,
             // e.g. H,A,B/H,A where H-A and A-H are the same interactions
@@ -489,6 +522,47 @@ fn build_residue_index(model: &'_ PDB) -> HashMap<ResidueId<'_>, usize> {
             })
         })
         .collect::<HashMap<ResidueId, usize>>()
+}
+
+fn build_peptide_neighbors<'a>(
+    pdb: &'a PDB,
+    metadata: Option<&StructureMetadata>,
+) -> HashSet<(ResiduePosition<'a>, ResiduePosition<'a>)> {
+    let mut neighbors = HashSet::new();
+    for model in pdb.models() {
+        let model_id = model.serial_number();
+        for chain in model.chains() {
+            let chain_id = chain.id();
+            let residues = chain.residues().collect::<Vec<_>>();
+            for pair in residues.windows(2) {
+                let first = pair[0];
+                let second = pair[1];
+                let explicitly_broken = metadata.is_some_and(|metadata| {
+                    metadata.has_chain_break_after(
+                        model_id,
+                        chain_id,
+                        first.serial_number(),
+                        first.insertion_code().unwrap_or(""),
+                        first.name().unwrap_or(""),
+                    )
+                });
+                let peptide_geometry = first
+                    .atoms()
+                    .find(|atom| atom.name() == "C")
+                    .zip(second.atoms().find(|atom| atom.name() == "N"))
+                    .is_some_and(|(carbon, nitrogen)| {
+                        carbon.distance(nitrogen) <= MAX_PEPTIDE_C_N_DISTANCE
+                    });
+                if peptide_geometry && !explicitly_broken {
+                    let first = ResiduePosition::from_residue(model_id, chain_id, first);
+                    let second = ResiduePosition::from_residue(model_id, chain_id, second);
+                    neighbors.insert((first, second));
+                    neighbors.insert((second, first));
+                }
+            }
+        }
+    }
+    neighbors
 }
 
 fn build_ring_positions(model: &'_ PDB) -> (HashMap<ResidueId<'_>, Plane>, Vec<String>) {
