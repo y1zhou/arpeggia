@@ -71,7 +71,11 @@ jobs:
           rust-toolchain: ${{ steps.rust-toolchain.outputs.name }}
           docker-options: -e CI
 
-      - run: ${{ (matrix.platform.os == 'windows' && 'dir') || 'ls -lh' }} dist
+      - name: Install and smoke-test wheel
+        shell: bash
+        run: |
+          uv pip install --system dist/*.whl
+          python python/tests/smoke_wheel.py
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
