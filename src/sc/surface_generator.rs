@@ -6,8 +6,8 @@ use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt;
 
+use super::PROBE_RADIUS;
 use super::atomic_radii::{EMBEDDED_ATOMIC_RADII, wildcard_match};
-use super::settings::Settings;
 use super::types::*;
 use super::vector3::Vec3;
 use rayon::prelude::*;
@@ -17,8 +17,8 @@ use rayon::prelude::*;
 pub enum SurfaceCalculatorError {
     /// No atoms defined
     NoAtoms,
-    /// Failed to read radii
-    Io(std::io::Error),
+    /// A selected chain group contains no usable atoms.
+    NoAtomsForGroup(usize),
     /// An atom has no usable radius.
     MissingRadius(String),
     /// Overlapping atoms detected
@@ -33,7 +33,9 @@ impl fmt::Display for SurfaceCalculatorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SurfaceCalculatorError::NoAtoms => write!(f, "No atoms defined"),
-            SurfaceCalculatorError::Io(e) => write!(f, "Failed to read radii: {e}"),
+            SurfaceCalculatorError::NoAtomsForGroup(group) => {
+                write!(f, "No atoms for chain group {group}")
+            }
             SurfaceCalculatorError::MissingRadius(message) => f.write_str(message),
             SurfaceCalculatorError::Coincident(msg) => {
                 write!(f, "Overlapping atoms detected: {msg}")
@@ -46,27 +48,12 @@ impl fmt::Display for SurfaceCalculatorError {
     }
 }
 
-impl std::error::Error for SurfaceCalculatorError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            SurfaceCalculatorError::Io(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl From<std::io::Error> for SurfaceCalculatorError {
-    fn from(err: std::io::Error) -> Self {
-        SurfaceCalculatorError::Io(err)
-    }
-}
+impl std::error::Error for SurfaceCalculatorError {}
 
 /// Type alias for parallel neighbor computation results
 type NeighborResult = Result<Vec<(Vec<usize>, Vec<usize>, bool)>, SurfaceCalculatorError>;
 
 pub struct SurfaceGenerator {
-    pub settings: Settings,
-    radii: &'static [AtomRadius],
     pub(crate) run: RunState,
 }
 
@@ -88,20 +75,18 @@ impl Default for SurfaceGenerator {
 impl SurfaceGenerator {
     pub fn new() -> Self {
         Self {
-            settings: Settings::default(),
-            radii: EMBEDDED_ATOMIC_RADII,
             run: RunState::default(),
         }
     }
 
-    pub fn get_atom_radius(&self, resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
+    pub fn get_atom_radius(resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
         let resn = if crate::contacts::ionic::is_histidine(resn) {
             "HIS"
         } else {
             resn
         };
         // First try the embedded radii table
-        for radius in self.radii {
+        for radius in EMBEDDED_ATOMIC_RADII {
             if !wildcard_match(resn, radius.residue) {
                 continue;
             }
@@ -110,9 +95,9 @@ impl SurfaceGenerator {
             }
             return Ok(radius.radius);
         }
-        Err(SurfaceCalculatorError::Io(std::io::Error::other(format!(
-            "No radius for {resn}:{atomn}"
-        ))))
+        Err(SurfaceCalculatorError::MissingRadius(format!(
+            "no radius for {resn}:{atomn}"
+        )))
     }
 
     fn atomi_to_index(&self) -> std::collections::HashMap<usize, usize> {
@@ -135,22 +120,15 @@ impl SurfaceGenerator {
             if matches!(att, Attention::Far) {
                 continue;
             }
-            // This branch is dead because Attention::Consider is never assigned
-            if matches!(att, Attention::Consider) && self.run.atoms[i].buried_by_indices.is_empty()
-            {
-                continue;
-            }
             self.build_probes(i)?;
         }
         self.generate_contact_surface()?;
-        if self.settings.rp > 0.0 {
-            self.generate_concave_surface()?;
-        }
+        self.generate_concave_surface()?;
         Ok(())
     }
 
     fn categorize_molecule_neighbors(&mut self) -> Result<(), SurfaceCalculatorError> {
-        let rp = self.settings.rp;
+        let rp = PROBE_RADIUS;
         let atoms: &Vec<ScAtom> = &self.run.atoms;
         let atomi_table = self.atomi_to_index();
         let neighbors_info: NeighborResult = atoms
@@ -222,17 +200,14 @@ impl SurfaceGenerator {
     }
 
     fn generate_contact_surface(&mut self) -> Result<(), SurfaceCalculatorError> {
-        let rp = self.settings.rp;
+        let rp = PROBE_RADIUS;
         let atoms: &Vec<ScAtom> = &self.run.atoms;
-        let results: Vec<(usize, Vec<Dot>, usize)> = (0..atoms.len())
+        let results: Vec<(usize, Vec<Dot>)> = (0..atoms.len())
             .into_par_iter()
             .filter_map(|i| {
                 let a_i = &atoms[i];
                 let att = a_i.attention;
                 if matches!(att, Attention::Far) {
-                    return None;
-                }
-                if matches!(att, Attention::Consider) && a_i.buried_by_indices.is_empty() {
                     return None;
                 }
                 if !a_i.accessible {
@@ -291,7 +266,7 @@ impl SurfaceGenerator {
                 }
                 let mut lats: Vec<Vec3> = Vec::new();
                 let o = Vec3::zero();
-                let cs = geom_sample_arc(
+                geom_sample_arc(
                     o,
                     radius_i,
                     equatorial_vector,
@@ -315,12 +290,10 @@ impl SurfaceGenerator {
                     }
                     rad = rad.sqrt();
                     points.clear();
-                    let ps =
-                        geom_sample_circle(cen, rad, north_dir, a_i.density, &mut points).ok()?;
+                    geom_sample_circle(cen, rad, north_dir, a_i.density, &mut points).ok()?;
                     if points.is_empty() {
                         continue;
                     }
-                    let area = ps * cs;
                     for &point in &points {
                         let pcen = a_i.coor + ((point - a_i.coor) * (expanded_radius_i / radius_i));
                         // collision with same-molecule neighbors (skip first neighbor)
@@ -357,23 +330,18 @@ impl SurfaceGenerator {
                         dots.push(Dot {
                             coor: point,
                             outnml,
-                            area,
                             buried,
-                            kind: DotKind::Contact,
-                            atom_index: i,
                         });
                     }
                 }
                 if dots.is_empty() {
                     None
                 } else {
-                    let n = dots.len();
-                    Some((a_i.molecule, dots, n))
+                    Some((a_i.molecule, dots))
                 }
             })
             .collect();
-        for (mol, mut dots, n) in results {
-            self.run.results.dots.convex += n;
+        for (mol, mut dots) in results {
             self.run.dots[mol].append(&mut dots);
         }
         Ok(())
@@ -387,7 +355,7 @@ impl SurfaceGenerator {
         {
             let atom1 = &self.run.atoms[atom_index];
             atom1_coor = atom1.coor;
-            expanded_radius_i = atom1.radius + self.settings.rp;
+            expanded_radius_i = atom1.radius + PROBE_RADIUS;
             neighbor_indices = atom1.neighbor_indices.clone();
             ij_dist2_map = atom1.neighbors_atomi_dist2.clone();
         }
@@ -398,7 +366,7 @@ impl SurfaceGenerator {
             if atom2.atomi <= self.run.atoms[atom_index].atomi {
                 continue;
             }
-            let expanded_radius_j = atom2.radius + self.settings.rp;
+            let expanded_radius_j = atom2.radius + PROBE_RADIUS;
             let ij_dist2 = ij_dist2_map.get(&atom2.atomi).unwrap();
             let dist_ij = ij_dist2.sqrt();
 
@@ -431,7 +399,7 @@ impl SurfaceGenerator {
             let has_point_cusp = asymmetry_term.abs() < dist_ij;
             let atom2_att = self.run.atoms[j].attention;
             if !matches!(self.run.atoms[atom_index].attention, Attention::Far)
-                || (!matches!(atom2_att, Attention::Far) && self.settings.rp > 0.0)
+                || !matches!(atom2_att, Attention::Far)
             {
                 self.emit_reentrant_surface(
                     atom_index,
@@ -456,12 +424,12 @@ impl SurfaceGenerator {
     ) -> Result<(), SurfaceCalculatorError> {
         let atom1_coor = self.run.atoms[atom1_index].coor;
         let neighbor_indices = self.run.atoms[atom1_index].neighbor_indices.clone();
-        let expanded_radius_i = self.run.atoms[atom1_index].radius + self.settings.rp;
+        let expanded_radius_i = self.run.atoms[atom1_index].radius + PROBE_RADIUS;
         let atom1_dist2_map: &std::collections::HashMap<usize, f64> =
             &self.run.atoms[atom1_index].neighbors_atomi_dist2;
 
         let atom2 = &self.run.atoms[atom2_index];
-        let expanded_radius_j = atom2.radius + self.settings.rp;
+        let expanded_radius_j = atom2.radius + PROBE_RADIUS;
         let atom2_natom = atom2.atomi;
         let atom2_att = atom2.attention;
         let atom2_dist2_map: &std::collections::HashMap<usize, f64> = &atom2.neighbors_atomi_dist2;
@@ -471,7 +439,7 @@ impl SurfaceGenerator {
             if atom3.atomi <= atom2_natom {
                 continue;
             }
-            let expanded_radius_k = atom3.radius + self.settings.rp;
+            let expanded_radius_k = atom3.radius + PROBE_RADIUS;
 
             // atom1 neighbor atom3 is not necessarily atom2 neighbor
             match atom2_dist2_map.get(&atom3.atomi) {
@@ -565,13 +533,13 @@ impl SurfaceGenerator {
             self.run.atoms[atom1_index].density,
             self.run.atoms[atom2_index].density,
         );
-        let expanded_radius_i = self.run.atoms[atom1_index].radius + self.settings.rp;
-        let expanded_radius_j = self.run.atoms[atom2_index].radius + self.settings.rp;
+        let expanded_radius_i = self.run.atoms[atom1_index].radius + PROBE_RADIUS;
+        let expanded_radius_j = self.run.atoms[atom2_index].radius + PROBE_RADIUS;
         let roll_circle_radius_i =
             ring_radius * self.run.atoms[atom1_index].radius / expanded_radius_i;
         let roll_circle_radius_j =
             ring_radius * self.run.atoms[atom2_index].radius / expanded_radius_j;
-        let mut belt_radius = ring_radius - self.settings.rp;
+        let mut belt_radius = ring_radius - PROBE_RADIUS;
         if belt_radius <= 0.0 {
             belt_radius = 0.0;
         }
@@ -579,7 +547,7 @@ impl SurfaceGenerator {
         let eccentricity = mean_radius / ring_radius;
         let effective_density = eccentricity * eccentricity * density;
         let mut subs: Vec<Vec3> = Vec::new();
-        let ts = geom_sample_circle(
+        geom_sample_circle(
             midplane_center,
             ring_radius,
             unit_axis,
@@ -597,7 +565,7 @@ impl SurfaceGenerator {
                 if neighbor.atomi == atom2_atomi {
                     continue;
                 }
-                let expanded_neighbor_radius = (neighbor.radius + self.settings.rp).powi(2);
+                let expanded_neighbor_radius = (neighbor.radius + PROBE_RADIUS).powi(2);
                 let d2 = ring_point.distance_squared(neighbor.coor);
                 if d2 < expanded_neighbor_radius {
                     tooclose = true;
@@ -613,12 +581,12 @@ impl SurfaceGenerator {
             let vec_pj = (self.run.atoms[atom2_index].coor - ring_point) / expanded_radius_j;
             let mut toroid_axis = vec_pi.cross(vec_pj);
             toroid_axis.normalize();
-            let mut cusp_term = self.settings.rp * self.settings.rp - ring_radius * ring_radius;
+            let mut cusp_term = PROBE_RADIUS * PROBE_RADIUS - ring_radius * ring_radius;
             let has_cusp_point = cusp_term > 0.0 && has_point_cusp;
             let (arc_end_i, arc_end_j) = if has_cusp_point {
                 cusp_term = cusp_term.sqrt();
                 let qij = midplane_center - unit_axis * cusp_term;
-                (((qij - ring_point) / self.settings.rp), Vec3::zero())
+                (((qij - ring_point) / PROBE_RADIUS), Vec3::zero())
             } else {
                 let mut pq = vec_pi + vec_pj;
                 pq.normalize();
@@ -634,9 +602,9 @@ impl SurfaceGenerator {
             }
             if !matches!(self.run.atoms[atom1_index].attention, Attention::Far) {
                 let mut points: Vec<Vec3> = Vec::new();
-                let ps = geom_sample_arc(
+                geom_sample_arc(
                     ring_point,
-                    self.settings.rp,
+                    PROBE_RADIUS,
                     toroid_axis,
                     density,
                     vec_pi,
@@ -644,51 +612,26 @@ impl SurfaceGenerator {
                     &mut points,
                 )?;
                 for &point in &points {
-                    let area = ps * ts * distance_point_to_line(midplane_center, unit_axis, point)
-                        / ring_radius;
-                    self.run.results.dots.toroidal += 1;
                     let molecule = self.run.atoms[atom1_index].molecule;
-                    self.add_dot(
-                        molecule,
-                        DotKind::Reentrant,
-                        point,
-                        area,
-                        ring_point,
-                        atom1_index,
-                    );
+                    self.add_dot(molecule, point, ring_point);
                 }
             }
             if matches!(self.run.atoms[atom2_index].attention, Attention::Far) {
                 continue;
             }
             let mut points: Vec<Vec3> = Vec::new();
-            let ps = geom_sample_arc(
+            geom_sample_arc(
                 ring_point,
-                self.settings.rp,
+                PROBE_RADIUS,
                 toroid_axis,
                 density,
                 arc_end_j,
                 vec_pj,
                 &mut points,
             )?;
-            self.run.results.dots.toroidal += points.len();
-            let point_areas: Vec<f64> = points
-                .par_iter()
-                .map(|point| {
-                    ps * ts * distance_point_to_line(midplane_center, unit_axis, *point)
-                        / ring_radius
-                })
-                .collect();
-            for (point, area) in points.iter().zip(point_areas.iter()) {
+            for point in points {
                 let molecule2 = self.run.atoms[atom2_index].molecule;
-                self.add_dot(
-                    molecule2,
-                    DotKind::Reentrant,
-                    *point,
-                    *area,
-                    ring_point,
-                    atom2_index,
-                );
+                self.add_dot(molecule2, point, ring_point);
             }
         }
         Ok(())
@@ -709,7 +652,7 @@ impl SurfaceGenerator {
                 continue;
             }
             if probe_center.distance_squared(neighbor.coor)
-                <= (neighbor.radius + self.settings.rp).powi(2)
+                <= (neighbor.radius + PROBE_RADIUS).powi(2)
             {
                 return true;
             }
@@ -718,7 +661,7 @@ impl SurfaceGenerator {
     }
 
     fn generate_concave_surface(&mut self) -> Result<(), SurfaceCalculatorError> {
-        let rp = self.settings.rp;
+        let rp = PROBE_RADIUS;
         let rp2 = rp * rp;
         let atoms: &Vec<ScAtom> = &self.run.atoms;
         let probes: &Vec<Probe> = &self.run.probes;
@@ -731,17 +674,11 @@ impl SurfaceGenerator {
                 lowprobs.push(idx);
             }
         }
-        let results: Vec<(Vec<Dot>, Vec<Dot>, usize)> = (0..probes.len())
+        let results: Vec<(Vec<Dot>, Vec<Dot>)> = (0..probes.len())
             .into_par_iter()
             .filter_map(|i| {
                 let probe = &probes[i];
                 let aidx = probe.atom_indices;
-                if matches!(atoms[aidx[0]].attention, Attention::Consider)
-                    && matches!(atoms[aidx[1]].attention, Attention::Consider)
-                    && matches!(atoms[aidx[2]].attention, Attention::Consider)
-                {
-                    return None;
-                }
                 let pijk = probe.point;
                 let uijk = probe.alt;
                 let hijk = probe.height;
@@ -781,8 +718,7 @@ impl SurfaceGenerator {
                 arc_axis.normalize();
                 let mut lats: Vec<Vec3> = Vec::new();
                 let o = Vec3::zero();
-                let cs =
-                    geom_sample_arc(o, rp, arc_axis, density, vp[mm], south_dir, &mut lats).ok()?;
+                geom_sample_arc(o, rp, arc_axis, density, vp[mm], south_dir, &mut lats).ok()?;
                 if lats.is_empty() {
                     return None;
                 }
@@ -798,11 +734,10 @@ impl SurfaceGenerator {
                     }
                     rad = rad.sqrt();
                     points.clear();
-                    let ps = geom_sample_circle(cen, rad, south_dir, density, &mut points).ok()?;
+                    geom_sample_circle(cen, rad, south_dir, density, &mut points).ok()?;
                     if points.is_empty() {
                         continue;
                     }
-                    let area = ps * cs;
                     for &point in &points {
                         let mut bail = false;
                         for v in &vectors {
@@ -862,10 +797,7 @@ impl SurfaceGenerator {
                         let dot = Dot {
                             coor: point,
                             outnml,
-                            area,
                             buried,
-                            kind: DotKind::Cavity,
-                            atom_index,
                         };
                         if molecule == 0 {
                             d0.push(dot);
@@ -874,36 +806,25 @@ impl SurfaceGenerator {
                         }
                     }
                 }
-                let n = d0.len() + d1.len();
-                if n == 0 { None } else { Some((d0, d1, n)) }
+                if d0.is_empty() && d1.is_empty() {
+                    None
+                } else {
+                    Some((d0, d1))
+                }
             })
             .collect();
-        for (mut d0, mut d1, n) in results {
-            self.run.results.dots.concave += n;
+        for (mut d0, mut d1) in results {
             self.run.dots[0].append(&mut d0);
             self.run.dots[1].append(&mut d1);
         }
         Ok(())
     }
 
-    fn add_dot(
-        &mut self,
-        molecule: usize,
-        kind: DotKind,
-        coor: Vec3,
-        area: f64,
-        pcen: Vec3,
-        atom_index: usize,
-    ) {
-        let atom = &self.run.atoms[atom_index];
-        let outnml = if self.settings.rp <= 0.0 {
-            coor - atom.coor
-        } else {
-            (pcen - coor) / self.settings.rp
-        };
+    fn add_dot(&mut self, molecule: usize, coor: Vec3, pcen: Vec3) {
+        let outnml = (pcen - coor) / PROBE_RADIUS;
         let buried = self.run.atoms.iter().any(|b| {
             if b.molecule != molecule {
-                let erl = b.radius + self.settings.rp;
+                let erl = b.radius + PROBE_RADIUS;
                 let d = pcen.distance_squared(b.coor);
                 d <= erl * erl
             } else {
@@ -913,23 +834,10 @@ impl SurfaceGenerator {
         let dot = Dot {
             coor,
             outnml,
-            area,
             buried,
-            kind,
-            atom_index,
         };
         self.run.dots[molecule].push(dot);
     }
-}
-
-fn distance_point_to_line(cen: Vec3, axis: Vec3, pnt: Vec3) -> f64 {
-    let vec = pnt - cen;
-    let dt = vec.dot(axis);
-    let mut d2 = vec.magnitude_squared() - dt * dt;
-    if d2 < 0.0 {
-        d2 = 0.0;
-    }
-    d2.sqrt()
 }
 
 // Pure geometry helpers for use in parallel closures
@@ -941,10 +849,10 @@ fn geom_sample_arc_segment(
     angle: f64,
     density: f64,
     points: &mut Vec<Vec3>,
-) -> Result<f64, SurfaceCalculatorError> {
+) -> Result<(), SurfaceCalculatorError> {
     if rad <= 0.0 {
         points.clear();
-        return Ok(0.0);
+        return Ok(());
     }
     let delta = 1.0 / (density.sqrt() * rad);
     if !delta.is_finite() || delta <= 0.0 || !angle.is_finite() || angle < 0.0 {
@@ -961,12 +869,7 @@ fn geom_sample_arc_segment(
         let s = rad * a.sin();
         points.push(cen + x * c + y * s);
     }
-    let ps = if points.is_empty() {
-        0.0
-    } else {
-        rad * angle / (points.len() as f64)
-    };
-    Ok(ps)
+    Ok(())
 }
 
 fn geom_sample_arc(
@@ -977,7 +880,7 @@ fn geom_sample_arc(
     x: Vec3,
     v: Vec3,
     points: &mut Vec<Vec3>,
-) -> Result<f64, SurfaceCalculatorError> {
+) -> Result<(), SurfaceCalculatorError> {
     let y = axis.cross(x);
     let dt1 = v.dot(x);
     let dt2 = v.dot(y);
@@ -994,7 +897,7 @@ fn geom_sample_circle(
     axis: Vec3,
     density: f64,
     points: &mut Vec<Vec3>,
-) -> Result<f64, SurfaceCalculatorError> {
+) -> Result<(), SurfaceCalculatorError> {
     let mut v1 = Vec3::new(
         axis.y * axis.y + axis.z * axis.z,
         axis.x * axis.x + axis.z * axis.z,

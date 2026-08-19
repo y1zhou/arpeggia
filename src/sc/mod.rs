@@ -7,7 +7,6 @@
 
 pub mod atomic_radii;
 pub mod sc_calculator;
-pub mod settings;
 pub mod surface_generator;
 pub mod types;
 pub mod vector3;
@@ -16,6 +15,12 @@ use crate::structure::{parse_groups, prepare_structure_with_chains};
 use pdbtbx::PDB;
 use sc_calculator::ScCalculator;
 use std::collections::HashSet;
+
+const PROBE_RADIUS: f64 = 1.7;
+const DOT_DENSITY: f64 = 15.0;
+const PERIPHERAL_BAND: f64 = 1.5;
+const SEPARATION_CUTOFF: f64 = 8.0;
+const GAUSSIAN_WEIGHT: f64 = 0.5;
 
 pub use surface_generator::SurfaceCalculatorError;
 
@@ -102,7 +107,6 @@ pub fn get_sc_details(
         group1_chains.union(&group2_chains).cloned().collect();
     let pdb_filtered = prepare_structure_with_chains(&pdb, model_num, true, &all_selected_chains);
 
-    // Initialize the calculator with thread settings
     let mut calc = ScCalculator::new();
 
     // Load atoms from PDB into the calculator
