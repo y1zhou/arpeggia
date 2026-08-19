@@ -77,26 +77,6 @@ impl<'a> InteractionComplex<'a> {
         protonation: ProtonationMode,
         ph: f64,
     ) -> crate::ArpeggiaResult<(Self, Vec<String>)> {
-        Self::build(
-            model,
-            metadata,
-            groups,
-            vdw_comp_factor,
-            interacting_threshold,
-            protonation,
-            ph,
-        )
-    }
-
-    fn build(
-        model: &'a PDB,
-        metadata: Option<&'a StructureMetadata>,
-        groups: &'a str,
-        vdw_comp_factor: f64,
-        interacting_threshold: f64,
-        protonation: ProtonationMode,
-        ph: f64,
-    ) -> crate::ArpeggiaResult<(Self, Vec<String>)> {
         // Parse all chains and input chain groups
         let all_chains: HashSet<String> = model.par_chains().map(|c| c.id().to_string()).collect();
         let (ligand, receptor) = parse_groups(&all_chains, groups)?;

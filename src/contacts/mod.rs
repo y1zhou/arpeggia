@@ -24,7 +24,7 @@ pub use vdw::find_vdw_contact;
 use pdbtbx::*;
 use polars::prelude::*;
 use std::collections::HashMap;
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// Analyze contacts with explicit connectivity and histidine-protonation policy.
 #[allow(clippy::too_many_arguments)]
@@ -78,7 +78,7 @@ pub fn analyze_contacts(
         ));
     }
     Ok(crate::Analysis::new(
-        contacts_from_complex(complex, Vec::new()),
+        contacts_from_complex(complex),
         warnings,
     ))
 }
@@ -161,16 +161,7 @@ pub fn get_contacts_with_metadata(
     )
 }
 
-fn contacts_from_complex(
-    i_complex: InteractionComplex<'_>,
-    build_ring_err: Vec<String>,
-) -> DataFrame {
-    if !build_ring_err.is_empty() {
-        for e in &build_ring_err {
-            warn!("{e}");
-        }
-    }
-
+fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> DataFrame {
     // Information on the sequence of the chains in the model
     debug!(
         "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",

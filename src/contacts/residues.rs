@@ -53,14 +53,6 @@ impl Plane {
         rad.to_degrees()
     }
 
-    /// Calculate the angle between the plane normal and the vector pointing from
-    /// the plane center to the point (tuple).
-    #[allow(dead_code)]
-    pub fn point_angle(&self, point: &(f64, f64, f64)) -> f64 {
-        let atom_point = na::Vector3::new(point.0, point.1, point.2);
-        self.point_vec_angle(&atom_point)
-    }
-
     /// Calculate the angle between two planes
     pub fn dihedral(&self, plane: &Plane) -> f64 {
         let mut rad =
