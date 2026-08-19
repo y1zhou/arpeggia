@@ -8,13 +8,13 @@ use std::collections::HashSet;
 /// Common residue names for solvent molecules.
 const SOLVENT_RESIDUES: &[&str] = &["HOH", "H2O", "D2O", "WAT", "TIP", "TIP3", "TIP4", "SPC"];
 
-/// Common residue names for ions and terminal caps.
+/// Common residue names for ions.
 const ION_RESIDUES: &[&str] = &[
     "NA", "CL", "K", "CA", "MG", "ZN", "FE", "MN", "CU", "CO", "NI", "CD", "SO4", "PO4", "NO3",
-    "ACE", "NH2",
 ];
+const TERMINAL_CAPS: &[&str] = &["ACE", "NH2"];
 
-/// Open an atomic data file and remove unsupported residues.
+/// Open an atomic data file and retain supported residues and terminal caps.
 pub fn load_model(input_file: &str) -> ArpeggiaResult<Analysis<PDB>> {
     if !std::path::Path::new(input_file).try_exists()? {
         return Err(ArpeggiaError::Io(std::io::Error::new(
@@ -47,7 +47,13 @@ pub fn load_model(input_file: &str) -> ArpeggiaResult<Analysis<PDB>> {
         ));
     }
 
-    pdb.remove_residues_by(|res| res.resn().is_none());
+    pdb.remove_residues_by(|residue| {
+        let name = residue.name().unwrap_or("");
+        residue.resn().is_none()
+            && !TERMINAL_CAPS
+                .iter()
+                .any(|cap| name.eq_ignore_ascii_case(cap))
+    });
 
     let mut warnings = diagnostics
         .into_iter()
@@ -438,5 +444,25 @@ END                                                                             
         let final_atom_count = pdb.atom_count();
 
         assert_eq!(initial_atom_count, final_atom_count);
+    }
+
+    #[test]
+    fn terminal_caps_are_retained_as_surface_occluders() {
+        let input =
+            b"HETATM    1  CH3 ACE A   0       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  N   ALA A   1       2.000   0.000   0.000  1.00 20.00           N  \n\
+HETATM    3  N   NH2 A   2       4.000   0.000   0.000  1.00 20.00           N  \n\
+END                                                                             \n";
+        let path =
+            std::env::temp_dir().join(format!("arpeggia-terminal-caps-{}.pdb", std::process::id()));
+        std::fs::write(&path, input).unwrap();
+        let pdb = load_model(path.to_str().unwrap()).unwrap().value;
+        std::fs::remove_file(path).unwrap();
+
+        assert_eq!(
+            pdb.residues().filter_map(Residue::name).collect::<Vec<_>>(),
+            ["ACE", "ALA", "NH2"]
+        );
+        assert_eq!(prepare_structure(&pdb, 0, true, "").residue_count(), 3);
     }
 }

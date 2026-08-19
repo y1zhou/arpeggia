@@ -273,25 +273,16 @@ fn calculate_per_atom_sap_records(
                         atom_sasa_map.get(&(y.atom().serial_number() as u64))?;
                     let neighbor_res_hydrophobicity = get_hydrophobicity(neighbor_resn)?;
                     let max_res_asa = get_sc_max_asa(neighbor_resn)?;
-                    Some(
-                        neighbor_res_hydrophobicity
-                            * (neighbor_atom_sasa / max_res_asa).clamp(0.0, 1.0),
-                    )
+                    Some(neighbor_res_hydrophobicity * (neighbor_atom_sasa / max_res_asa))
                 })
                 .sum::<f32>();
             (x_atomi, atom_sap_score)
         })
         .collect();
 
-    let sidechain_atomi: HashSet<u64> = pdb_all_atoms
-        .atoms_with_hierarchy()
-        .filter(|h| is_sap_sidechain(h.residue().name().unwrap_or(""), h.atom().name()))
-        .map(|h| h.atom().serial_number() as u64)
-        .collect();
-
     let mut records = atom_sasa_records
         .into_iter()
-        .filter(|record| sidechain_atomi.contains(&record.atomi))
+        .filter(|record| is_sap_sidechain(&record.resn, &record.atomn))
         .map(|record| AtomSapRecord {
             sap_score: sap_scores_map.get(&record.atomi).copied().unwrap_or(0.0),
             chain: record.chain,
@@ -333,12 +324,7 @@ fn append_prepared_input_warnings(
         .map(str::trim)
         .filter(|chain| !chain.is_empty())
         .collect::<HashSet<_>>();
-    let Some(model) = (if model_num == 0 {
-        pdb.models().next()
-    } else {
-        pdb.models()
-            .find(|model| model.serial_number() == model_num)
-    }) else {
+    let Ok(model) = crate::structure::selected_model(pdb, model_num) else {
         return;
     };
     let selected_chains = model
@@ -359,26 +345,12 @@ fn append_prepared_input_warnings(
     let mut unresolved = 0;
     let mut inconsistent = 0;
     for residue in selected_chains.iter().flat_map(|chain| chain.residues()) {
-        let name = residue.name().unwrap_or("");
-        if !crate::contacts::ionic::is_histidine(name) {
-            continue;
-        }
-        let hd1 = residue.atoms().any(|atom| atom.name() == "HD1");
-        let he2 = residue.atoms().any(|atom| atom.name() == "HE2");
-        match name {
-            "HIS" if !hd1 && !he2 => unresolved += 1,
-            "HID" | "HSD" if !hd1 || he2 => inconsistent += 1,
-            "HIE" | "HSE" if hd1 || !he2 => inconsistent += 1,
-            "HIP" | "HSP"
-                if !hd1
-                    || !he2
-                    || residue
-                        .atoms()
-                        .any(|atom| atom.element() == Some(&Element::P)) =>
-            {
+        match crate::contacts::ionic::histidine_preparation_issue(residue) {
+            Some(crate::contacts::ionic::HistidinePreparationIssue::Unresolved) => unresolved += 1,
+            Some(crate::contacts::ionic::HistidinePreparationIssue::Inconsistent) => {
                 inconsistent += 1;
             }
-            _ => {}
+            None => {}
         }
     }
     if unresolved > 0 {
@@ -539,7 +511,7 @@ fn calculate_per_residue_sap_records(
                 relative_sc_sasa: if max_sc_asa == 0.0 {
                     0.0
                 } else {
-                    (sc_sasa / max_sc_asa).clamp(0.0, 1.0)
+                    sc_sasa / max_sc_asa
                 },
             }
         })
@@ -920,6 +892,43 @@ END                                                                             
                 "wrong SAP for {key:?}"
             );
         }
+    }
+
+    #[test]
+    fn sap_exposure_ratio_is_not_silently_clamped() {
+        let input =
+            b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let residue = get_per_residue_sap_score(&pdb, 1.1, 100, 0, 5.0, "")
+            .unwrap()
+            .value;
+
+        assert!(
+            residue
+                .column("relative_sc_sasa")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                > 1.0
+        );
+        assert!(
+            residue
+                .column("sap_score")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                > get_hydrophobicity("ALA").unwrap()
+        );
     }
 
     #[test]

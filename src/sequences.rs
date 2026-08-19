@@ -37,6 +37,7 @@ pub fn get_sequences(pdb: &PDB, model_num: usize) -> crate::ArpeggiaResult<Vec<(
             let sequence = chain.residues().filter_map(ResidueExt::resn).collect();
             (chain.id().to_string(), sequence)
         })
+        .filter(|(_, sequence): &(String, String)| !sequence.is_empty())
         .collect())
 }
 
@@ -73,6 +74,22 @@ END                                                                             
             .unwrap()
             .0;
         assert_eq!(get_sequences(&pdb, 0).unwrap(), [("A".into(), "MG".into())]);
+    }
+
+    #[test]
+    fn observed_sequence_omits_nonpolymer_only_chains() {
+        let input =
+            b"ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+HETATM    2  O   HOH W   1       2.000   0.000   0.000  1.00 20.00           O  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+
+        assert_eq!(get_sequences(&pdb, 0).unwrap(), [("A".into(), "A".into())]);
     }
 
     #[test]
