@@ -610,6 +610,92 @@ END                                                                             
     }
 
     #[test]
+    fn histidine_tautomers_have_specific_donors_and_acceptors() {
+        for (residue, donor, hydrogen) in [
+            ("HID", "ND1", "HD1"),
+            ("HSD", "ND1", "HD1"),
+            ("HIE", "NE2", "HE2"),
+            ("HSE", "NE2", "HE2"),
+            ("HIP", "ND1", "HD1"),
+            ("HSP", "ND1", "HD1"),
+        ] {
+            let donor_input = format!(
+                "ATOM      1 {donor:>4} {residue} A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+                 ATOM      2 {hydrogen:>4} {residue} A   1       1.000   0.000   0.000  1.00 20.00           H  \n\
+                 ATOM      3  OD1 ASN B   1       2.500   0.000   0.000  1.00 20.00           O  \n\
+                 END                                                                             \n"
+            );
+            let (pdb, _) = ReadOptions::default()
+                .set_format(Format::Pdb)
+                .set_only_atomic_coords(true)
+                .read_raw(BufReader::new(donor_input.as_bytes()))
+                .unwrap();
+            let interactions = default_contacts(&pdb, "A/B", 0.1, 6.5);
+            assert!(
+                interactions
+                    .column("interaction")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .iter()
+                    .flatten()
+                    .any(|value| value == "HydrogenBond"),
+                "{residue} {donor} should donate"
+            );
+
+            let acceptor_input = format!(
+                "ATOM      1  NE2 GLN A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+                 ATOM      2 HE21 GLN A   1       1.000   0.000   0.000  1.00 20.00           H  \n\
+                 ATOM      3 {donor:>4} {residue} B   1       2.500   0.000   0.000  1.00 20.00           N  \n\
+                 END                                                                             \n"
+            );
+            let (pdb, _) = ReadOptions::default()
+                .set_format(Format::Pdb)
+                .set_only_atomic_coords(true)
+                .read_raw(BufReader::new(acceptor_input.as_bytes()))
+                .unwrap();
+            let interactions = default_contacts(&pdb, "A/B", 0.1, 6.5);
+            assert!(
+                !interactions
+                    .column("interaction")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .iter()
+                    .flatten()
+                    .any(|value| value == "HydrogenBond"),
+                "{residue} {donor} should not accept"
+            );
+        }
+    }
+
+    #[test]
+    fn explicit_his_ring_hydrogen_selects_the_tautomer() {
+        let input =
+            b"ATOM      1  NZ  LYS A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      2  HZ1 LYS A   1       1.000   0.000   0.000  1.00 20.00           H  \n\
+ATOM      3  ND1 HIS B   1       2.500   0.000   0.000  1.00 20.00           N  \n\
+ATOM      4  HD1 HIS B   1       3.500   0.000   0.000  1.00 20.00           H  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+        let interactions = default_contacts(&pdb, "A/B", 0.1, 6.5);
+        assert!(
+            !interactions
+                .column("interaction")
+                .unwrap()
+                .str()
+                .unwrap()
+                .iter()
+                .flatten()
+                .any(|value| value == "HydrogenBond")
+        );
+    }
+
+    #[test]
     fn explicit_connectivity_can_associate_a_noncanonical_donor_hydrogen() {
         let input = b"ATOM      1  N   LYS A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
 ATOM      2  Q1  LYS A   1       1.000   0.000   0.000  1.00 20.00           H  \n\

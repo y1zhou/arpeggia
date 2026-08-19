@@ -156,10 +156,12 @@ fn is_donor_acceptor_pair<'a>(
     let e1_atom = entity1.atom().name();
     let e2_atom = entity2.atom().name();
 
-    if is_hydrogen_donor(e1_conformer, e1_atom) && is_hydrogen_acceptor(e2_conformer, e2_atom) {
+    if is_hydrogen_donor(e1_conformer, e1_atom, entity1.residue())
+        && is_hydrogen_acceptor(e2_conformer, e2_atom, entity2.residue())
+    {
         Some((entity1, entity2))
-    } else if is_hydrogen_donor(e2_conformer, e2_atom)
-        && is_hydrogen_acceptor(e1_conformer, e1_atom)
+    } else if is_hydrogen_donor(e2_conformer, e2_atom, entity2.residue())
+        && is_hydrogen_acceptor(e1_conformer, e1_atom, entity1.residue())
     {
         Some((entity2, entity1))
     } else {
@@ -168,11 +170,19 @@ fn is_donor_acceptor_pair<'a>(
 }
 
 /// Determine if the atom in the residue is a hydrogen acceptor
-fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
+fn is_hydrogen_acceptor(res_name: &str, atom_name: &str, residue: &Residue) -> bool {
     // all the carbonyl oxygens in the main chain and on the terminals
     let oxygens = HashSet::from(["O", "OXT"]);
     if oxygens.contains(atom_name) && res_name != "HOH" {
         return true;
+    }
+    if crate::contacts::ionic::is_histidine(res_name) && matches!(atom_name, "ND1" | "NE2") {
+        return match histidine_tautomer(res_name, residue) {
+            HistidineTautomer::Delta => atom_name == "NE2",
+            HistidineTautomer::Epsilon => atom_name == "ND1",
+            HistidineTautomer::Both => false,
+            HistidineTautomer::Unresolved => true,
+        };
     }
     matches!(
         (res_name, atom_name),
@@ -181,10 +191,6 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
             | ("ASP", "OD1" | "OD2")
             | ("GLN", "OE1")
             | ("GLU", "OE1" | "OE2")
-            | (
-                "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP",
-                "ND1" | "NE2"
-            )
             | ("SER", "OG")
             | ("THR", "OG1")
             | ("TYR", "OH")
@@ -194,20 +200,23 @@ fn is_hydrogen_acceptor(res_name: &str, atom_name: &str) -> bool {
 }
 
 /// Determine if the atom in the residue is a hydrogen donor
-fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
+fn is_hydrogen_donor(res_name: &str, atom_name: &str, residue: &Residue) -> bool {
     // All amide niteogens in the main chain except proline
     if atom_name == "N" && res_name != "PRO" {
         return true;
+    }
+    if crate::contacts::ionic::is_histidine(res_name) && matches!(atom_name, "ND1" | "NE2") {
+        return match histidine_tautomer(res_name, residue) {
+            HistidineTautomer::Delta => atom_name == "ND1",
+            HistidineTautomer::Epsilon => atom_name == "NE2",
+            HistidineTautomer::Both | HistidineTautomer::Unresolved => true,
+        };
     }
     matches!(
         (res_name, atom_name),
         ("ARG", "NE" | "NH1" | "NH2")
             | ("ASN", "ND2")
             | ("GLN", "NE2")
-            | (
-                "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP",
-                "ND1" | "NE2"
-            )
             | ("LYS", "NZ")
             | ("SER", "OG")
             | ("THR", "OG1")
@@ -215,6 +224,32 @@ fn is_hydrogen_donor(res_name: &str, atom_name: &str) -> bool {
             | ("TYR", "OH")
             | ("CYS", "SG") // 10.1002/prot.22327
     )
+}
+
+#[derive(Clone, Copy)]
+enum HistidineTautomer {
+    Delta,
+    Epsilon,
+    Both,
+    Unresolved,
+}
+
+fn histidine_tautomer(res_name: &str, residue: &Residue) -> HistidineTautomer {
+    match res_name {
+        "HID" | "HSD" => HistidineTautomer::Delta,
+        "HIE" | "HSE" => HistidineTautomer::Epsilon,
+        "HIP" | "HSP" => HistidineTautomer::Both,
+        _ => {
+            let hd1 = residue.atoms().any(|atom| atom.name() == "HD1");
+            let he2 = residue.atoms().any(|atom| atom.name() == "HE2");
+            match (hd1, he2) {
+                (true, false) => HistidineTautomer::Delta,
+                (false, true) => HistidineTautomer::Epsilon,
+                (true, true) => HistidineTautomer::Both,
+                (false, false) => HistidineTautomer::Unresolved,
+            }
+        }
+    }
 }
 
 fn is_hydrogen_for_donor(res_name: &str, donor_name: &str, hydrogen_name: &str) -> bool {
@@ -249,7 +284,7 @@ pub(crate) fn count_donors_without_explicit_hydrogen(
         .filter(|entity| {
             let residue_name = entity.conformer().name();
             let donor_name = entity.atom().name();
-            is_hydrogen_donor(residue_name, donor_name)
+            is_hydrogen_donor(residue_name, donor_name, entity.residue())
                 && !entity.residue().atoms().any(|atom| {
                     atom.element() == Some(&Element::H)
                         && (is_hydrogen_for_donor(residue_name, donor_name, atom.name())
@@ -289,9 +324,12 @@ fn is_weak_donor_acceptor_pair<'a>(
     let e1_atom = entity1.atom().name();
     let e2_atom = entity2.atom().name();
 
-    if is_weak_hydrogen_donor(entity1.atom()) && is_hydrogen_acceptor(e2_conformer, e2_atom) {
+    if is_weak_hydrogen_donor(entity1.atom())
+        && is_hydrogen_acceptor(e2_conformer, e2_atom, entity2.residue())
+    {
         Some((entity1, entity2))
-    } else if is_weak_hydrogen_donor(entity2.atom()) && is_hydrogen_acceptor(e1_conformer, e1_atom)
+    } else if is_weak_hydrogen_donor(entity2.atom())
+        && is_hydrogen_acceptor(e1_conformer, e1_atom, entity1.residue())
     {
         Some((entity2, entity1))
     } else {

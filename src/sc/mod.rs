@@ -150,6 +150,26 @@ mod tests {
     }
 
     #[test]
+    fn histidine_aliases_use_canonical_sc_radii() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let input = std::fs::read_to_string(format!("{root}/test-data/6bft.pdb")).unwrap();
+        let alias_input = input.replace(" HIS L", " HID L");
+        let canonical = load_model(&format!("{root}/test-data/6bft.pdb"))
+            .unwrap()
+            .value;
+        let alias = pdbtbx::ReadOptions::default()
+            .set_format(pdbtbx::Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(alias_input.as_bytes()))
+            .unwrap()
+            .0;
+
+        let canonical = get_sc_details(&canonical, "H/L", 0).unwrap().value;
+        let alias = get_sc_details(&alias, "H/L", 0).unwrap().value;
+        assert_eq!(alias, canonical);
+    }
+
+    #[test]
     fn sc_rejects_overlapping_groups() {
         let pdb = load_multi_chain();
         assert!(matches!(

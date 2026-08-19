@@ -92,6 +92,11 @@ impl SurfaceGenerator {
     }
 
     pub fn get_atom_radius(&self, resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
+        let resn = if crate::contacts::ionic::is_histidine(resn) {
+            "HIS"
+        } else {
+            resn
+        };
         // First try the embedded radii table
         for radius in self.radii {
             if !wildcard_match(resn, radius.residue) {
