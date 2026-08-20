@@ -225,6 +225,26 @@ mod tests {
     }
 
     #[test]
+    fn trimmed_empty_interface_returns_an_error() {
+        let input =
+            b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  CB  ALA B   1       7.500   0.000   0.000  1.00 20.00           C  \n\
+END                                                                             \n";
+        let pdb = pdbtbx::ReadOptions::default()
+            .set_format(pdbtbx::Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+
+        assert!(matches!(
+            get_sc(&pdb, "A/B", 0),
+            Err(crate::ArpeggiaError::Calculation(message))
+                if message.contains("interface")
+        ));
+    }
+
+    #[test]
     fn missing_radius_is_a_public_calculation_error() {
         let input =
             b"ATOM      1  QQ  ALA A   1       0.000   0.000   0.000  1.00 20.00          RN  \n\

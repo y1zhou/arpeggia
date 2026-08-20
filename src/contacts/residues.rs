@@ -166,6 +166,9 @@ impl ResidueExt for Residue {
                 .collect(),
             "TRP" => self
                 .par_atoms()
+                // [WARNING] The fused indole rings share one plane, but this
+                // combined center differs from separate five- and six-member
+                // ring centers near aromatic-contact distance thresholds.
                 .filter(|atom| {
                     matches!(
                         atom.name(),

@@ -149,6 +149,9 @@ impl ScCalculator {
         for i in 0..2 {
             self.trim_peripheral_band(i);
         }
+        if self.base.run.trimmed_dots.iter().any(Vec::is_empty) {
+            return Err(SurfaceCalculatorError::NoInterface);
+        }
 
         self.calc_neighbor_score(0, 1);
         self.calc_neighbor_score(1, 0);

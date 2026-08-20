@@ -479,7 +479,7 @@ fn sap_score(
 ///     num_threads (int, optional): Number of threads for parallel calculations (0 for auto). Defaults to 0.
 ///
 /// Returns:
-///     float: The shape complementarity score (0-1).
+///     float: The shape complementarity score (approximately -1 to 1).
 ///
 /// Example:
 ///     >>> import arpeggia
