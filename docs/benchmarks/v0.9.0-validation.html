@@ -16,6 +16,7 @@ figure { margin:0; border:1px solid #8887; border-radius:.5rem; padding:.5rem; }
 figcaption { font-weight:650; } svg { width:100%; height:auto; }
 .axis { stroke:#888; } .identity { stroke:#d14; stroke-dasharray:6 5; }
 circle { fill:#2676c9; opacity:.72; } code { background:#8882; padding:.1rem .3rem; border-radius:.25rem; }
+pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
 .note { border-left:4px solid #d9a200; padding:.6rem 1rem; background:#d9a20018; }
 @media(max-width:800px) { .cards,.plots { grid-template-columns:1fr; } table { font-size:.8rem; } }
 </style></head><body>
@@ -125,6 +126,37 @@ circle { fill:#2676c9; opacity:.72; } code { background:#8882; padding:.1rem .3r
 </tbody></table>
 <p>The stock CLI discrepancy is input preparation: its name-based hydrogen filter also removes the tyrosine oxygen atom named <code>OH</code>. With the same atom population, the core scores match. The v0.9.0 cleanup removed write-only surface statistics and preserved the exact regression above.</p>
 
+<h2>Calculation-loop performance</h2>
+<table><thead><tr><th>Workload</th><th>Version</th><th>Median wall time</th><th>Median peak RSS</th><th>Output check</th></tr></thead><tbody>
+<tr><th>6BFT H/L SC</th><td>pre-optimization</td><td>0.25 s</td><td>34,620 KB</td><td rowspan="2">0.725407 exact</td></tr>
+<tr><th>6BFT H/L SC</th><td>v0.9.0 compact neighbors</td><td>0.23 s</td><td>29,780 KB</td></tr>
+<tr><th>2EAB A/B SC</th><td>pre-optimization</td><td>0.48 s</td><td>88,804 KB</td><td rowspan="2">0.3778 CLI value exact</td></tr>
+<tr><th>2EAB A/B SC</th><td>v0.9.0 compact neighbors</td><td>0.36 s</td><td>68,696 KB</td></tr>
+<tr><th>2EAB A/B contacts</th><td>pre-optimization</td><td>0.09 s</td><td>68,672 KB</td><td rowspan="2">CSV byte-identical</td></tr>
+<tr><th>2EAB A/B contacts</th><td>v0.9.0 indexed groups</td><td>0.06 s</td><td>68,956 KB</td></tr>
+<tr><th>2EAB atom SAP</th><td>repeated preparation/maps</td><td>0.16 s</td><td>51,556 KB</td><td rowspan="2">max |Δ| 1.4×10<sup>-7</sup>; ρ ≈ 1</td></tr>
+<tr><th>2EAB atom SAP</th><td>v0.9.0 prepared spatial atoms</td><td>0.12 s</td><td>50,880 KB</td></tr>
+<tr><th>2EAB residue SAP</th><td>repeated preparation/maps</td><td>0.16 s</td><td>57,312 KB</td><td rowspan="2">max |Δ| 3.0×10<sup>-7</sup>; ρ = 1</td></tr>
+<tr><th>2EAB residue SAP</th><td>v0.9.0 prepared spatial atoms</td><td>0.12 s</td><td>51,360 KB</td></tr>
+</tbody></table>
+<p>Each row is the median of seven one-thread release-mode whole-command runs after filesystem warm-up. SC now reuses one <code>rstar</code> neighbor query and stores sorted compact-index vectors. Contacts carry one-byte group masks and compact residue identities beside indexed atoms. SAP prepares once and carries the definition-derived hydrophobic contribution in its spatial item. The first cold execution of a newly built binary was excluded; runtime and RSS are local observations, not portable limits.</p>
+
+<h3>Reproducing the external 2EAB fixture</h3>
+<p>The full 2EAB structure is intentionally not committed or packaged. Fetch the RustSASA corpus at commit <code>ad8ecd2237abd41291d39e7e5e7e6ad5bbcea2c7</code>; its source <code>tests/data/freesasa_pdbs/2eab.pdb</code> has SHA-256 <code>c185b82cf99ec495e5c7c4433292a892211189ccca37d497d745db86c53b371e</code>. Prepare it with installed Rosetta revision <code>597b55d6600c3939574ffee30a4469b26c3337bd</code>, an empty protocol, a constant seed, and no relax, packing, design, or sampling:</p>
+<pre><code>git clone https://github.com/maxall41/RustSASA.git rustsasa
+git -C rustsasa checkout ad8ecd2237abd41291d39e7e5e7e6ad5bbcea2c7
+printf '%s\n' '&lt;ROSETTASCRIPTS&gt;&lt;PROTOCOLS /&gt;&lt;/ROSETTASCRIPTS&gt;' &gt; empty.xml
+/mnt/data/common/rosetta/source/bin/rosetta_scripts.linuxgccrelease \
+  -s rustsasa/tests/data/freesasa_pdbs/2eab.pdb \
+  -parser:protocol empty.xml -constant_seed -jran 1111111 \
+  -out:path:pdb prepared-raw
+awk 'BEGIN { aa=" ALA ARG ASN ASP CYS GLN GLU GLY HIS HID HIE HIP HSD HSE HSP ILE LEU LYS MET MSE PHE PRO SER THR TRP TYR VAL " }
+     /^ATOM/ { res=substr($0,18,3); if (index(aa," " res " ")) print; next }
+     /^HETATM|^CONECT|^TER/ { next }
+     { print }' prepared-raw/2eab_0001.pdb &gt; 2eab-arpeggia.pdb
+awk '/^ATOM/ { print }' 2eab-arpeggia.pdb | sha256sum</code></pre>
+<p>The coordinate stream must hash to <code>7d3a0ef4ce482f1eede33e38aabf8e97f3089468951d549223da57283c79c505</code>. Rosetta places the execution date in two header lines, so a whole-file digest is not reproducible across preparation dates; the archived August 18 raw output digest <code>588767eb74dc903e6174e7d2fd2c1eadc7e302d295abdff0cfb7b65f6df16a84</code> is therefore not used as the verification gate. Routine CI instead uses the small provenance-marked 2EAB disulfide extract to validate resolved <code>SSBOND</code> behavior without adding the approximately 2.1 MB full structure to the repository.</p>
+
 <h2>Metadata parser performance</h2>
 <table><thead><tr><th>Parser</th><th>7K00 result</th><th>Cold wall time</th><th>Warm wall time</th><th>Peak RSS</th></tr></thead><tbody>
 <tr><th>Previous whole-file token matrix</th><td>Parse failure</td><td>1.15 s to failure</td><td>—</td><td>238,880 KB</td></tr>
@@ -135,10 +167,10 @@ circle { fill:#2676c9; opacity:.72; } code { background:#8882; padding:.1rem .3r
 <h2>Assembled release audit</h2>
 <ul>
  <li><code>release/v0.9.0</code> was created from <code>master</code> and contains only selected production, regression-test, ADR, final-report, and release commits. It contains no benchmark driver, machine-result JSON, prepared structure, or intermediate report.</li>
- <li>All repository hooks passed, including formatting, Ruff, rumdl, and Clippy. The locked suite passed 82 Rust library tests, 7 CLI tests, 9 doctests, 15 Python tests, and <code>ty</code>.</li>
+ <li>All repository hooks passed, including formatting, Ruff, rumdl, and Clippy. The locked suite passed 93 Rust library tests, 7 CLI tests, 9 doctests, 15 Python tests, and <code>ty</code>.</li>
  <li>The locked release build, wheel, source distribution, Cargo package listing, isolated wheel installation, and installed-wheel calculation passed. No HTML report is present in any package.</li>
  <li>RustSec found no applicable vulnerability after updating <code>h2</code> to 0.4.16. The recorded unmaintained warnings are <code>bincode</code> through Polars and <code>paste</code> through rust-sasa; two ignored <code>quick-xml</code> advisories are confined to uncompiled optional Polars metadata. The exact Python runtime packages, Polars 1.38.1 and polars-runtime-32 1.38.1, have no known vulnerability.</li>
- <li>The release replay verified all 85 prepared-file hashes and reproduced the SASA/SAP figures in this report. The 6BFT H/L CLI repeated SC 0.7254 in 0.28 s at 34,632 KB peak RSS; these runtime measurements are local observations, not portable limits.</li>
+ <li>The release replay verified all 85 prepared-file hashes and reproduced the SASA/SAP figures in this report. The optimized 6BFT H/L CLI repeated SC 0.725407 in 0.23 s at 29,780 KB median peak RSS, while the external 2EAB A/B run repeated SC 0.3778 in 0.36 s at 68,696 KB; these runtime measurements are local observations, not portable limits.</li>
 </ul>
 
 <h2>Method and provenance</h2><ul>
