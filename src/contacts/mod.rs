@@ -481,6 +481,39 @@ CONECT    1    2\nEND                                                           
     }
 
     #[test]
+    fn prepared_2eab_disulfide_uses_explicit_connectivity() {
+        let root = env!("CARGO_MANIFEST_DIR");
+        let path = format!("{root}/test-data/2eab-disulfide.pdb");
+        let pdb = crate::load_model(&path).unwrap().value;
+        let metadata = crate::read_metadata(&path).unwrap().value;
+
+        let contacts = get_contacts_with_metadata(
+            &pdb,
+            &metadata,
+            "/",
+            0.1,
+            6.5,
+            ProtonationMode::AllCharged,
+            7.4,
+        )
+        .unwrap()
+        .value;
+        let interactions = contacts.column("interaction").unwrap().str().unwrap();
+        assert!(
+            interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "Covalent")
+        );
+        assert!(
+            !interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialCovalent")
+        );
+    }
+
+    #[test]
     fn discarded_altloc_connectivity_does_not_apply_to_selected_atoms() {
         let input =
             b"ATOM      1  SG ACYS A   1       0.000   0.000   0.000  0.60 20.00           S  \n\
