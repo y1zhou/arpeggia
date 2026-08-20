@@ -2,14 +2,13 @@
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
 use core::f64;
-use std::cmp::Ordering;
 use std::f64::consts::PI;
 use std::fmt;
 
-use super::PROBE_RADIUS;
 use super::atomic_radii::{EMBEDDED_ATOMIC_RADII, wildcard_match};
 use super::types::*;
 use super::vector3::Vec3;
+use super::{DOT_DENSITY, PROBE_RADIUS};
 use rayon::prelude::*;
 
 /// Error type for surface calculation operations.
@@ -50,9 +49,6 @@ impl fmt::Display for SurfaceCalculatorError {
 
 impl std::error::Error for SurfaceCalculatorError {}
 
-/// Type alias for parallel neighbor computation results
-type NeighborResult = Result<Vec<(Vec<usize>, Vec<usize>, bool)>, SurfaceCalculatorError>;
-
 #[derive(Default)]
 pub struct SurfaceGenerator {
     pub(crate) run: RunState,
@@ -89,20 +85,10 @@ impl SurfaceGenerator {
         )))
     }
 
-    fn atomi_to_index(&self) -> std::collections::HashMap<usize, usize> {
-        self.run
-            .atoms
-            .iter()
-            .enumerate()
-            .map(|(i, a)| (a.atomi, i))
-            .collect::<std::collections::HashMap<usize, usize>>()
-    }
-
     pub(crate) fn generate_molecular_surfaces(&mut self) -> Result<(), SurfaceCalculatorError> {
         if self.run.atoms.is_empty() {
             return Err(SurfaceCalculatorError::NoAtoms);
         }
-        self.categorize_molecule_neighbors()?;
         let len = self.run.atoms.len();
         for i in 0..len {
             let att = self.run.atoms[i].attention;
@@ -113,78 +99,6 @@ impl SurfaceGenerator {
         }
         self.generate_contact_surface()?;
         self.generate_concave_surface()?;
-        Ok(())
-    }
-
-    fn categorize_molecule_neighbors(&mut self) -> Result<(), SurfaceCalculatorError> {
-        let rp = PROBE_RADIUS;
-        let atoms: &Vec<ScAtom> = &self.run.atoms;
-        let atomi_table = self.atomi_to_index();
-        let neighbors_info: NeighborResult = atoms
-            .par_iter()
-            .map(|atom1| {
-                let mut neighbor_indices_tmp: Vec<(usize, f64)> = Vec::new();
-                let mut buried_by_indices: Vec<usize> = Vec::new();
-                for (atom2_atomi, atom2_dist2) in atom1.neighbors_atomi_dist2.iter() {
-                    if &atom1.atomi == atom2_atomi {
-                        continue;
-                    }
-                    let atom2_idx = atomi_table.get(atom2_atomi).unwrap();
-                    let atom2 = &atoms[*atom2_idx];
-
-                    let same_mol = atom1.molecule == atom2.molecule;
-                    if same_mol && (atom2_dist2 <= &0.0001) {
-                        return Err(SurfaceCalculatorError::Coincident(format!(
-                            "{}:{}:{} == {}:{}:{}",
-                            atom1.atomi,
-                            atom1.resn,
-                            atom1.atomn,
-                            atom2.atomi,
-                            atom2.resn,
-                            atom2.atomn
-                        )));
-                    }
-                    let bridge = atom1.radius + atom2.radius + 2.0 * rp;
-                    let bridge2 = bridge * bridge;
-                    if same_mol {
-                        if atom2_dist2 < &bridge2 {
-                            neighbor_indices_tmp.push((*atom2_idx, *atom2_dist2));
-                        }
-                    } else if atom2_dist2 < &bridge2 {
-                        buried_by_indices.push(*atom2_idx);
-                    }
-                }
-                neighbor_indices_tmp.sort_unstable_by(|&(_, d1), &(_, d2)| {
-                    if d1 < d2 {
-                        Ordering::Less
-                    } else if d1 > d2 {
-                        Ordering::Greater
-                    } else {
-                        Ordering::Equal
-                    }
-                });
-
-                let neighbor_indices: Vec<usize> = neighbor_indices_tmp
-                    .into_iter()
-                    .map(|(idx, _)| idx)
-                    .collect();
-                let accessible = neighbor_indices.is_empty();
-                Ok((neighbor_indices, buried_by_indices, accessible))
-            })
-            .collect();
-        match neighbors_info {
-            Err(e) => return Err(e),
-            Ok(r) => {
-                for (atom, (neighbors, buried_by, accessible)) in self.run.atoms.iter_mut().zip(r) {
-                    atom.neighbor_indices = neighbors;
-                    atom.buried_by_indices = buried_by;
-                    if accessible {
-                        atom.accessible = true;
-                    }
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -202,7 +116,7 @@ impl SurfaceGenerator {
                 if !a_i.accessible {
                     return None;
                 }
-                let neighbors = a_i.neighbor_indices.clone();
+                let neighbors = &a_i.neighbor_indices;
                 let mut north_dir = Vec3::new(0.0, 0.0, 1.0);
                 let mut south_dir = Vec3::new(0.0, 0.0, -1.0);
                 let mut equatorial_vector = Vec3::new(1.0, 0.0, 0.0);
@@ -259,7 +173,7 @@ impl SurfaceGenerator {
                     o,
                     radius_i,
                     equatorial_vector,
-                    a_i.density,
+                    DOT_DENSITY,
                     north_dir,
                     south_dir,
                     &mut lats,
@@ -279,7 +193,7 @@ impl SurfaceGenerator {
                     }
                     rad = rad.sqrt();
                     points.clear();
-                    geom_sample_circle(cen, rad, north_dir, a_i.density, &mut points).ok()?;
+                    geom_sample_circle(cen, rad, north_dir, DOT_DENSITY, &mut points).ok()?;
                     if points.is_empty() {
                         continue;
                     }
@@ -340,13 +254,11 @@ impl SurfaceGenerator {
         let atom1_coor: Vec3;
         let expanded_radius_i: f64;
         let neighbor_indices: Vec<usize>;
-        let ij_dist2_map: std::collections::HashMap<usize, f64>;
         {
             let atom1 = &self.run.atoms[atom_index];
             atom1_coor = atom1.coor;
             expanded_radius_i = atom1.radius + PROBE_RADIUS;
             neighbor_indices = atom1.neighbor_indices.clone();
-            ij_dist2_map = atom1.neighbors_atomi_dist2.clone();
         }
         let num_neighbors = neighbor_indices.len();
 
@@ -356,7 +268,9 @@ impl SurfaceGenerator {
                 continue;
             }
             let expanded_radius_j = atom2.radius + PROBE_RADIUS;
-            let ij_dist2 = ij_dist2_map.get(&atom2.atomi).unwrap();
+            let ij_dist2 = self.run.atoms[atom_index]
+                .neighbor_distance_squared(j)
+                .unwrap();
             let dist_ij = ij_dist2.sqrt();
 
             let unit_axis = (atom2.coor - atom1_coor) / dist_ij;
@@ -414,14 +328,11 @@ impl SurfaceGenerator {
         let atom1_coor = self.run.atoms[atom1_index].coor;
         let neighbor_indices = self.run.atoms[atom1_index].neighbor_indices.clone();
         let expanded_radius_i = self.run.atoms[atom1_index].radius + PROBE_RADIUS;
-        let atom1_dist2_map: &std::collections::HashMap<usize, f64> =
-            &self.run.atoms[atom1_index].neighbors_atomi_dist2;
 
         let atom2 = &self.run.atoms[atom2_index];
         let expanded_radius_j = atom2.radius + PROBE_RADIUS;
         let atom2_natom = atom2.atomi;
         let atom2_att = atom2.attention;
-        let atom2_dist2_map: &std::collections::HashMap<usize, f64> = &atom2.neighbors_atomi_dist2;
         let mut made_probe = false;
         for &k in &neighbor_indices {
             let atom3 = &self.run.atoms[k];
@@ -431,7 +342,7 @@ impl SurfaceGenerator {
             let expanded_radius_k = atom3.radius + PROBE_RADIUS;
 
             // atom1 neighbor atom3 is not necessarily atom2 neighbor
-            match atom2_dist2_map.get(&atom3.atomi) {
+            match atom2.neighbor_distance_squared(k) {
                 None => continue,
                 Some(dist_jk2) => {
                     if dist_jk2.sqrt() >= expanded_radius_j + expanded_radius_k {
@@ -439,7 +350,10 @@ impl SurfaceGenerator {
                     }
                 }
             }
-            let dist_ik = atom1_dist2_map.get(&atom3.atomi).unwrap().sqrt();
+            let dist_ik = self.run.atoms[atom1_index]
+                .neighbor_distance_squared(k)
+                .unwrap()
+                .sqrt();
             if dist_ik >= expanded_radius_i + expanded_radius_k {
                 continue;
             }
@@ -518,10 +432,7 @@ impl SurfaceGenerator {
         has_point_cusp: bool,
     ) -> Result<(), SurfaceCalculatorError> {
         let neighbors = self.run.atoms[atom1_index].neighbor_indices.clone();
-        let density = f64::midpoint(
-            self.run.atoms[atom1_index].density,
-            self.run.atoms[atom2_index].density,
-        );
+        let density = DOT_DENSITY;
         let expanded_radius_i = self.run.atoms[atom1_index].radius + PROBE_RADIUS;
         let expanded_radius_j = self.run.atoms[atom2_index].radius + PROBE_RADIUS;
         let roll_circle_radius_i =
@@ -631,7 +542,7 @@ impl SurfaceGenerator {
         probe_center: Vec3,
         atom1_index: usize,
         atom2_index: usize,
-        neighbor_indices: &Vec<usize>,
+        neighbor_indices: &[usize],
     ) -> bool {
         let atom1_natom = self.run.atoms[atom1_index].atomi;
         let atom2_natom = self.run.atoms[atom2_index].atomi;
@@ -671,9 +582,7 @@ impl SurfaceGenerator {
                 let pijk = probe.point;
                 let uijk = probe.alt;
                 let hijk = probe.height;
-                let density =
-                    (atoms[aidx[0]].density + atoms[aidx[1]].density + atoms[aidx[2]].density)
-                        / 3.0;
+                let density = DOT_DENSITY;
                 let mut nears: Vec<usize> = Vec::new();
                 for &lp in &lowprobs {
                     if lp == i {

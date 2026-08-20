@@ -2,15 +2,15 @@
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
 use core::f64;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
 use super::vector3::{DotPoint, Vec3};
-use super::{DOT_DENSITY, GAUSSIAN_WEIGHT, PERIPHERAL_BAND, SEPARATION_CUTOFF};
+use super::{GAUSSIAN_WEIGHT, PERIPHERAL_BAND, PROBE_RADIUS, SEPARATION_CUTOFF};
 use pdbtbx::*;
 use rayon::prelude::*;
-use rstar::{PointDistance, RTree};
+use rstar::{PointDistance, RTree, primitives::GeomWithData};
 
 /// Clamp bounds for dot product to avoid numerical issues at extremes
 const DOT_PRODUCT_CLAMP_MIN: f64 = -0.999;
@@ -28,18 +28,17 @@ impl ScCalculator {
         group1_chains: &HashSet<String>,
         group2_chains: &HashSet<String>,
     ) -> Result<(), SurfaceCalculatorError> {
-        let tree = pdb.create_hierarchy_rtree();
         let max_radius_sq = SEPARATION_CUTOFF * SEPARATION_CUTOFF;
 
-        let atoms = pdb
+        let mut atoms = pdb
             .atoms_with_hierarchy()
             .filter_map(|hier| {
-                let chain_id = hier.chain().id().to_string();
+                let chain_id = hier.chain().id();
 
                 // Determine which molecule (0 or 1) based on chain group
-                let molecule = if group1_chains.contains(&chain_id) {
+                let molecule = if group1_chains.contains(chain_id) {
                     0
-                } else if group2_chains.contains(&chain_id) {
+                } else if group2_chains.contains(chain_id) {
                     1
                 } else {
                     return None; // Skip atoms not in either group
@@ -72,60 +71,83 @@ impl ScCalculator {
                     }
                 };
 
-                // Locate neighboring atoms within cutoff to assign attention
-                // The items are (molecule index, Atom, distance squared)
-                let neighbors: Vec<(usize, &Atom, f64)> = tree
-                    .locate_within_distance(pos, max_radius_sq)
-                    .map(|h| {
-                        let h_chain = h.chain().id();
-                        let h_mol = if group1_chains.contains(h_chain) {
-                            0
-                        } else if group2_chains.contains(h_chain) {
-                            1
-                        } else {
-                            2 // Outside both groups, ignored later
-                        };
-                        (h_mol, h.atom(), atom.distance_2(&h.atom().pos()))
-                    })
-                    .collect();
-
-                let attention = match neighbors
-                    .iter()
-                    .map(|(m, _, d)| {
-                        if (m == &2) | (&molecule == m) {
-                            f64::INFINITY
-                        } else {
-                            *d
-                        }
-                    })
-                    .fold(f64::INFINITY, f64::min)
-                {
-                    d if d < max_radius_sq => Attention::Buried,
-                    _ => Attention::Far,
-                };
-
                 Some(Ok(ScAtom {
                     atomi: atom.serial_number(),
                     molecule,
                     radius: atom_radius,
-                    density: DOT_DENSITY,
-                    attention,
+                    attention: Attention::Far,
                     accessible: false,
                     atomn: atom.name().to_string(),
                     resn: residue.name().unwrap_or("UNK").to_string(),
                     coor: Vec3::new(pos.0, pos.1, pos.2),
-                    neighbors_atomi_dist2: neighbors
-                        .into_iter()
-                        .map(|(_, atom, d)| (atom.serial_number(), d))
-                        .collect::<HashMap<usize, f64>>(),
                     neighbor_indices: Vec::new(),
-                    buried_by_indices: Vec::new(),
+                    neighbor_distances: Vec::new(),
                 }))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        let tree = RTree::bulk_load(
+            atoms
+                .iter()
+                .enumerate()
+                .map(|(index, atom)| {
+                    GeomWithData::new([atom.coor.x, atom.coor.y, atom.coor.z], index)
+                })
+                .collect(),
+        );
+        let neighbors = atoms
+            .par_iter()
+            .enumerate()
+            .map(|(index, atom)| {
+                let mut distances = Vec::new();
+                let mut attention = Attention::Far;
+                for neighbor in tree
+                    .locate_within_distance([atom.coor.x, atom.coor.y, atom.coor.z], max_radius_sq)
+                {
+                    let neighbor_index = neighbor.data;
+                    if neighbor_index == index {
+                        continue;
+                    }
+                    let other = &atoms[neighbor_index];
+                    let distance_squared = atom.coor.distance_squared(other.coor);
+                    if atom.molecule != other.molecule {
+                        attention = Attention::Buried;
+                        continue;
+                    }
+                    if distance_squared <= 0.0001 {
+                        return Err(SurfaceCalculatorError::Coincident(format!(
+                            "{}:{}:{} == {}:{}:{}",
+                            atom.atomi, atom.resn, atom.atomn, other.atomi, other.resn, other.atomn
+                        )));
+                    }
+                    let bridge = atom.radius + other.radius + 2.0 * PROBE_RADIUS;
+                    if distance_squared < bridge * bridge {
+                        distances.push((neighbor_index, distance_squared));
+                    }
+                }
+                let mut neighbor_indices = distances.clone();
+                neighbor_indices.sort_unstable_by(|left, right| left.1.total_cmp(&right.1));
+                distances.sort_unstable_by_key(|&(neighbor, _)| neighbor);
+                Ok((
+                    neighbor_indices
+                        .into_iter()
+                        .map(|(neighbor, _)| neighbor)
+                        .collect::<Vec<_>>(),
+                    distances,
+                    attention,
+                ))
+            })
+            .collect::<Result<Vec<_>, SurfaceCalculatorError>>()?;
+        for (atom, (neighbor_indices, neighbor_distances, attention)) in
+            atoms.iter_mut().zip(neighbors)
+        {
+            atom.accessible = neighbor_indices.is_empty();
+            atom.neighbor_indices = neighbor_indices;
+            atom.neighbor_distances = neighbor_distances;
+            atom.attention = attention;
+        }
+
         // Add atoms to calculator
-        self.base.run.atoms.clear();
         self.base.run.atoms = atoms;
         Ok(())
     }

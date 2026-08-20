@@ -1,7 +1,5 @@
 //! SC calculation types.
 
-use std::collections::HashMap;
-
 use super::vector3::Vec3;
 
 /// Atom attention/visibility state.
@@ -19,20 +17,25 @@ pub struct ScAtom {
     pub atomi: usize,
     pub molecule: usize,
     pub radius: f64,
-    /// Per-atom sampling density (~15 dots/Å²)
-    pub density: f64,
     pub attention: Attention,
     /// Is atom accessible to solvent/contact surface
     pub accessible: bool,
     pub atomn: String,
     pub resn: String,
     pub coor: Vec3,
-    /// Indices of all neighbors and their distance^2 to limit search space
-    pub neighbors_atomi_dist2: HashMap<usize, f64>,
-    /// Neighbor indices on same molecule
+    /// Same-molecule neighbors sorted by distance.
     pub neighbor_indices: Vec<usize>,
-    /// Neighbor indices on opposite molecule that bury this atom
-    pub buried_by_indices: Vec<usize>,
+    /// Same-molecule neighbor distances sorted by compact atom index.
+    pub neighbor_distances: Vec<(usize, f64)>,
+}
+
+impl ScAtom {
+    pub fn neighbor_distance_squared(&self, index: usize) -> Option<f64> {
+        self.neighbor_distances
+            .binary_search_by_key(&index, |&(neighbor, _)| neighbor)
+            .ok()
+            .map(|position| self.neighbor_distances[position].1)
+    }
 }
 
 #[derive(Clone, Debug)]
