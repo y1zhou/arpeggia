@@ -57,6 +57,12 @@ bonding evidence in the input structure. Its public interaction label is
 `PotentialCovalent`.
 _Avoid_: Covalent bond, inferred covalent bond
 
+**Resolved Explicit Bond**:
+An input bond declaration that matches two atoms in the selected model and
+Selected Conformer. Contact calculation represents it with compact selected-atom
+identities while retaining the qualified declaration as its evidence.
+_Avoid_: Distance-inferred bond, unqualified bond
+
 **Peptide-Adjacent Residues**:
 Two residues in one selected chain whose peptide C--N geometry is continuous and
 not separated by an explicit chain break. Coordinate order or consecutive
@@ -143,6 +149,12 @@ meaningful complete value. Rust returns a typed error, Python raises an
 exception, and the CLI exits unsuccessfully; no null or partial scalar is
 reported.
 _Avoid_: Missing result, nullable score, partial success
+
+**Sampled SC Interface**:
+The paired buried surface-dot populations that remain after SC peripheral-band
+trimming and can produce both directional scores. If either population is empty,
+there is no complete SC value.
+_Avoid_: Raw surface proximity, zero SC
 
 **Definition-Derived Calculation**:
 A deterministic calculation whose empirical parameters come from a named

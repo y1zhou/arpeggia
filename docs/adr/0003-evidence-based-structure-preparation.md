@@ -42,6 +42,14 @@ because they do not establish the scientific boundary. `seqres` parses sequence
 declarations independently and ignores malformed `TER` records because they do
 not affect the declared sequence.
 
+Qualified bond declarations are matched once against the selected model and
+conformer. Contact calculation then uses compact model-and-atom identities rather
+than reconstructing hierarchical string keys for every candidate pair. Resolved
+bonds are stored as an immutable sorted vector and queried by binary search;
+hashing is reserved for cases with a measured or algorithmic advantage over
+simpler storage. A bond that names a discarded conformer cannot establish a
+definitive covalent contact.
+
 `seqres` remains chain-oriented like `seq`: it returns one declared sequence per
 chain in declaration order, repeats a shared mmCIF entity sequence for each
 mapped chain, and includes declared chains without coordinates. Unrecognized
