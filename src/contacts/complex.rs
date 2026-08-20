@@ -8,42 +8,28 @@ use super::{
 use crate::{StructureMetadata, metadata::ResolvedBonds, structure::parse_groups};
 use pdbtbx::*;
 use rayon::prelude::*;
+use rstar::{RTree, primitives::GeomWithData};
 use std::collections::{HashMap, HashSet};
 
 const MAX_PEPTIDE_C_N_DISTANCE: f64 = 1.8;
+const GROUP1: u8 = 0b01;
+const GROUP2: u8 = 0b10;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct ResiduePosition<'a> {
-    model: usize,
-    chain: &'a str,
-    residue: isize,
-    insertion: &'a str,
+struct IndexedAtom<'a> {
+    entity: AtomConformerResidueChainModel<'a>,
+    group: u8,
+    residue_index: usize,
 }
 
-impl<'a> ResiduePosition<'a> {
-    fn from_id(residue: &'a ResidueId<'a>) -> Self {
-        Self {
-            model: residue.model,
-            chain: residue.chain,
-            residue: residue.resi,
-            insertion: residue.insertion,
-        }
-    }
-
-    fn from_residue(model: usize, chain: &'a str, residue: &'a Residue) -> Self {
-        Self {
-            model,
-            chain,
-            residue: residue.serial_number(),
-            insertion: residue.insertion_code().unwrap_or(""),
-        }
-    }
+struct IndexedRing<'a> {
+    residue: ResidueId<'a>,
+    plane: Plane,
+    group: u8,
+    residue_index: usize,
 }
 
 /// The workhorse struct for identifying interactions in the model
 pub struct InteractionComplex<'a> {
-    /// All information present in the atomic model
-    pub model: &'a PDB,
     /// All ligand chains
     pub ligand: HashSet<String>,
     /// All receptor chains
@@ -56,12 +42,12 @@ pub struct InteractionComplex<'a> {
     protonation: ProtonationMode,
     ph: f64,
 
-    /// Maps residue names to unique indices
-    res2idx: HashMap<ResidueId<'a>, usize>,
+    atoms: Vec<IndexedAtom<'a>>,
+    atom_tree: RTree<GeomWithData<[f64; 3], usize>>,
     /// Residue pairs connected by observed peptide-bond geometry.
-    peptide_neighbors: HashSet<(ResiduePosition<'a>, ResiduePosition<'a>)>,
+    peptide_neighbors: Vec<(usize, usize)>,
     /// Maps ring residues to ring centers and normals
-    rings: HashMap<ResidueId<'a>, Plane>,
+    rings: Vec<IndexedRing<'a>>,
     /// Map residues to side chain planes
     sc_planes: HashMap<ResidueId<'a>, Plane>,
 }
@@ -84,20 +70,30 @@ impl<'a> InteractionComplex<'a> {
 
         // Build a mapping of residue names to indices
         let res2idx = build_residue_index(model);
-        let peptide_neighbors = build_peptide_neighbors(model, metadata);
+        let peptide_neighbors = build_peptide_neighbors(model, metadata, &res2idx);
+        let atoms = build_indexed_atoms(model, &ligand, &receptor, &res2idx);
+        let atom_tree = RTree::bulk_load(
+            atoms
+                .iter()
+                .enumerate()
+                .map(|(index, atom)| {
+                    let position = atom.entity.atom().pos();
+                    GeomWithData::new([position.0, position.1, position.2], index)
+                })
+                .collect(),
+        );
         let resolved_bonds = metadata.map_or_else(ResolvedBonds::default, |metadata| {
             metadata.resolve_bonds(model)
         });
 
         // Build a mapping of ring residue names to ring centers and normals
-        let (rings, ring_err) = build_ring_positions(model);
+        let (rings, ring_err) = build_ring_positions(model, &ligand, &receptor, &res2idx);
 
         // Similarly, build a mapping of side chain planes
         let sc_planes = build_sc_plane_positions(model);
 
         Ok((
             Self {
-                model,
                 ligand,
                 receptor,
                 vdw_comp_factor,
@@ -105,7 +101,8 @@ impl<'a> InteractionComplex<'a> {
                 resolved_bonds,
                 protonation,
                 ph,
-                res2idx,
+                atoms,
+                atom_tree,
                 peptide_neighbors,
                 rings,
                 sc_planes,
@@ -132,56 +129,68 @@ impl<'a> InteractionComplex<'a> {
     /// Across chains, first see if the two chains both appear as ligands and receptors.
     /// In such cases, we avoid calculations where c1 > c2 if the interaction is symmetric.
     /// Currently, only ring-atom interactions are asymmetric.
-    fn should_compare_entities(
-        &self,
-        e1: &AtomConformerResidueChainModel,
-        e2: &AtomConformerResidueChainModel,
-        symmetric: bool,
-    ) -> bool {
+    fn should_compare_entities(&self, e1: &IndexedAtom, e2: &IndexedAtom, symmetric: bool) -> bool {
         // Ignore if any of the atoms is a hydrogen atom
-        if (e1.atom().element() == Some(&Element::H)) | (e2.atom().element() == Some(&Element::H)) {
+        if (e1.entity.atom().element() == Some(&Element::H))
+            | (e2.entity.atom().element() == Some(&Element::H))
+        {
             return false;
         }
 
-        let e1_res = ResidueId::from_hier(e1);
-        let e2_res = ResidueId::from_hier(e2);
-        self.should_compare_residues(&e1_res, &e2_res, symmetric)
+        let e1_res = ResidueId::from_hier(&e1.entity);
+        let e2_res = ResidueId::from_hier(&e2.entity);
+        self.should_compare_residues(
+            &e1_res,
+            &e2_res,
+            e1.group,
+            e2.group,
+            e1.residue_index,
+            e2.residue_index,
+            symmetric,
+        )
     }
 
-    fn should_compare_residues(&self, r1: &ResidueId, r2: &ResidueId, symmetric: bool) -> bool {
+    #[allow(clippy::too_many_arguments)]
+    fn should_compare_residues(
+        &self,
+        r1: &ResidueId,
+        r2: &ResidueId,
+        group1: u8,
+        group2: u8,
+        residue1: usize,
+        residue2: usize,
+        symmetric: bool,
+    ) -> bool {
         // Ignore if the two atoms are from different models
         if r1.model != r2.model {
             return false;
         }
 
         // Ignore if they are not a valid ligand-receptor pair
-        if !((self.ligand.contains(r1.chain) && self.receptor.contains(r2.chain))
-            | (self.ligand.contains(r2.chain) && self.receptor.contains(r1.chain)))
+        if !(((group1 & GROUP1 != 0) && (group2 & GROUP2 != 0))
+            | ((group2 & GROUP1 != 0) && (group1 & GROUP2 != 0)))
         {
             return false;
         }
 
         // Ignore if they are neighboring residues in the same chain
         if r1.chain == r2.chain {
-            let r1_position = ResiduePosition::from_id(r1);
-            let r2_position = ResiduePosition::from_id(r2);
-            if r1_position == r2_position
-                || self.peptide_neighbors.contains(&(r1_position, r2_position))
+            if residue1 == residue2
+                || self
+                    .peptide_neighbors
+                    .binary_search(&ordered_index_pair(residue1, residue2))
+                    .is_ok()
             {
                 return false;
             }
-            let e1_idx = self.res2idx[r1];
-            let e2_idx = self.res2idx[r2];
 
-            if symmetric { e1_idx < e2_idx } else { true }
+            if symmetric { residue1 < residue2 } else { true }
         } else {
             // Across two chains, avoid duplicate comparisons when the chains exist on both sides,
             // e.g. H,A,B/H,A where H-A and A-H are the same interactions
             !(symmetric
-                && self.receptor.contains(r1.chain)
-                && self.receptor.contains(r2.chain)
-                && self.ligand.contains(r1.chain)
-                && self.ligand.contains(r2.chain)
+                && group1 == GROUP1 | GROUP2
+                && group2 == GROUP1 | GROUP2
                 && (r1.chain > r2.chain))
         }
     }
@@ -233,34 +242,38 @@ pub trait Interactions {
 
 impl Interactions for InteractionComplex<'_> {
     fn get_atomic_contacts(&self) -> Vec<ResultEntry> {
-        let tree = self.model.create_hierarchy_rtree();
         let max_radius_squared = self.interacting_threshold * self.interacting_threshold;
 
         // Find all atoms within the radius of the ligand atoms
-        let ligand_neighbors: Vec<(
-            AtomConformerResidueChainModel,
-            &AtomConformerResidueChainModel,
-        )> = self
-            .model
-            .atoms_with_hierarchy()
-            .filter(|x| {
-                self.ligand.contains(x.chain().id()) && (x.atom().element() != Some(&Element::H))
-            })
-            .flat_map(|x| {
-                tree.locate_within_distance(x.atom().pos(), max_radius_squared)
-                    .filter(|y| self.receptor.contains(y.chain().id()))
-                    .filter(|y| self.should_compare_entities(&x, y, true))
-                    .map(|y| (x.clone(), y))
-                    .collect::<Vec<(
-                        AtomConformerResidueChainModel,
-                        &AtomConformerResidueChainModel,
-                    )>>()
+        let ligand_neighbors: Vec<(usize, usize)> = self
+            .atoms
+            .iter()
+            .enumerate()
+            .filter(|(_, atom)| atom.group & GROUP1 != 0)
+            .flat_map(|(first_index, first)| {
+                self.atom_tree
+                    .locate_within_distance(
+                        {
+                            let position = first.entity.atom().pos();
+                            [position.0, position.1, position.2]
+                        },
+                        max_radius_squared,
+                    )
+                    .filter_map(|point| {
+                        let second = &self.atoms[point.data];
+                        (second.group & GROUP2 != 0
+                            && self.should_compare_entities(first, second, true))
+                        .then_some((first_index, point.data))
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
 
         ligand_neighbors
             .par_iter()
-            .map(|(e1, e2)| {
+            .map(|&(first_index, second_index)| {
+                let e1 = &self.atoms[first_index].entity;
+                let e2 = &self.atoms[second_index].entity;
                 let mut atomic_contacts: Vec<ResultEntry> = vec![];
                 let model_id = e1.model().serial_number();
                 let dist = e1.atom().distance(e2.atom());
@@ -327,31 +340,49 @@ impl Interactions for InteractionComplex<'_> {
     }
 
     fn get_ring_atom_contacts(&self) -> Vec<ResultEntry> {
-        let tree = self.model.create_hierarchy_rtree();
         let max_radius_squared = self.interacting_threshold * self.interacting_threshold;
 
         // Find ring - atom contacts
         let ring_atom_neighbors = self
             .rings
             .iter()
-            .flat_map(|(x, v)| {
-                tree.locate_within_distance(
-                    (v.center.x, v.center.y, v.center.z),
-                    max_radius_squared,
-                )
-                .filter(|y| {
-                    let y_res = ResidueId::from_hier(y);
-                    self.should_compare_residues(x, &y_res, false)
-                })
-                .map(|y| (x, v, y))
-                .collect::<Vec<(&ResidueId, &Plane, &AtomConformerResidueChainModel)>>()
+            .enumerate()
+            .flat_map(|(ring_index, ring)| {
+                self.atom_tree
+                    .locate_within_distance(
+                        [
+                            ring.plane.center.x,
+                            ring.plane.center.y,
+                            ring.plane.center.z,
+                        ],
+                        max_radius_squared,
+                    )
+                    .filter_map(|point| {
+                        let atom = &self.atoms[point.data];
+                        let atom_residue = ResidueId::from_hier(&atom.entity);
+                        self.should_compare_residues(
+                            &ring.residue,
+                            &atom_residue,
+                            ring.group,
+                            atom.group,
+                            ring.residue_index,
+                            atom.residue_index,
+                            false,
+                        )
+                        .then_some((ring_index, point.data))
+                    })
+                    .collect::<Vec<_>>()
             })
-            .collect::<Vec<(&ResidueId, &Plane, &AtomConformerResidueChainModel)>>();
+            .collect::<Vec<_>>();
 
         // Find ring-atom interactions
         ring_atom_neighbors
             .par_iter()
-            .map(|(k, ring, y)| {
+            .map(|&(ring_index, atom_index)| {
+                let indexed_ring = &self.rings[ring_index];
+                let k = &indexed_ring.residue;
+                let ring = &indexed_ring.plane;
+                let y = &self.atoms[atom_index].entity;
                 let mut ring_contacts = Vec::new();
 
                 // Cation-pi interactions
@@ -385,23 +416,37 @@ impl Interactions for InteractionComplex<'_> {
         let ring_ring_neighbors = self
             .rings
             .iter()
-            .flat_map(|(k1, ring1)| {
+            .enumerate()
+            .flat_map(|(first_index, first)| {
                 self.rings
                     .iter()
-                    .filter(|(k2, _)| {
-                        self.ligand.contains(k1.chain)
-                            && self.receptor.contains(k2.chain)
-                            && self.should_compare_residues(k1, k2, true)
+                    .enumerate()
+                    .filter_map(|(second_index, second)| {
+                        self.should_compare_residues(
+                            &first.residue,
+                            &second.residue,
+                            first.group,
+                            second.group,
+                            first.residue_index,
+                            second.residue_index,
+                            true,
+                        )
+                        .then_some((first_index, second_index))
                     })
-                    .map(|(k2, ring2)| (k1, ring1, k2, ring2))
-                    .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>()
+                    .collect::<Vec<_>>()
             })
-            .collect::<Vec<(&ResidueId, &Plane, &ResidueId, &Plane)>>();
+            .collect::<Vec<_>>();
 
         // Find ring-ring interactions
         ring_ring_neighbors
             .par_iter()
-            .filter_map(|(k1, ring1, k2, ring2)| {
+            .filter_map(|&(first_index, second_index)| {
+                let first = &self.rings[first_index];
+                let second = &self.rings[second_index];
+                let k1 = &first.residue;
+                let k2 = &second.residue;
+                let ring1 = &first.plane;
+                let ring2 = &second.plane;
                 let dist = (ring1.center - ring2.center).norm();
                 let pi_pi_contacts = find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
                     model: k1.model,
@@ -438,41 +483,62 @@ impl Interactions for InteractionComplex<'_> {
 ///
 /// Returns a mapping from residue to index.
 fn build_residue_index(model: &'_ PDB) -> HashMap<ResidueId<'_>, usize> {
-    model
-        .models()
-        .flat_map(|m| {
-            let model_id = m.serial_number();
-            m.chains().flat_map(move |c| {
-                let chain_id = c.id();
-                c.residues().enumerate().flat_map(move |(i, residue)| {
-                    // All conformers in the same residue should share the same index
-                    let (resi, insertion) = residue.id();
-                    let insertion = insertion.unwrap_or("");
-                    let resn = residue.name().unwrap_or("");
-
-                    residue.conformers().map(move |conformer| {
-                        let res_id = ResidueId::new(
-                            model_id,
-                            chain_id,
+    let mut result = HashMap::new();
+    let mut index = 0;
+    for model in model.models() {
+        for chain in model.chains() {
+            for residue in chain.residues() {
+                let (resi, insertion) = residue.id();
+                for conformer in residue.conformers() {
+                    result.insert(
+                        ResidueId::new(
+                            model.serial_number(),
+                            chain.id(),
                             resi,
-                            insertion,
+                            insertion.unwrap_or(""),
                             conformer.alternative_location().unwrap_or(""),
-                            resn,
-                        );
+                            residue.name().unwrap_or(""),
+                        ),
+                        index,
+                    );
+                }
+                index += 1;
+            }
+        }
+    }
+    result
+}
 
-                        (res_id, i)
-                    })
-                })
+fn group_mask(chain: &str, ligand: &HashSet<String>, receptor: &HashSet<String>) -> u8 {
+    u8::from(ligand.contains(chain)) * GROUP1 + u8::from(receptor.contains(chain)) * GROUP2
+}
+
+fn build_indexed_atoms<'a>(
+    model: &'a PDB,
+    ligand: &HashSet<String>,
+    receptor: &HashSet<String>,
+    residues: &HashMap<ResidueId<'a>, usize>,
+) -> Vec<IndexedAtom<'a>> {
+    model
+        .atoms_with_hierarchy()
+        .filter(|entity| entity.atom().element() != Some(&Element::H))
+        .filter_map(|entity| {
+            let group = group_mask(entity.chain().id(), ligand, receptor);
+            (group != 0).then(|| IndexedAtom {
+                residue_index: residues[&ResidueId::from_hier(&entity)],
+                entity,
+                group,
             })
         })
-        .collect::<HashMap<ResidueId, usize>>()
+        .collect()
 }
 
 fn build_peptide_neighbors<'a>(
     pdb: &'a PDB,
     metadata: Option<&StructureMetadata>,
-) -> HashSet<(ResiduePosition<'a>, ResiduePosition<'a>)> {
-    let mut neighbors = HashSet::new();
+    residue_indices: &HashMap<ResidueId<'a>, usize>,
+) -> Vec<(usize, usize)> {
+    let mut neighbors = Vec::new();
     for model in pdb.models() {
         let model_id = model.serial_number();
         for chain in model.chains() {
@@ -498,32 +564,67 @@ fn build_peptide_neighbors<'a>(
                         carbon.distance(nitrogen) <= MAX_PEPTIDE_C_N_DISTANCE
                     });
                 if peptide_geometry && !explicitly_broken {
-                    let first = ResiduePosition::from_residue(model_id, chain_id, first);
-                    let second = ResiduePosition::from_residue(model_id, chain_id, second);
-                    neighbors.insert((first, second));
-                    neighbors.insert((second, first));
+                    let residue_index = |residue: &Residue| {
+                        let conformer = residue.conformers().next().unwrap();
+                        residue_indices[&ResidueId::new(
+                            model_id,
+                            chain_id,
+                            residue.serial_number(),
+                            residue.insertion_code().unwrap_or(""),
+                            conformer.alternative_location().unwrap_or(""),
+                            residue.name().unwrap_or(""),
+                        )]
+                    };
+                    let first_index = residue_index(first);
+                    let second_index = residue_index(second);
+                    neighbors.push(ordered_index_pair(first_index, second_index));
                 }
             }
         }
     }
+    neighbors.sort_unstable();
+    neighbors.dedup();
     neighbors
 }
 
-fn build_ring_positions(model: &'_ PDB) -> (HashMap<ResidueId<'_>, Plane>, Vec<String>) {
-    let ring_res = HashSet::from([
-        "HIS", "HID", "HIE", "HIP", "HSD", "HSE", "HSP", "PHE", "TYR", "TRP",
-    ]);
-    let mut ring_positions = HashMap::new();
+fn ordered_index_pair(first: usize, second: usize) -> (usize, usize) {
+    if first <= second {
+        (first, second)
+    } else {
+        (second, first)
+    }
+}
+
+fn build_ring_positions<'a>(
+    model: &'a PDB,
+    ligand: &HashSet<String>,
+    receptor: &HashSet<String>,
+    residues: &HashMap<ResidueId<'a>, usize>,
+) -> (Vec<IndexedRing<'a>>, Vec<String>) {
+    let mut ring_positions = Vec::new();
     let mut errors = Vec::new();
 
     for m in model.models() {
         let model_id = m.serial_number();
         for c in m.chains() {
             let chain_id = c.id();
-            for r in c
-                .residues()
-                .filter(|r| r.name().is_some_and(|name| ring_res.contains(name)))
-            {
+            for r in c.residues().filter(|r| {
+                r.name().is_some_and(|name| {
+                    matches!(
+                        name,
+                        "HIS"
+                            | "HID"
+                            | "HIE"
+                            | "HIP"
+                            | "HSD"
+                            | "HSE"
+                            | "HSP"
+                            | "PHE"
+                            | "TYR"
+                            | "TRP"
+                    )
+                })
+            }) {
                 let (resi, insertion_code) = r.id();
                 let insertion_code = insertion_code.unwrap_or("");
                 let resn = r.name().unwrap_or("");
@@ -538,7 +639,12 @@ fn build_ring_positions(model: &'_ PDB) -> (HashMap<ResidueId<'_>, Plane>, Vec<S
                     );
                     match r.center_and_normal(Some(r.ring_atoms())) {
                         Some(ring) => {
-                            ring_positions.insert(res_id, ring);
+                            ring_positions.push(IndexedRing {
+                                group: group_mask(chain_id, ligand, receptor),
+                                residue_index: residues[&res_id],
+                                residue: res_id,
+                                plane: ring,
+                            });
                         }
                         None => {
                             errors
@@ -611,12 +717,22 @@ ENDMDL\nEND\n";
             .read_raw(BufReader::new(input.as_slice()))
             .unwrap();
 
-        let (rings, errors) = build_ring_positions(&pdb);
+        let chains = HashSet::from(["A".to_string()]);
+        let residues = build_residue_index(&pdb);
+        let (rings, errors) = build_ring_positions(&pdb, &chains, &chains, &residues);
 
         assert!(errors.is_empty());
         assert_eq!(rings.len(), 2);
-        let first = rings.iter().find(|(id, _)| id.model == 1).unwrap().1;
-        let second = rings.iter().find(|(id, _)| id.model == 2).unwrap().1;
+        let first = &rings
+            .iter()
+            .find(|ring| ring.residue.model == 1)
+            .unwrap()
+            .plane;
+        let second = &rings
+            .iter()
+            .find(|ring| ring.residue.model == 2)
+            .unwrap()
+            .plane;
         assert!((second.center.x - first.center.x) > 5.0);
     }
 }
