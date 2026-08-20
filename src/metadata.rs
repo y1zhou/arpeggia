@@ -130,6 +130,55 @@ type BondKey = (BondEndpoint, BondEndpoint);
 type BondQualifiers = (BondQualifier, BondQualifier);
 type Bonds = HashMap<BondKey, Vec<BondQualifiers>>;
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct AtomIdentity {
+    model: usize,
+    serial: usize,
+}
+
+impl AtomIdentity {
+    fn from_entity(entity: &AtomConformerResidueChainModel, atom: &Atom) -> Self {
+        Self {
+            model: entity.model().serial_number(),
+            serial: atom.serial_number(),
+        }
+    }
+}
+
+/// Explicit bonds resolved against the selected atoms of a prepared structure.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ResolvedBonds(Vec<(AtomIdentity, AtomIdentity)>);
+
+impl ResolvedBonds {
+    pub(crate) fn contains_entities(
+        &self,
+        first: &AtomConformerResidueChainModel,
+        second: &AtomConformerResidueChainModel,
+    ) -> bool {
+        self.contains(
+            AtomIdentity::from_entity(first, first.atom()),
+            AtomIdentity::from_entity(second, second.atom()),
+        )
+    }
+
+    pub(crate) fn contains_entity_atom(
+        &self,
+        entity: &AtomConformerResidueChainModel,
+        atom: &Atom,
+    ) -> bool {
+        self.contains(
+            AtomIdentity::from_entity(entity, entity.atom()),
+            AtomIdentity::from_entity(entity, atom),
+        )
+    }
+
+    fn contains(&self, first: AtomIdentity, second: AtomIdentity) -> bool {
+        self.0
+            .binary_search(&ordered_atom_bond(first, second))
+            .is_ok()
+    }
+}
+
 /// Explicit connectivity and declared polymer sequences from one input file.
 #[derive(Clone, Debug, Default)]
 pub struct StructureMetadata {
@@ -145,34 +194,46 @@ impl StructureMetadata {
             .contains_key(&ordered_bond(first.clone(), second.clone()))
     }
 
-    pub(crate) fn has_entity_bond(
-        &self,
-        first: &AtomConformerResidueChainModel,
-        second: &AtomConformerResidueChainModel,
-    ) -> bool {
+    pub(crate) fn resolve_bonds(&self, pdb: &PDB) -> ResolvedBonds {
         if self.bonds.is_empty() {
-            return false;
+            return ResolvedBonds::default();
         }
-        self.has_qualified_bond(
-            QualifiedBondEndpoint::from_entity_atom(first, first.atom()),
-            QualifiedBondEndpoint::from_entity_atom(second, second.atom()),
-        )
+        let mut atoms = HashMap::<BondEndpoint, Vec<(BondQualifier, AtomIdentity)>>::new();
+        for entity in pdb.atoms_with_hierarchy() {
+            let qualified = QualifiedBondEndpoint::from_entity_atom(&entity, entity.atom());
+            atoms.entry(qualified.endpoint).or_default().push((
+                qualified.qualifier,
+                AtomIdentity::from_entity(&entity, entity.atom()),
+            ));
+        }
+
+        let mut resolved = Vec::new();
+        for ((first, second), records) in &self.bonds {
+            let (Some(first_atoms), Some(second_atoms)) = (atoms.get(first), atoms.get(second))
+            else {
+                continue;
+            };
+            for (first_record, second_record) in records {
+                for (first_qualifier, first_identity) in first_atoms {
+                    if !first_record.matches(first_qualifier) {
+                        continue;
+                    }
+                    for (second_qualifier, second_identity) in second_atoms {
+                        if second_record.matches(second_qualifier)
+                            && first_identity != second_identity
+                        {
+                            resolved.push(ordered_atom_bond(*first_identity, *second_identity));
+                        }
+                    }
+                }
+            }
+        }
+        resolved.sort_unstable();
+        resolved.dedup();
+        ResolvedBonds(resolved)
     }
 
-    pub(crate) fn has_entity_atom_bond(
-        &self,
-        entity: &AtomConformerResidueChainModel,
-        atom: &Atom,
-    ) -> bool {
-        if self.bonds.is_empty() {
-            return false;
-        }
-        self.has_qualified_bond(
-            QualifiedBondEndpoint::from_entity_atom(entity, entity.atom()),
-            QualifiedBondEndpoint::from_entity_atom(entity, atom),
-        )
-    }
-
+    #[cfg(test)]
     fn has_qualified_bond(
         &self,
         first: QualifiedBondEndpoint,
@@ -796,6 +857,14 @@ fn value<'a>(row: &'a [String], columns: &HashMap<&str, usize>, name: &str) -> O
 }
 
 fn ordered_bond(first: BondEndpoint, second: BondEndpoint) -> (BondEndpoint, BondEndpoint) {
+    if first <= second {
+        (first, second)
+    } else {
+        (second, first)
+    }
+}
+
+fn ordered_atom_bond(first: AtomIdentity, second: AtomIdentity) -> (AtomIdentity, AtomIdentity) {
     if first <= second {
         (first, second)
     } else {

@@ -14,7 +14,6 @@ pub mod vdw;
 // Re-exports
 pub use aromatic::{find_cation_pi, find_pi_pi};
 pub use complex::*;
-pub use hbond::{find_hydrogen_bond, find_weak_hydrogen_bond};
 pub use hydrophobic::find_hydrophobic_contact;
 pub use ionic::{find_ionic_bond_with_protonation, find_ionic_repulsion_with_protonation};
 pub use residues::ResidueId;
@@ -67,7 +66,8 @@ pub fn analyze_contacts(
         crate::AnalysisWarning::new(crate::WarningCode::IncompleteGeometry, message)
     }));
     warnings.extend(protonation_warnings(&prepared, protonation));
-    let missing_donors = hbond::count_donors_without_explicit_hydrogen(&prepared, metadata);
+    let missing_donors =
+        hbond::count_donors_without_explicit_hydrogen(&prepared, complex.resolved_bonds());
     if missing_donors > 0 {
         warnings.push(crate::AnalysisWarning::new(
             crate::WarningCode::MissingDonorHydrogen,

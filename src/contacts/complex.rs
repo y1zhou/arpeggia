@@ -1,10 +1,11 @@
 use super::{
     InteractingEntity, Interaction, ProtonationMode, ResultEntry, find_cation_pi,
-    find_hydrogen_bond, find_hydrophobic_contact, find_ionic_bond_with_protonation,
-    find_ionic_repulsion_with_protonation, find_pi_pi, find_vdw_contact, find_weak_hydrogen_bond,
+    find_hydrophobic_contact, find_ionic_bond_with_protonation,
+    find_ionic_repulsion_with_protonation, find_pi_pi, find_vdw_contact,
+    hbond::{find_hydrogen_bond, find_weak_hydrogen_bond},
     residues::{Plane, ResidueExt, ResidueId},
 };
-use crate::{StructureMetadata, structure::parse_groups};
+use crate::{StructureMetadata, metadata::ResolvedBonds, structure::parse_groups};
 use pdbtbx::*;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -51,7 +52,7 @@ pub struct InteractionComplex<'a> {
     pub vdw_comp_factor: f64,
     /// Distance cutoff when searching for neighboring atoms
     pub interacting_threshold: f64,
-    metadata: Option<&'a StructureMetadata>,
+    resolved_bonds: ResolvedBonds,
     protonation: ProtonationMode,
     ph: f64,
 
@@ -84,6 +85,9 @@ impl<'a> InteractionComplex<'a> {
         // Build a mapping of residue names to indices
         let res2idx = build_residue_index(model);
         let peptide_neighbors = build_peptide_neighbors(model, metadata);
+        let resolved_bonds = metadata.map_or_else(ResolvedBonds::default, |metadata| {
+            metadata.resolve_bonds(model)
+        });
 
         // Build a mapping of ring residue names to ring centers and normals
         let (rings, ring_err) = build_ring_positions(model);
@@ -98,7 +102,7 @@ impl<'a> InteractionComplex<'a> {
                 receptor,
                 vdw_comp_factor,
                 interacting_threshold,
-                metadata,
+                resolved_bonds,
                 protonation,
                 ph,
                 res2idx,
@@ -115,10 +119,11 @@ impl<'a> InteractionComplex<'a> {
         first: &AtomConformerResidueChainModel,
         second: &AtomConformerResidueChainModel,
     ) -> bool {
-        let Some(metadata) = self.metadata else {
-            return false;
-        };
-        metadata.has_entity_bond(first, second)
+        self.resolved_bonds.contains_entities(first, second)
+    }
+
+    pub(crate) fn resolved_bonds(&self) -> &ResolvedBonds {
+        &self.resolved_bonds
     }
 
     /// Determine if two entities need to be checked for interactions or not.
@@ -284,7 +289,7 @@ impl Interactions for InteractionComplex<'_> {
                 // Ionic bonds, Hydrogen bonds and polar contacts
                 let ionic_bonds =
                     find_ionic_bond_with_protonation(e1, e2, self.protonation, self.ph);
-                let hbonds = find_hydrogen_bond(e1, e2, self.vdw_comp_factor, self.metadata);
+                let hbonds = find_hydrogen_bond(e1, e2, self.vdw_comp_factor, &self.resolved_bonds);
                 let electrostatic = match (ionic_bonds, hbonds) {
                     (Some(Interaction::IonicBond), Some(Interaction::HydrogenBond)) => {
                         Some(Interaction::SaltBridge)
@@ -301,7 +306,7 @@ impl Interactions for InteractionComplex<'_> {
 
                 // C-H...O bonds
                 let weak_hbonds =
-                    find_weak_hydrogen_bond(e1, e2, self.vdw_comp_factor, self.metadata)
+                    find_weak_hydrogen_bond(e1, e2, self.vdw_comp_factor, &self.resolved_bonds)
                         .map(&make_entry);
                 atomic_contacts.extend(weak_hbonds);
 
