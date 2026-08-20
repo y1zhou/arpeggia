@@ -175,22 +175,12 @@ pub(crate) fn calculate_atom_sasa_records(
     )
 }
 
-pub(crate) fn calculate_sap_atom_sasa_records(
+pub(crate) fn calculate_prepared_sap_atom_sasa_records(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
-    model_num: usize,
-    chains: &str,
 ) -> crate::ArpeggiaResult<Vec<AtomSasaRecord>> {
-    calculate_atom_sasa_records_with_scheme(
-        pdb,
-        probe_radius,
-        n_points,
-        model_num,
-        false,
-        chains,
-        RadiusScheme::SapReduce,
-    )
+    calculate_prepared_atom_sasa_records(pdb, probe_radius, n_points, None, RadiusScheme::SapReduce)
 }
 
 #[allow(clippy::too_many_arguments)]

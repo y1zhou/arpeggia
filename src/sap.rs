@@ -16,11 +16,12 @@
 //! - SASA is the side-chain solvent accessible surface area
 //! - SASA_max is the maximum SASA for that residue type
 
-use crate::sasa::{calculate_sap_atom_sasa_records, validate_sasa_input};
+use crate::sasa::{calculate_prepared_sap_atom_sasa_records, validate_sasa_input};
 use crate::structure::prepare_structure;
 use pdbtbx::*;
 use polars::prelude::*;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use rstar::{RTree, primitives::GeomWithData};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 #[derive(Clone, Debug)]
 struct AtomSapRecord {
@@ -44,6 +45,12 @@ struct ResidueSapRecord {
     sap_score: f32,
     max_sc_asa: f32,
     relative_sc_sasa: f32,
+}
+
+struct SapAtom {
+    record: AtomSapRecord,
+    position: [f64; 3],
+    contribution: f32,
 }
 
 /// Black & Mould (1991) hydrophobicity scale values for amino acids.
@@ -200,14 +207,9 @@ pub fn get_per_atom_sap_score(
         ));
     }
     let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let (records, unsupported) = calculate_per_atom_sap_records(
-        &analysis.value,
-        probe_radius,
-        n_points,
-        model_num,
-        sap_radius,
-        chains,
-    )?;
+    let prepared = prepare_structure(&analysis.value, model_num, false, chains);
+    let (records, unsupported) =
+        calculate_per_atom_sap_records(&prepared, probe_radius, n_points, sap_radius)?;
     let mut warnings = analysis.warnings;
     append_unsupported_monomer_warning(&unsupported, &mut warnings);
     append_prepared_input_warnings(&analysis.value, model_num, chains, &mut warnings);
@@ -221,14 +223,11 @@ fn calculate_per_atom_sap_records(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
-    model_num: usize,
     sap_radius: f32,
-    chains: &str,
 ) -> crate::ArpeggiaResult<(Vec<AtomSapRecord>, BTreeSet<String>)> {
     // SAP applies Rosetta's Reduce-radius exposure definition to all supplied
     // atoms; standard SASA remains a separate heavy-atom ProtOr calculation.
-    let atom_sasa_records =
-        calculate_sap_atom_sasa_records(pdb, probe_radius, n_points, model_num, chains)?;
+    let atom_sasa_records = calculate_prepared_sap_atom_sasa_records(pdb, probe_radius, n_points)?;
     let unsupported = atom_sasa_records
         .iter()
         .filter(|record| {
@@ -238,60 +237,68 @@ fn calculate_per_atom_sap_records(
         .collect::<BTreeSet<_>>();
     // [WARNING] Rosetta publishes no SAP calibration for these monomers. They
     // are omitted and diagnosed instead of borrowing an unjustified constant.
-    let atom_sasa_records = atom_sasa_records
+    let atoms = atom_sasa_records
         .into_iter()
-        .filter(|record| !unsupported.contains(&record.resn))
+        .zip(pdb.atoms_with_hierarchy())
+        .filter(|(record, _)| {
+            !unsupported.contains(&record.resn) && is_sap_sidechain(&record.resn, &record.atomn)
+        })
+        .filter_map(|(record, entity)| {
+            debug_assert_eq!(record.atomi, entity.atom().serial_number() as u64);
+            let hydrophobicity = get_hydrophobicity(&record.resn)?;
+            let max_asa = get_sc_max_asa(&record.resn)?;
+            let position = entity.atom().pos();
+            Some(SapAtom {
+                contribution: if max_asa == 0.0 {
+                    0.0
+                } else {
+                    hydrophobicity * record.sasa / max_asa
+                },
+                position: [position.0, position.1, position.2],
+                record: AtomSapRecord {
+                    chain: record.chain,
+                    resn: record.resn,
+                    resi: record.resi,
+                    insertion: record.insertion,
+                    atomn: record.atomn,
+                    atomi: record.atomi,
+                    sasa: record.sasa,
+                    sap_score: 0.0,
+                },
+            })
+        })
         .collect::<Vec<_>>();
-    let atom_sasa_map: HashMap<u64, f32> = atom_sasa_records
-        .iter()
-        .map(|record| (record.atomi, record.sasa))
-        .collect();
-
-    let pdb_all_atoms = prepare_structure(pdb, model_num, false, chains);
-    let tree = pdb_all_atoms.create_hierarchy_rtree();
+    let tree = RTree::bulk_load(
+        atoms
+            .iter()
+            .enumerate()
+            .map(|(index, atom)| GeomWithData::new(atom.position, index))
+            .collect(),
+    );
     let sap_radius_sq = f64::from(sap_radius * sap_radius);
-
-    let sap_scores_map: HashMap<u64, f32> = pdb_all_atoms
-        .atoms_with_hierarchy()
-        .filter(|h| is_sap_sidechain(h.residue().name().unwrap_or(""), h.atom().name()))
-        .map(|x| {
-            let x_atomi = x.atom().serial_number() as u64;
-            let x_position = x.atom().pos();
-            let atom_sap_score = tree
-                .locate_within_distance(x_position, sap_radius_sq)
-                .filter(|y| is_sap_sidechain(y.residue().name().unwrap_or(""), y.atom().name()))
-                .filter(|y| {
-                    let y_position = y.atom().pos();
-                    (x_position.0 - y_position.0).powi(2)
-                        + (x_position.1 - y_position.1).powi(2)
-                        + (x_position.2 - y_position.2).powi(2)
+    let scores = atoms
+        .iter()
+        .map(|atom| {
+            tree.locate_within_distance(atom.position, sap_radius_sq)
+                .filter(|neighbor| {
+                    let position = atoms[neighbor.data].position;
+                    atom.position
+                        .iter()
+                        .zip(position)
+                        .map(|(left, right)| (left - right).powi(2))
+                        .sum::<f64>()
                         < sap_radius_sq
                 })
-                .filter_map(|y| {
-                    let neighbor_resn = y.residue().name()?;
-                    let neighbor_atom_sasa =
-                        atom_sasa_map.get(&(y.atom().serial_number() as u64))?;
-                    let neighbor_res_hydrophobicity = get_hydrophobicity(neighbor_resn)?;
-                    let max_res_asa = get_sc_max_asa(neighbor_resn)?;
-                    Some(neighbor_res_hydrophobicity * (neighbor_atom_sasa / max_res_asa))
-                })
-                .sum::<f32>();
-            (x_atomi, atom_sap_score)
+                .map(|neighbor| atoms[neighbor.data].contribution)
+                .sum::<f32>()
         })
-        .collect();
-
-    let mut records = atom_sasa_records
+        .collect::<Vec<_>>();
+    let mut records = atoms
         .into_iter()
-        .filter(|record| is_sap_sidechain(&record.resn, &record.atomn))
-        .map(|record| AtomSapRecord {
-            sap_score: sap_scores_map.get(&record.atomi).copied().unwrap_or(0.0),
-            chain: record.chain,
-            resn: record.resn,
-            resi: record.resi,
-            insertion: record.insertion,
-            atomn: record.atomn,
-            atomi: record.atomi,
-            sasa: record.sasa,
+        .zip(scores)
+        .map(|(atom, sap_score)| AtomSapRecord {
+            sap_score,
+            ..atom.record
         })
         .collect::<Vec<_>>();
     records.sort_by_key(|record| record.atomi);
@@ -435,14 +442,9 @@ pub fn get_per_residue_sap_score(
         ));
     }
     let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let (records, unsupported) = calculate_per_residue_sap_records(
-        &analysis.value,
-        probe_radius,
-        n_points,
-        model_num,
-        sap_radius,
-        chains,
-    )?;
+    let prepared = prepare_structure(&analysis.value, model_num, false, chains);
+    let (records, unsupported) =
+        calculate_per_residue_sap_records(&prepared, probe_radius, n_points, sap_radius)?;
     let mut warnings = analysis.warnings;
     append_unsupported_monomer_warning(&unsupported, &mut warnings);
     append_prepared_input_warnings(&analysis.value, model_num, chains, &mut warnings);
@@ -456,14 +458,11 @@ fn calculate_per_residue_sap_records(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
-    model_num: usize,
     sap_radius: f32,
-    chains: &str,
 ) -> crate::ArpeggiaResult<(Vec<ResidueSapRecord>, BTreeSet<String>)> {
     let mut grouped: BTreeMap<(String, String, i64, String), (f32, f32)> = BTreeMap::new();
 
-    let prepared = prepare_structure(pdb, model_num, false, chains);
-    for model in prepared.models() {
+    for model in pdb.models() {
         for chain in model.chains() {
             for residue in chain.residues() {
                 let Some(resn) = residue
@@ -486,7 +485,7 @@ fn calculate_per_residue_sap_records(
     }
 
     let (atom_records, unsupported) =
-        calculate_per_atom_sap_records(pdb, probe_radius, n_points, model_num, sap_radius, chains)?;
+        calculate_per_atom_sap_records(pdb, probe_radius, n_points, sap_radius)?;
     for record in atom_records {
         let key = (record.chain, record.resn, record.resi, record.insertion);
         let (sc_sasa, sap_score) = grouped.entry(key).or_insert((0.0, 0.0));
