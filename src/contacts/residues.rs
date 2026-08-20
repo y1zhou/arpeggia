@@ -3,7 +3,7 @@ use pdbtbx::*;
 use rayon::prelude::*;
 
 /// The struct for a residue identifier
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct ResidueId<'a> {
     /// Model identifier
     pub model: usize,

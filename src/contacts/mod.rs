@@ -16,13 +16,11 @@ pub use aromatic::{find_cation_pi, find_pi_pi};
 pub use complex::*;
 pub use hydrophobic::find_hydrophobic_contact;
 pub use ionic::{find_ionic_bond_with_protonation, find_ionic_repulsion_with_protonation};
-pub use residues::ResidueId;
 pub use structs::*;
 pub use vdw::find_vdw_contact;
 
 use pdbtbx::*;
 use polars::prelude::*;
-use std::collections::HashMap;
 use tracing::debug;
 
 /// Analyze contacts with explicit connectivity and histidine-protonation policy.
@@ -195,9 +193,7 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> DataFrame {
     debug!("Found {} ring contacts\n{}", df_ring.height(), df_ring);
 
     // Annotate sidechain centroid distances and dihedrals
-    let mut sc_dist_dihedrals = HashMap::new();
-    sc_dist_dihedrals.extend(i_complex.collect_sc_stats(&atomic_contacts));
-    sc_dist_dihedrals.extend(i_complex.collect_sc_stats(&ring_contacts));
+    let sc_dist_dihedrals = i_complex.collect_sc_stats(&atomic_contacts, &ring_contacts);
 
     let df_sc_stats = sc_results_to_df(&sc_dist_dihedrals);
 
@@ -267,22 +263,20 @@ pub(crate) fn results_to_df(res: &[ResultEntry]) -> DataFrame {
 }
 
 /// Convert sidechain statistics into a Polars `DataFrame`.
-pub(crate) fn sc_results_to_df(
-    res: &HashMap<(ResidueId, ResidueId), (f64, f64, f64)>,
-) -> DataFrame {
+pub(crate) fn sc_results_to_df(res: &[SidechainStat<'_>]) -> DataFrame {
     df!(
-        "model" => res.keys().map(|k| k.0.model as u64).collect::<Vec<u64>>(),
-        "from_chain" => res.keys().map(|k| k.0.chain.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.keys().map(|k| k.0.resi as i64).collect::<Vec<i64>>(),
-        "from_insertion" => res.keys().map(|k| k.0.insertion.to_owned()).collect::<Vec<String>>(),
-        "from_altloc" => res.keys().map(|k| k.0.altloc.to_owned()).collect::<Vec<String>>(),
-        "to_chain" => res.keys().map(|k| k.1.chain.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.keys().map(|k| k.1.resi as i64).collect::<Vec<i64>>(),
-        "to_insertion" => res.keys().map(|k| k.1.insertion.to_owned()).collect::<Vec<String>>(),
-        "to_altloc" => res.keys().map(|k| k.1.altloc.to_owned()).collect::<Vec<String>>(),
-        "sc_centroid_dist" => res.values().map(|v| v.0 as f32).collect::<Vec<f32>>(),
-        "sc_dihedral" => res.values().map(|v| v.1 as f32).collect::<Vec<f32>>(),
-        "sc_centroid_angle" => res.values().map(|v| v.2 as f32).collect::<Vec<f32>>(),
+        "model" => res.iter().map(|(k, _)| k.0.model as u64).collect::<Vec<u64>>(),
+        "from_chain" => res.iter().map(|(k, _)| k.0.chain.to_owned()).collect::<Vec<String>>(),
+        "from_resi" => res.iter().map(|(k, _)| k.0.resi as i64).collect::<Vec<i64>>(),
+        "from_insertion" => res.iter().map(|(k, _)| k.0.insertion.to_owned()).collect::<Vec<String>>(),
+        "from_altloc" => res.iter().map(|(k, _)| k.0.altloc.to_owned()).collect::<Vec<String>>(),
+        "to_chain" => res.iter().map(|(k, _)| k.1.chain.to_owned()).collect::<Vec<String>>(),
+        "to_resi" => res.iter().map(|(k, _)| k.1.resi as i64).collect::<Vec<i64>>(),
+        "to_insertion" => res.iter().map(|(k, _)| k.1.insertion.to_owned()).collect::<Vec<String>>(),
+        "to_altloc" => res.iter().map(|(k, _)| k.1.altloc.to_owned()).collect::<Vec<String>>(),
+        "sc_centroid_dist" => res.iter().map(|(_, v)| v.0 as f32).collect::<Vec<f32>>(),
+        "sc_dihedral" => res.iter().map(|(_, v)| v.1 as f32).collect::<Vec<f32>>(),
+        "sc_centroid_angle" => res.iter().map(|(_, v)| v.2 as f32).collect::<Vec<f32>>(),
     )
     .unwrap()
 }

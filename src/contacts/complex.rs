@@ -15,6 +15,8 @@ const MAX_PEPTIDE_C_N_DISTANCE: f64 = 1.8;
 const GROUP1: u8 = 0b01;
 const GROUP2: u8 = 0b10;
 
+pub(crate) type SidechainStat<'a> = ((ResidueId<'a>, ResidueId<'a>), (f64, f64, f64));
+
 struct IndexedAtom<'a> {
     entity: AtomConformerResidueChainModel<'a>,
     group: u8,
@@ -195,12 +197,14 @@ impl<'a> InteractionComplex<'a> {
         }
     }
 
-    pub(crate) fn collect_sc_stats(
-        &'_ self,
-        contacts: &'a [ResultEntry],
-    ) -> HashMap<(ResidueId<'_>, ResidueId<'_>), (f64, f64, f64)> {
-        contacts
-            .par_iter()
+    pub(crate) fn collect_sc_stats<'b>(
+        &self,
+        atomic_contacts: &'b [ResultEntry],
+        ring_contacts: &'b [ResultEntry],
+    ) -> Vec<SidechainStat<'b>> {
+        let mut pairs = atomic_contacts
+            .iter()
+            .chain(ring_contacts)
             .filter_map(|contact| {
                 let res1 = ResidueId::new(
                     contact.model,
@@ -210,7 +214,6 @@ impl<'a> InteractionComplex<'a> {
                     contact.ligand.altloc.as_str(),
                     contact.ligand.resn.as_str(),
                 );
-                let res1_plane = self.sc_planes.get(&res1)?;
                 let res2 = ResidueId::new(
                     contact.model,
                     contact.receptor.chain.as_str(),
@@ -219,13 +222,23 @@ impl<'a> InteractionComplex<'a> {
                     contact.receptor.altloc.as_str(),
                     contact.receptor.resn.as_str(),
                 );
-                let res2_plane = self.sc_planes.get(&res2)?;
+                (self.sc_planes.contains_key(&res1) && self.sc_planes.contains_key(&res2))
+                    .then_some((res1, res2))
+            })
+            .collect::<Vec<_>>();
+        pairs.sort_unstable();
+        pairs.dedup();
+        pairs
+            .into_par_iter()
+            .map(|(res1, res2)| {
+                let res1_plane = &self.sc_planes[&res1];
+                let res2_plane = &self.sc_planes[&res2];
                 let centroid_dist = res1_plane.point_vec_dist(&res2_plane.center);
                 let dihedral = res1_plane.dihedral(res2_plane);
                 let centroid_angle = res1_plane.point_vec_angle(&res2_plane.center);
-                Some(((res1, res2), (centroid_dist, dihedral, centroid_angle)))
+                ((res1, res2), (centroid_dist, dihedral, centroid_angle))
             })
-            .collect::<HashMap<(ResidueId, ResidueId), (f64, f64, f64)>>()
+            .collect()
     }
 }
 
