@@ -212,7 +212,7 @@ impl SurfaceGenerator {
                             continue;
                         }
                         // burial check against opposite molecule
-                        let other_mol = usize::from(a_i.molecule == 0);
+                        let other_mol = u8::from(a_i.molecule == 0);
                         let mut buried = false;
                         for b in atoms {
                             if b.molecule != other_mol {
@@ -240,7 +240,7 @@ impl SurfaceGenerator {
                 if dots.is_empty() {
                     None
                 } else {
-                    Some((a_i.molecule, dots))
+                    Some((usize::from(a_i.molecule), dots))
                 }
             })
             .collect();
@@ -679,7 +679,7 @@ impl SurfaceGenerator {
                         } else {
                             (pcen - point) / rp
                         };
-                        let other_mol = usize::from(molecule == 0);
+                        let other_mol = u8::from(molecule == 0);
                         let mut buried = false;
                         for b in atoms {
                             if b.molecule != other_mol {
@@ -718,7 +718,7 @@ impl SurfaceGenerator {
         Ok(())
     }
 
-    fn add_dot(&mut self, molecule: usize, coor: Vec3, pcen: Vec3) {
+    fn add_dot(&mut self, molecule: u8, coor: Vec3, pcen: Vec3) {
         let outnml = (pcen - coor) / PROBE_RADIUS;
         let buried = self.run.atoms.iter().any(|b| {
             if b.molecule != molecule {
@@ -734,7 +734,7 @@ impl SurfaceGenerator {
             outnml,
             buried,
         };
-        self.run.dots[molecule].push(dot);
+        self.run.dots[usize::from(molecule)].push(dot);
     }
 }
 

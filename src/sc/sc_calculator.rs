@@ -157,7 +157,13 @@ impl ScCalculator {
             return Err(SurfaceCalculatorError::NoAtoms);
         }
         for i in 0..2 {
-            if !self.base.run.atoms.iter().any(|atom| atom.molecule == i) {
+            if !self
+                .base
+                .run
+                .atoms
+                .iter()
+                .any(|atom| usize::from(atom.molecule) == i)
+            {
                 return Err(SurfaceCalculatorError::NoAtomsForGroup(i + 1));
             }
         }

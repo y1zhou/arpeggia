@@ -15,7 +15,7 @@ pub enum Attention {
 #[derive(Clone, Debug, Default)]
 pub struct ScAtom {
     pub atomi: usize,
-    pub molecule: usize,
+    pub molecule: u8,
     pub radius: f64,
     pub attention: Attention,
     /// Is atom accessible to solvent/contact surface
