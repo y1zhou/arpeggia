@@ -87,8 +87,6 @@ pub fn get_sc_details(
     model_num: usize,
 ) -> crate::ArpeggiaResult<crate::Analysis<ScResult>> {
     let selected_model = crate::structure::selected_model(pdb, model_num)?;
-    let mut pdb = pdb.clone();
-    let warnings = crate::structure::select_conformers(&mut pdb);
     // Get all chains in the PDB
     let all_chains: HashSet<String> = selected_model
         .chains()
@@ -105,13 +103,13 @@ pub fn get_sc_details(
 
     let all_selected_chains: HashSet<String> =
         group1_chains.union(&group2_chains).cloned().collect();
-    let pdb_filtered = prepare_structure_with_chains(&pdb, model_num, true, &all_selected_chains);
+    let analysis = prepare_structure_with_chains(pdb, model_num, true, &all_selected_chains);
 
     let mut calc = ScCalculator::default();
 
     // Load atoms from PDB into the calculator
     // Each contains a `molecule_id` that is 0 for group1, 1 for group2
-    calc.add_atoms(&pdb_filtered, &group1_chains, &group2_chains)?;
+    calc.add_atoms(&analysis.value, &group1_chains, &group2_chains)?;
 
     // Calculate SC
     let results = calc.calc()?;
@@ -121,7 +119,7 @@ pub fn get_sc_details(
             group1: results.surfaces[0].s_median,
             group2: results.surfaces[1].s_median,
         },
-        warnings,
+        analysis.warnings,
     ))
 }
 

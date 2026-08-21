@@ -21,7 +21,7 @@ use crate::structure::prepare_structure;
 use pdbtbx::*;
 use polars::prelude::*;
 use rstar::{RTree, primitives::GeomWithData};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug)]
 struct AtomSapRecord {
@@ -206,13 +206,13 @@ pub fn get_per_atom_sap_score(
             "sap_radius must be finite and positive".into(),
         ));
     }
-    let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let prepared = prepare_structure(&analysis.value, model_num, false, chains);
+    validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
+    let analysis = prepare_structure(pdb, model_num, false, chains);
     let (records, unsupported) =
-        calculate_per_atom_sap_records(&prepared, probe_radius, n_points, sap_radius)?;
+        calculate_per_atom_sap_records(&analysis.value, probe_radius, n_points, sap_radius)?;
     let mut warnings = analysis.warnings;
     append_unsupported_monomer_warning(&unsupported, &mut warnings);
-    append_prepared_input_warnings(&analysis.value, model_num, chains, &mut warnings);
+    append_prepared_input_warnings(&analysis.value, &mut warnings);
     Ok(crate::Analysis::new(
         atom_sap_records_to_dataframe(&records),
         warnings,
@@ -320,24 +320,11 @@ fn append_unsupported_monomer_warning(
     }
 }
 
-fn append_prepared_input_warnings(
-    pdb: &PDB,
-    model_num: usize,
-    chains: &str,
-    warnings: &mut Vec<crate::AnalysisWarning>,
-) {
-    let requested = chains
-        .split(',')
-        .map(str::trim)
-        .filter(|chain| !chain.is_empty())
-        .collect::<HashSet<_>>();
-    let Ok(model) = crate::structure::selected_model(pdb, model_num) else {
+fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisWarning>) {
+    let Some(model) = pdb.models().next() else {
         return;
     };
-    let selected_chains = model
-        .chains()
-        .filter(|chain| requested.is_empty() || requested.contains(chain.id()))
-        .collect::<Vec<_>>();
+    let selected_chains = model.chains().collect::<Vec<_>>();
     if selected_chains
         .iter()
         .flat_map(|chain| chain.atoms())
@@ -441,13 +428,13 @@ pub fn get_per_residue_sap_score(
             "sap_radius must be finite and positive".into(),
         ));
     }
-    let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let prepared = prepare_structure(&analysis.value, model_num, false, chains);
+    validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
+    let analysis = prepare_structure(pdb, model_num, false, chains);
     let (records, unsupported) =
-        calculate_per_residue_sap_records(&prepared, probe_radius, n_points, sap_radius)?;
+        calculate_per_residue_sap_records(&analysis.value, probe_radius, n_points, sap_radius)?;
     let mut warnings = analysis.warnings;
     append_unsupported_monomer_warning(&unsupported, &mut warnings);
-    append_prepared_input_warnings(&analysis.value, model_num, chains, &mut warnings);
+    append_prepared_input_warnings(&analysis.value, &mut warnings);
     Ok(crate::Analysis::new(
         residue_sap_records_to_dataframe(&records),
         warnings,

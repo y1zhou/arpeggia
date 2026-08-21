@@ -131,9 +131,8 @@ pub fn get_atom_sasa(
     model_num: usize,
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
-    let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let records =
-        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
+    let analysis = calculate_atom_sasa_records(pdb, probe_radius, n_points, model_num, chains)?;
+    let records = analysis.value;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&records, &mut warnings);
     Ok(crate::Analysis::new(
@@ -157,22 +156,23 @@ fn append_polarity_warning(records: &[AtomSasaRecord], warnings: &mut Vec<crate:
     }
 }
 
-pub(crate) fn calculate_atom_sasa_records(
+fn calculate_atom_sasa_records(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
     model_num: usize,
     chains: &str,
-) -> crate::ArpeggiaResult<Vec<AtomSasaRecord>> {
-    calculate_atom_sasa_records_with_scheme(
-        pdb,
+) -> crate::ArpeggiaResult<crate::Analysis<Vec<AtomSasaRecord>>> {
+    validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
+    let analysis = prepare_structure(pdb, model_num, true, chains);
+    let records = calculate_prepared_atom_sasa_records(
+        &analysis.value,
         probe_radius,
         n_points,
-        model_num,
-        true,
-        chains,
+        None,
         RadiusScheme::StandardProtor,
-    )
+    )?;
+    Ok(crate::Analysis::new(records, analysis.warnings))
 }
 
 pub(crate) fn calculate_prepared_sap_atom_sasa_records(
@@ -181,20 +181,6 @@ pub(crate) fn calculate_prepared_sap_atom_sasa_records(
     n_points: usize,
 ) -> crate::ArpeggiaResult<Vec<AtomSasaRecord>> {
     calculate_prepared_atom_sasa_records(pdb, probe_radius, n_points, None, RadiusScheme::SapReduce)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn calculate_atom_sasa_records_with_scheme(
-    pdb: &PDB,
-    probe_radius: f32,
-    n_points: usize,
-    model_num: usize,
-    remove_hydrogens: bool,
-    chains: &str,
-    radius_scheme: RadiusScheme,
-) -> crate::ArpeggiaResult<Vec<AtomSasaRecord>> {
-    let pdb_filtered = prepare_structure(pdb, model_num, remove_hydrogens, chains);
-    calculate_prepared_atom_sasa_records(&pdb_filtered, probe_radius, n_points, None, radius_scheme)
 }
 
 fn calculate_prepared_atom_sasa_records(
@@ -468,9 +454,8 @@ pub fn get_residue_sasa(
     model_num: usize,
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
-    let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let atom_records =
-        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
+    let analysis = calculate_atom_sasa_records(pdb, probe_radius, n_points, model_num, chains)?;
+    let atom_records = analysis.value;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&atom_records, &mut warnings);
     Ok(crate::Analysis::new(
@@ -564,9 +549,8 @@ pub fn get_chain_sasa(
     model_num: usize,
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
-    let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let atom_records =
-        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
+    let analysis = calculate_atom_sasa_records(pdb, probe_radius, n_points, model_num, chains)?;
+    let atom_records = analysis.value;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&atom_records, &mut warnings);
     Ok(crate::Analysis::new(
@@ -651,8 +635,7 @@ pub fn get_dsasa_components(
     n_points: usize,
     model_num: usize,
 ) -> crate::ArpeggiaResult<crate::Analysis<DsasaResult>> {
-    let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, "")?;
-    let pdb = &analysis.value;
+    validate_sasa_input(pdb, probe_radius, n_points, model_num, "")?;
     // Get all chains in the PDB
     let all_chains: HashSet<String> = crate::structure::selected_model(pdb, model_num)?
         .chains()
@@ -671,14 +654,15 @@ pub fn get_dsasa_components(
     let combined_group_chains: HashSet<String> =
         group1_chains.union(&group2_chains).cloned().collect();
 
-    let prepared = StructurePreparation::new(model_num)
+    let analysis = StructurePreparation::new(model_num)
         .remove_hydrogens(true)
         .remove_solvent_and_ions(true)
         .chain_set(&combined_group_chains)
         .prepare(pdb);
+    let prepared = &analysis.value;
 
     let combined_atom_sasa = calculate_prepared_atom_sasa_records(
-        &prepared,
+        prepared,
         probe_radius,
         n_points,
         None,
@@ -690,7 +674,7 @@ pub fn get_dsasa_components(
     let combined_total = sum_chain_sasa(&combined_sasa);
 
     let group1_sasa = aggregate_chain_records(calculate_prepared_atom_sasa_records(
-        &prepared,
+        prepared,
         probe_radius,
         n_points,
         Some(&group1_chains),
@@ -699,7 +683,7 @@ pub fn get_dsasa_components(
     let group1_total = sum_chain_sasa(&group1_sasa);
 
     let group2_sasa = aggregate_chain_records(calculate_prepared_atom_sasa_records(
-        &prepared,
+        prepared,
         probe_radius,
         n_points,
         Some(&group2_chains),
@@ -810,9 +794,8 @@ pub fn get_relative_sasa(
     model_num: usize,
     chains: &str,
 ) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
-    let analysis = validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
-    let atom_records =
-        calculate_atom_sasa_records(&analysis.value, probe_radius, n_points, model_num, chains)?;
+    let analysis = calculate_atom_sasa_records(pdb, probe_radius, n_points, model_num, chains)?;
+    let atom_records = analysis.value;
     let mut warnings = analysis.warnings;
     append_polarity_warning(&atom_records, &mut warnings);
     let residue_records = aggregate_residue_records(atom_records);
@@ -851,7 +834,7 @@ pub(crate) fn validate_sasa_input(
     n_points: usize,
     model_num: usize,
     chains: &str,
-) -> crate::ArpeggiaResult<crate::Analysis<PDB>> {
+) -> crate::ArpeggiaResult<()> {
     if !probe_radius.is_finite() || probe_radius <= 0.0 {
         return Err(crate::ArpeggiaError::InvalidArgument(
             "probe_radius must be finite and positive".into(),
@@ -877,9 +860,7 @@ pub(crate) fn validate_sasa_input(
             "chain {chain} does not exist"
         )));
     }
-    let mut prepared = pdb.clone();
-    let warnings = crate::structure::select_conformers(&mut prepared);
-    Ok(crate::Analysis::new(prepared, warnings))
+    Ok(())
 }
 
 fn relative_sasa_records_to_dataframe(records: &[RelativeSasaRecord]) -> DataFrame {
@@ -984,6 +965,33 @@ END                                                                             
         assert_eq!(
             df.column("atomn").unwrap().str().unwrap().get(0),
             Some("CB")
+        );
+    }
+
+    #[test]
+    fn surface_preparation_reports_automatic_conformer_selection() {
+        let input =
+            b"ATOM      1  CB AALA A   1       0.000   0.000   0.000  0.60 20.00           C  \n\
+ATOM      2  CB BALA A   1       1.000   0.000   0.000  0.40 20.00           C  \n\
+ATOM      3  CB AALA B   1       4.000   0.000   0.000  0.60 20.00           C  \n\
+ATOM      4  CB BALA B   1       5.000   0.000   0.000  0.40 20.00           C  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(std::io::BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let analysis = get_atom_sasa(&pdb, 1.4, 20, 0, "A").unwrap();
+
+        assert_eq!(analysis.value.height(), 1);
+        assert_eq!(
+            analysis
+                .warnings
+                .iter()
+                .filter(|warning| warning.code == WarningCode::ConformerSelected)
+                .count(),
+            1
         );
     }
 

@@ -229,9 +229,8 @@ impl StructurePreparation {
         self
     }
 
-    pub(crate) fn prepare(&self, pdb: &PDB) -> PDB {
+    pub(crate) fn prepare(&self, pdb: &PDB) -> Analysis<PDB> {
         let mut pdb_prepared = filter_pdb_by_model(pdb, self.model_num);
-        select_conformers(&mut pdb_prepared);
         assert!(
             pdb_prepared.model_count() > 0,
             "No models exist after preparation step; check `model_num`"
@@ -245,10 +244,6 @@ impl StructurePreparation {
             );
         }
 
-        if self.remove_hydrogens {
-            pdb_prepared.remove_atoms_by(|atom| atom.element() == Some(&Element::H));
-        }
-
         if self.remove_solvent_and_ions {
             pdb_prepared.remove_residues_by(|residue| {
                 let resn = residue.name().unwrap_or("");
@@ -256,7 +251,13 @@ impl StructurePreparation {
             });
         }
 
-        pdb_prepared
+        let warnings = select_conformers(&mut pdb_prepared);
+
+        if self.remove_hydrogens {
+            pdb_prepared.remove_atoms_by(|atom| atom.element() == Some(&Element::H));
+        }
+
+        Analysis::new(pdb_prepared, warnings)
     }
 }
 
@@ -266,7 +267,7 @@ pub(crate) fn prepare_structure(
     model_num: usize,
     remove_hydrogens: bool,
     chains: &str,
-) -> PDB {
+) -> Analysis<PDB> {
     StructurePreparation::new(model_num)
         .remove_hydrogens(remove_hydrogens)
         .remove_solvent_and_ions(true)
@@ -280,7 +281,7 @@ pub(crate) fn prepare_structure_with_chains(
     model_num: usize,
     remove_hydrogens: bool,
     chains: &HashSet<String>,
-) -> PDB {
+) -> Analysis<PDB> {
     StructurePreparation::new(model_num)
         .remove_hydrogens(remove_hydrogens)
         .remove_solvent_and_ions(true)
@@ -463,6 +464,9 @@ END                                                                             
             pdb.residues().filter_map(Residue::name).collect::<Vec<_>>(),
             ["ACE", "ALA", "NH2"]
         );
-        assert_eq!(prepare_structure(&pdb, 0, true, "").residue_count(), 3);
+        assert_eq!(
+            prepare_structure(&pdb, 0, true, "").value.residue_count(),
+            3
+        );
     }
 }
