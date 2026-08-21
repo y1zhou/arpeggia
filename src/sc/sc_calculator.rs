@@ -125,17 +125,13 @@ impl ScCalculator {
                         distances.push((neighbor_index, distance_squared));
                     }
                 }
-                let mut neighbor_indices = distances.clone();
-                neighbor_indices.sort_unstable_by(|left, right| left.1.total_cmp(&right.1));
+                distances.sort_unstable_by(|left, right| left.1.total_cmp(&right.1));
+                let neighbor_indices = distances
+                    .iter()
+                    .map(|&(neighbor, _)| neighbor)
+                    .collect::<Vec<_>>();
                 distances.sort_unstable_by_key(|&(neighbor, _)| neighbor);
-                Ok((
-                    neighbor_indices
-                        .into_iter()
-                        .map(|(neighbor, _)| neighbor)
-                        .collect::<Vec<_>>(),
-                    distances,
-                    attention,
-                ))
+                Ok((neighbor_indices, distances, attention))
             })
             .collect::<Result<Vec<_>, SurfaceCalculatorError>>()?;
         for (atom, (neighbor_indices, neighbor_distances, attention)) in
