@@ -33,17 +33,6 @@ pub(crate) fn find_hydrogen_bond(
     vdw_comp_factor: f64,
     bonds: &ResolvedBonds,
 ) -> Option<Interaction> {
-    find_hydrogen_bond_with(entity1, entity2, vdw_comp_factor, |donor, atom| {
-        bonds.contains_entity_atom(donor, atom)
-    })
-}
-
-fn find_hydrogen_bond_with(
-    entity1: &AtomConformerResidueChainModel,
-    entity2: &AtomConformerResidueChainModel,
-    vdw_comp_factor: f64,
-    has_explicit_bond: impl Fn(&AtomConformerResidueChainModel, &Atom) -> bool,
-) -> Option<Interaction> {
     if let Some((donor, acceptor)) = is_donor_acceptor_pair(entity1, entity2) {
         let da_dist = donor.atom().distance(acceptor.atom());
         if da_dist <= HYDROGEN_BOND_DIST {
@@ -56,7 +45,7 @@ fn find_hydrogen_bond_with(
                             donor.conformer().name(),
                             donor.atom().name(),
                             atom.name(),
-                        ) || has_explicit_bond(donor, atom))
+                        ) || bonds.contains_entity_atom(donor, atom))
                 })
                 .any(|hydrogen| {
                     let acceptor_vdw = acceptor
@@ -98,17 +87,6 @@ pub(crate) fn find_weak_hydrogen_bond(
     vdw_comp_factor: f64,
     bonds: &ResolvedBonds,
 ) -> Option<Interaction> {
-    find_weak_hydrogen_bond_with(entity1, entity2, vdw_comp_factor, |donor, atom| {
-        bonds.contains_entity_atom(donor, atom)
-    })
-}
-
-fn find_weak_hydrogen_bond_with(
-    entity1: &AtomConformerResidueChainModel,
-    entity2: &AtomConformerResidueChainModel,
-    vdw_comp_factor: f64,
-    has_explicit_bond: impl Fn(&AtomConformerResidueChainModel, &Atom) -> bool,
-) -> Option<Interaction> {
     if let Some((donor, acceptor)) = is_weak_donor_acceptor_pair(entity1, entity2) {
         let da_dist = donor.atom().distance(acceptor.atom());
         if da_dist <= HYDROGEN_BOND_DIST {
@@ -118,7 +96,7 @@ fn find_weak_hydrogen_bond_with(
                 .filter(|atom| {
                     atom.element() == Some(&Element::H)
                         && (is_hydrogen_for_carbon(donor.atom().name(), atom.name())
-                            || has_explicit_bond(donor, atom))
+                            || bonds.contains_entity_atom(donor, atom))
                 })
                 .any(|hydrogen| {
                     let acceptor_vdw = acceptor
@@ -283,8 +261,16 @@ fn is_hydrogen_for_donor(res_name: &str, donor_name: &str, hydrogen_name: &str) 
     }
 }
 
-pub(crate) fn count_donors_without_explicit_hydrogen(pdb: &PDB, bonds: &ResolvedBonds) -> usize {
+pub(crate) fn count_donors_without_explicit_hydrogen(
+    pdb: &PDB,
+    bonds: &ResolvedBonds,
+    ligand: &std::collections::HashSet<String>,
+    receptor: &std::collections::HashSet<String>,
+) -> usize {
     pdb.atoms_with_hierarchy()
+        .filter(|entity| {
+            ligand.contains(entity.chain().id()) || receptor.contains(entity.chain().id())
+        })
         .filter(|entity| {
             let residue_name = entity.conformer().name();
             let donor_name = entity.atom().name();

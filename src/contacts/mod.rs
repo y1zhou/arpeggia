@@ -63,9 +63,18 @@ pub fn analyze_contacts(
     warnings.extend(ring_warnings.into_iter().map(|message| {
         crate::AnalysisWarning::new(crate::WarningCode::IncompleteGeometry, message)
     }));
-    warnings.extend(protonation_warnings(&prepared, protonation));
-    let missing_donors =
-        hbond::count_donors_without_explicit_hydrogen(&prepared, complex.resolved_bonds());
+    warnings.extend(protonation_warnings(
+        &prepared,
+        protonation,
+        &complex.ligand,
+        &complex.receptor,
+    ));
+    let missing_donors = hbond::count_donors_without_explicit_hydrogen(
+        &prepared,
+        complex.resolved_bonds(),
+        &complex.ligand,
+        &complex.receptor,
+    );
     if missing_donors > 0 {
         warnings.push(crate::AnalysisWarning::new(
             crate::WarningCode::MissingDonorHydrogen,
@@ -81,8 +90,15 @@ pub fn analyze_contacts(
     ))
 }
 
-fn protonation_warnings(pdb: &PDB, mode: ProtonationMode) -> Vec<crate::AnalysisWarning> {
-    pdb.residues()
+fn protonation_warnings(
+    pdb: &PDB,
+    mode: ProtonationMode,
+    ligand: &std::collections::HashSet<String>,
+    receptor: &std::collections::HashSet<String>,
+) -> Vec<crate::AnalysisWarning> {
+    pdb.chains()
+        .filter(|chain| ligand.contains(chain.id()) || receptor.contains(chain.id()))
+        .flat_map(|chain| chain.residues())
         .filter(|residue| ionic::is_histidine(residue.name().unwrap_or("")))
         .filter_map(|residue| {
             let issue = ionic::histidine_preparation_issue(residue)?;
@@ -697,6 +713,38 @@ END                                                                             
                 .iter()
                 .any(|warning| warning.code == crate::WarningCode::InconsistentHistidine)
         );
+    }
+
+    #[test]
+    fn excluded_chains_do_not_emit_contact_preparation_warnings() {
+        let input =
+            b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  CB  VAL B   1       3.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      3  ND1 HIS C   1       6.000   0.000   0.000  1.00 20.00           N  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let analysis = analyze_contacts(
+            &pdb,
+            None,
+            "A/B",
+            0.1,
+            6.5,
+            ProtonationMode::AllCharged,
+            7.4,
+        )
+        .unwrap();
+
+        assert!(!analysis.warnings.iter().any(|warning| {
+            matches!(
+                warning.code,
+                crate::WarningCode::UnresolvedHistidine | crate::WarningCode::MissingDonorHydrogen
+            )
+        }));
     }
 
     #[test]
