@@ -500,14 +500,26 @@ CONECT    1    2\nEND                                                           
                 .flatten()
                 .any(|value| value == "PotentialDisulfide")
         );
+        assert!(
+            !interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "Disulfide")
+        );
     }
 
     #[test]
-    fn prepared_2eab_disulfide_uses_explicit_connectivity() {
-        let root = env!("CARGO_MANIFEST_DIR");
-        let path = format!("{root}/test-data/2eab-disulfide.pdb");
-        let pdb = crate::load_model(&path).unwrap().value;
+    fn prepared_2eab_ssbond_precedes_conect() {
+        let input = include_str!("../../test-data/2eab-disulfide.pdb")
+            .replace("END\n", "CONECT 8893 9228\nEND\n");
+        let path = std::env::temp_dir().join(format!(
+            "arpeggia-ssbond-precedence-{}.pdb",
+            std::process::id()
+        ));
+        std::fs::write(&path, input).unwrap();
+        let pdb = crate::load_model(path.to_str().unwrap()).unwrap().value;
         let metadata = crate::read_metadata(&path).unwrap().value;
+        std::fs::remove_file(path).unwrap();
 
         let contacts = get_contacts_with_metadata(
             &pdb,
@@ -525,19 +537,25 @@ CONECT    1    2\nEND                                                           
             interactions
                 .iter()
                 .flatten()
+                .any(|value| value == "Disulfide")
+        );
+        assert!(
+            !interactions
+                .iter()
+                .flatten()
                 .any(|value| value == "Covalent")
         );
         assert!(
             !interactions
                 .iter()
                 .flatten()
-                .any(|value| value == "PotentialCovalent")
+                .any(|value| value == "PotentialDisulfide")
         );
         assert!(
             !interactions
                 .iter()
                 .flatten()
-                .any(|value| value == "PotentialDisulfide")
+                .any(|value| value == "PotentialCovalent")
         );
     }
 

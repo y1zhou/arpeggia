@@ -47,9 +47,14 @@ does not present such a label as a definitive result.
 _Avoid_: Best guess, heuristic result
 
 **Covalent Contact**:
-An atomic contact supported by bonding information extracted from the input
-structure. Its public interaction label is `Covalent`.
+A non-disulfide atomic contact supported by bonding information extracted from
+the input structure. Its public interaction label is `Covalent`.
 _Avoid_: Distance-inferred bond
+
+**Disulfide Contact**:
+A CYS SG--SG bond supported by a PDB `SSBOND` or mmCIF disulfide declaration.
+Its public interaction label is `Disulfide`.
+_Avoid_: Geometry-inferred disulfide
 
 **Potential Covalent Contact**:
 An atomic contact that satisfies Arpeggia's covalent-distance criterion but lacks
@@ -59,8 +64,9 @@ _Avoid_: Covalent bond, inferred covalent bond
 
 **Potential Disulfide Contact**:
 A CYS SG--SG contact in Arpeggia's covalent-distance band whose absolute
-CB--SG--SG--CB dihedral is 60--120 degrees, but whose residue pair lacks input
-bonding evidence. Its public interaction label is `PotentialDisulfide`.
+CB--SG--SG--CB dihedral is 60--120 degrees, but whose residue pair lacks an
+`SSBOND` or mmCIF disulfide declaration. Its public interaction label is
+`PotentialDisulfide`.
 _Avoid_: Disulfide bond, inferred disulfide bond
 
 **Resolved Explicit Bond**:

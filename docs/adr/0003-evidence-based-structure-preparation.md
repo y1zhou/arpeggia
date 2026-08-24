@@ -1,14 +1,15 @@
 # Use evidence-based structure preparation
 
-Arpeggia reports definitive covalent contacts only when bonding information is
-extractable from the input structure. Contacts meeting the existing
-distance-based covalent criterion without that evidence are reported separately
-as `PotentialCovalent`. Undeclared CYS SG pairs in that distance band are
-reported as `PotentialDisulfide` when the absolute CB--SG--SG--CB dihedral is
-60--120 degrees, preserving the original Arpeggia geometry rule without
-presenting inferred connectivity as definitive. Hydrogen-bond geometry uses only
-hydrogens bonded to the specific donor; Arpeggia does not automatically
-protonate structures and warns when possible donors lack hydrogens.
+Arpeggia reports resolved PDB `SSBOND` and mmCIF disulfide declarations as
+`Disulfide`, and other resolved input connectivity as `Covalent`. Contacts
+meeting the existing distance-based covalent criterion without that evidence
+are reported separately as `PotentialCovalent`. Undeclared CYS SG pairs in that
+distance band are reported as `PotentialDisulfide` when the absolute
+CB--SG--SG--CB dihedral is 60--120 degrees, preserving the original Arpeggia
+geometry rule without presenting inferred connectivity as definitive.
+Hydrogen-bond geometry uses only hydrogens bonded to the specific donor;
+Arpeggia does not automatically protonate structures and warns when possible
+donors lack hydrogens.
 
 Histidine charge is controlled by `AllCharged`, `Heuristic`, or `ExplicitOnly`.
 `AllCharged` is the default and preserves Arpeggio's unconditional

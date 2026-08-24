@@ -5,7 +5,11 @@ use super::{
     hbond::{find_hydrogen_bond, find_weak_hydrogen_bond},
     residues::{Plane, ResidueExt, ResidueId},
 };
-use crate::{StructureMetadata, metadata::ResolvedBonds, structure::parse_groups};
+use crate::{
+    StructureMetadata,
+    metadata::{ExplicitBondKind, ResolvedBonds},
+    structure::parse_groups,
+};
 use pdbtbx::*;
 use rayon::prelude::*;
 use rstar::{RTree, primitives::GeomWithData};
@@ -113,12 +117,12 @@ impl<'a> InteractionComplex<'a> {
         ))
     }
 
-    fn has_explicit_bond(
+    fn explicit_bond_kind(
         &self,
         first: &AtomConformerResidueChainModel,
         second: &AtomConformerResidueChainModel,
-    ) -> bool {
-        self.resolved_bonds.contains_entities(first, second)
+    ) -> Option<ExplicitBondKind> {
+        self.resolved_bonds.kind_entities(first, second)
     }
 
     pub(crate) fn resolved_bonds(&self) -> &ResolvedBonds {
@@ -299,9 +303,13 @@ impl Interactions for InteractionComplex<'_> {
                 };
 
                 // Clashes and VdW contacts
-                let vdw =
-                    find_vdw_contact(e1, e2, self.vdw_comp_factor, self.has_explicit_bond(e1, e2))
-                        .map(&make_entry);
+                let vdw = find_vdw_contact(
+                    e1,
+                    e2,
+                    self.vdw_comp_factor,
+                    self.explicit_bond_kind(e1, e2),
+                )
+                .map(&make_entry);
                 let steric_clash = vdw
                     .as_ref()
                     .is_some_and(|entry| entry.interaction == Interaction::StericClash);

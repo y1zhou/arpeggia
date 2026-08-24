@@ -1,4 +1,5 @@
 use super::structs::Interaction;
+use crate::metadata::ExplicitBondKind;
 
 use pdbtbx::*;
 
@@ -12,16 +13,20 @@ use pdbtbx::*;
 /// Cysteine SG pairs in this band are classified as potential disulfides when
 /// their CB-SG-SG-CB dihedral is between 60 and 120 degrees, following the
 /// original Arpeggia rule ([DOI: 10.1039/c8sc01423j](https://doi.org/10.1039/c8sc01423j)).
+/// Resolved disulfide declarations take precedence over other explicit
+/// connectivity, which in turn takes precedence over geometry inference.
 /// Nonbonded atoms inside their unmodified Van de Waals envelope clash; atoms only
 /// inside the compensated outer envelope are Van de Waals contacts.
 pub fn find_vdw_contact(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     vdw_comp_factor: f64,
-    explicitly_bonded: bool,
+    explicit_bond: Option<ExplicitBondKind>,
 ) -> Option<Interaction> {
-    if explicitly_bonded {
-        return Some(Interaction::Covalent);
+    match explicit_bond {
+        Some(ExplicitBondKind::Disulfide) => return Some(Interaction::Disulfide),
+        Some(ExplicitBondKind::Covalent) => return Some(Interaction::Covalent),
+        None => {}
     }
     let e1_radii = entity1.atom().element()?.atomic_radius();
     let e2_radii = entity2.atom().element()?.atomic_radius();

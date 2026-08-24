@@ -15,9 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   toroidal-surface branch and model-local plane traversal. Ringless structures
   are valid; absolute parity with the pinned `sc-rs` CLI remains explicitly
   documented in the regression test.
-- Split explicit `Covalent` evidence from distance-inferred
-  `PotentialCovalent`, restored geometry-inferred `PotentialDisulfide`, and
-  named steric clash, van der Waals clash, and van der Waals contact regions
+- Split resolved `Disulfide` and `Covalent` evidence from geometry-inferred
+  `PotentialDisulfide` and distance-inferred `PotentialCovalent`, and named
+  steric clash, van der Waals clash, and van der Waals contact regions
   separately.
 - Associated hydrogen geometry with the specific donor rather than every
   hydrogen in its residue, restricted weak donors to carbon sites bearing

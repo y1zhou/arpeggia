@@ -4,8 +4,10 @@ use pdbtbx::*;
 /// Interaction types.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Interaction {
-    /// A bond explicitly declared by the input structure.
+    /// A non-disulfide bond explicitly declared by the input structure.
     Covalent,
+    /// A disulfide explicitly declared by the input structure.
+    Disulfide,
     /// A nonbonded overlap shorter than the potential-covalent band.
     StericClash,
     /// Within the covalent-distance band without input bond evidence

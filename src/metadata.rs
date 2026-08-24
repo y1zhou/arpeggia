@@ -127,8 +127,14 @@ impl QualifiedBondEndpoint {
 }
 
 type BondKey = (BondEndpoint, BondEndpoint);
-type BondQualifiers = (BondQualifier, BondQualifier);
-type Bonds = HashMap<BondKey, Vec<BondQualifiers>>;
+type BondRecord = (BondQualifier, BondQualifier, ExplicitBondKind);
+type Bonds = HashMap<BondKey, Vec<BondRecord>>;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExplicitBondKind {
+    Covalent,
+    Disulfide,
+}
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct AtomIdentity {
@@ -147,35 +153,38 @@ impl AtomIdentity {
 
 /// Explicit bonds resolved against the selected atoms of a prepared structure.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct ResolvedBonds(Vec<(AtomIdentity, AtomIdentity)>);
+pub(crate) struct ResolvedBonds(Vec<(AtomIdentity, AtomIdentity, ExplicitBondKind)>);
 
 impl ResolvedBonds {
-    pub(crate) fn contains_entities(
-        &self,
-        first: &AtomConformerResidueChainModel,
-        second: &AtomConformerResidueChainModel,
-    ) -> bool {
-        self.contains(
-            AtomIdentity::from_entity(first, first.atom()),
-            AtomIdentity::from_entity(second, second.atom()),
-        )
-    }
-
     pub(crate) fn contains_entity_atom(
         &self,
         entity: &AtomConformerResidueChainModel,
         atom: &Atom,
     ) -> bool {
-        self.contains(
+        self.kind(
             AtomIdentity::from_entity(entity, entity.atom()),
             AtomIdentity::from_entity(entity, atom),
         )
+        .is_some()
     }
 
-    fn contains(&self, first: AtomIdentity, second: AtomIdentity) -> bool {
+    pub(crate) fn kind_entities(
+        &self,
+        first: &AtomConformerResidueChainModel,
+        second: &AtomConformerResidueChainModel,
+    ) -> Option<ExplicitBondKind> {
+        self.kind(
+            AtomIdentity::from_entity(first, first.atom()),
+            AtomIdentity::from_entity(second, second.atom()),
+        )
+    }
+
+    fn kind(&self, first: AtomIdentity, second: AtomIdentity) -> Option<ExplicitBondKind> {
+        let atoms = ordered_atom_bond(first, second);
         self.0
-            .binary_search(&ordered_atom_bond(first, second))
-            .is_ok()
+            .binary_search_by_key(&atoms, |&(first, second, _)| (first, second))
+            .ok()
+            .map(|index| self.0[index].2)
     }
 }
 
@@ -213,7 +222,7 @@ impl StructureMetadata {
             else {
                 continue;
             };
-            for (first_record, second_record) in records {
+            for (first_record, second_record, kind) in records {
                 for (first_qualifier, first_identity) in first_atoms {
                     if !first_record.matches(first_qualifier) {
                         continue;
@@ -222,14 +231,25 @@ impl StructureMetadata {
                         if second_record.matches(second_qualifier)
                             && first_identity != second_identity
                         {
-                            resolved.push(ordered_atom_bond(*first_identity, *second_identity));
+                            let (first, second) =
+                                ordered_atom_bond(*first_identity, *second_identity);
+                            resolved.push((first, second, *kind));
                         }
                     }
                 }
             }
         }
-        resolved.sort_unstable();
-        resolved.dedup();
+        resolved.sort_unstable_by_key(|&(first, second, _)| (first, second));
+        resolved.dedup_by(|current, previous| {
+            let same_atoms = current.0 == previous.0 && current.1 == previous.1;
+            if same_atoms
+                && (current.2 == ExplicitBondKind::Disulfide
+                    || previous.2 == ExplicitBondKind::Disulfide)
+            {
+                previous.2 = ExplicitBondKind::Disulfide;
+            }
+            same_atoms
+        });
         ResolvedBonds(resolved)
     }
 
@@ -243,7 +263,7 @@ impl StructureMetadata {
         self.bonds
             .get(&(first.endpoint, second.endpoint))
             .is_some_and(|records| {
-                records.iter().any(|(record_first, record_second)| {
+                records.iter().any(|(record_first, record_second, _)| {
                     record_first.matches(&first.qualifier)
                         && record_second.matches(&second.qualifier)
                 })
@@ -389,6 +409,7 @@ fn parse_pdb(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarn
                         &mut bonds,
                         QualifiedBondEndpoint::new(first, None, "", "CYS"),
                         QualifiedBondEndpoint::new(second, None, "", "CYS"),
+                        ExplicitBondKind::Disulfide,
                     );
                 }
             }
@@ -421,6 +442,7 @@ fn parse_pdb(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarn
                             field(line, 46, 47),
                             field(line, 47, 50),
                         ),
+                        ExplicitBondKind::Covalent,
                     );
                 }
             }
@@ -442,7 +464,12 @@ fn parse_pdb(input: &str) -> ArpeggiaResult<(StructureMetadata, Vec<AnalysisWarn
             for first in first {
                 for second in second {
                     if first.qualifier.model == second.qualifier.model {
-                        insert_bond(&mut bonds, first.clone(), second.clone());
+                        insert_bond(
+                            &mut bonds,
+                            first.clone(),
+                            second.clone(),
+                            ExplicitBondKind::Covalent,
+                        );
                     }
                 }
             }
@@ -552,7 +579,12 @@ fn parse_mmcif_reader(
                             cif_endpoint(&row, &columns, 2),
                         )
                     {
-                        insert_bond(&mut bonds, first, second);
+                        let kind = if kind.starts_with("disulf") {
+                            ExplicitBondKind::Disulfide
+                        } else {
+                            ExplicitBondKind::Covalent
+                        };
+                        insert_bond(&mut bonds, first, second, kind);
                     }
                 }
                 CifTarget::EntityPolySeq => {
@@ -883,12 +915,17 @@ fn ordered_qualified_bond(
     }
 }
 
-fn insert_bond(bonds: &mut Bonds, first: QualifiedBondEndpoint, second: QualifiedBondEndpoint) {
+fn insert_bond(
+    bonds: &mut Bonds,
+    first: QualifiedBondEndpoint,
+    second: QualifiedBondEndpoint,
+    kind: ExplicitBondKind,
+) {
     let (first, second) = ordered_qualified_bond(first, second);
-    let qualifiers = (first.qualifier, second.qualifier);
+    let record = (first.qualifier, second.qualifier, kind);
     let records = bonds.entry((first.endpoint, second.endpoint)).or_default();
-    if !records.contains(&qualifiers) {
-        records.push(qualifiers);
+    if !records.contains(&record) {
+        records.push(record);
     }
 }
 
