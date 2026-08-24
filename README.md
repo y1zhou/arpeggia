@@ -22,7 +22,7 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   - [x] Ionic interactions
   - [x] Hydrogen bonds
   - [x] Weak hydrogen bonds
-  - [x] Explicit covalent bonds and distance-inferred potential covalent contacts
+  - [x] Resolved disulfide/covalent bonds and inferred potential contacts
 - [x] Calculate SASA (Solvent Accessible Surface Area) at atom, residue, and chain levels
 - [x] Calculate relative SASA (RSA) normalized by MaxASA values
 - [x] Calculate SAP (Spatial Aggregation Propensity) scores for aggregation prediction

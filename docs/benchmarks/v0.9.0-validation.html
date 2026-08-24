@@ -155,7 +155,7 @@ awk 'BEGIN { aa=" ALA ARG ASN ASP CYS GLN GLU GLY HIS HID HIE HIP HSD HSE HSP IL
      /^HETATM|^CONECT|^TER/ { next }
      { print }' prepared-raw/2eab_0001.pdb &gt; 2eab-arpeggia.pdb
 awk '/^ATOM/ { print }' 2eab-arpeggia.pdb | sha256sum</code></pre>
-<p>The coordinate stream must hash to <code>7d3a0ef4ce482f1eede33e38aabf8e97f3089468951d549223da57283c79c505</code>. Rosetta places the execution date in two header lines, so a whole-file digest is not reproducible across preparation dates; the archived August 18 raw output digest <code>588767eb74dc903e6174e7d2fd2c1eadc7e302d295abdff0cfb7b65f6df16a84</code> is therefore not used as the verification gate. Routine CI instead uses the small provenance-marked 2EAB disulfide extract to validate resolved <code>SSBOND</code> behavior without adding the approximately 2.1 MB full structure to the repository.</p>
+<p>The coordinate stream must hash to <code>7d3a0ef4ce482f1eede33e38aabf8e97f3089468951d549223da57283c79c505</code>. Rosetta places the execution date in two header lines, so a whole-file digest is not reproducible across preparation dates; the archived August 18 raw output digest <code>588767eb74dc903e6174e7d2fd2c1eadc7e302d295abdff0cfb7b65f6df16a84</code> is therefore not used as the verification gate. Routine CI instead uses the small provenance-marked 2EAB disulfide extract to validate that a resolved <code>SSBOND</code> reports <code>Disulfide</code> without adding the approximately 2.1 MB full structure to the repository.</p>
 
 <h2>Metadata parser performance</h2>
 <table><thead><tr><th>Parser</th><th>7K00 result</th><th>Cold wall time</th><th>Warm wall time</th><th>Peak RSS</th></tr></thead><tbody>
