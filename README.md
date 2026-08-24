@@ -36,7 +36,9 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 
 - Contact rows use `Covalent` only for bonds declared by PDB `SSBOND`, `LINK`,
   or `CONECT`, or mmCIF `_struct_conn`. The prior distance rule now produces
-  `PotentialCovalent`. Clash and van der Waals regions are separately named.
+  `PotentialCovalent`; undeclared CYS pairs matching the original distance and
+  CB--SG--SG--CB dihedral rule produce `PotentialDisulfide`. Clash and van der
+  Waals regions are separately named.
 - Explicit hydrogen-bond geometry uses only hydrogens associated with the donor
   atom. Missing donor hydrogens produce warnings; Arpeggia does not protonate
   input structures.

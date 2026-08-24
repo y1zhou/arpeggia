@@ -494,6 +494,12 @@ CONECT    1    2\nEND                                                           
                 .flatten()
                 .any(|value| value == "PotentialCovalent")
         );
+        assert!(
+            !interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialDisulfide")
+        );
     }
 
     #[test]
@@ -526,6 +532,66 @@ CONECT    1    2\nEND                                                           
                 .iter()
                 .flatten()
                 .any(|value| value == "PotentialCovalent")
+        );
+        assert!(
+            !interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialDisulfide")
+        );
+    }
+
+    #[test]
+    fn undeclared_disulfide_geometry_is_potential_disulfide() {
+        let input = include_str!("../../test-data/2eab-disulfide.pdb")
+            .lines()
+            .filter(|line| !line.starts_with("SSBOND"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_bytes()))
+            .unwrap();
+
+        let contacts = default_contacts(&pdb, "/", 0.1, 6.5);
+        let interactions = contacts.column("interaction").unwrap().str().unwrap();
+        assert!(
+            interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialDisulfide"),
+            "expected the undeclared CYS SG pair to be PotentialDisulfide; got {interactions:?}"
+        );
+    }
+
+    #[test]
+    fn undeclared_cysteines_outside_disulfide_geometry_remain_potential_covalent() {
+        let input =
+            b"ATOM      1  CB  CYS A   1       0.000   1.000   0.000  1.00 20.00           C  \n\
+ATOM      2  SG  CYS A   1       0.000   0.000   0.000  1.00 20.00           S  \n\
+ATOM      3  SG  CYS B   1       2.030   0.000   0.000  1.00 20.00           S  \n\
+ATOM      4  CB  CYS B   1       2.030   1.000   0.000  1.00 20.00           C  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+
+        let contacts = default_contacts(&pdb, "A/B", 0.1, 6.5);
+        let interactions = contacts.column("interaction").unwrap().str().unwrap();
+        assert!(
+            interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialCovalent")
+        );
+        assert!(
+            !interactions
+                .iter()
+                .flatten()
+                .any(|value| value == "PotentialDisulfide")
         );
     }
 

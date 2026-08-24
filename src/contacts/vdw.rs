@@ -9,6 +9,9 @@ use pdbtbx::*;
 /// they are considered to be in a steric clash.
 /// If the distance is between the covalent radii sum and that plus the `vdw_comp_factor`,
 /// they are considered potentially covalent until input topology confirms a bond.
+/// Cysteine SG pairs in this band are classified as potential disulfides when
+/// their CB-SG-SG-CB dihedral is between 60 and 120 degrees, following the
+/// original Arpeggia rule ([DOI: 10.1039/c8sc01423j](https://doi.org/10.1039/c8sc01423j)).
 /// Nonbonded atoms inside their unmodified Van de Waals envelope clash; atoms only
 /// inside the compensated outer envelope are Van de Waals contacts.
 pub fn find_vdw_contact(
@@ -30,9 +33,34 @@ pub fn find_vdw_contact(
 
     match dist {
         d if d < sum_cov_radii - vdw_comp_factor => Some(Interaction::StericClash),
+        d if d < sum_cov_radii + vdw_comp_factor && is_disulfide(entity1, entity2) => {
+            Some(Interaction::PotentialDisulfide)
+        }
         d if d < sum_cov_radii + vdw_comp_factor => Some(Interaction::PotentialCovalent),
         d if d < sum_vdw_radii => Some(Interaction::VanDerWaalsClash),
         d if d < sum_vdw_radii + vdw_comp_factor => Some(Interaction::VanDerWaalsContact),
         _ => None,
     }
+}
+
+fn is_disulfide(
+    entity1: &AtomConformerResidueChainModel,
+    entity2: &AtomConformerResidueChainModel,
+) -> bool {
+    if entity1.residue().name() != Some("CYS")
+        || entity2.residue().name() != Some("CYS")
+        || entity1.atom().name() != "SG"
+        || entity2.atom().name() != "SG"
+    {
+        return false;
+    }
+
+    let Some(cb1) = entity1.residue().atoms().find(|atom| atom.name() == "CB") else {
+        return false;
+    };
+    let Some(cb2) = entity2.residue().atoms().find(|atom| atom.name() == "CB") else {
+        return false;
+    };
+
+    (60.0..=120.0).contains(&cb1.dihedral(entity1.atom(), entity2.atom(), cb2).abs())
 }

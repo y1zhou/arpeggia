@@ -10,6 +10,8 @@ pub enum Interaction {
     StericClash,
     /// Within the covalent-distance band without input bond evidence
     PotentialCovalent,
+    /// Cysteine SG geometry consistent with a disulfide, without input bond evidence
+    PotentialDisulfide,
     /// Nonbonded overlap inside the van der Waals envelope
     VanDerWaalsClash,
     /// Within the compensated outer van der Waals envelope

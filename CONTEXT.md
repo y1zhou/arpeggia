@@ -57,6 +57,12 @@ bonding evidence in the input structure. Its public interaction label is
 `PotentialCovalent`.
 _Avoid_: Covalent bond, inferred covalent bond
 
+**Potential Disulfide Contact**:
+A CYS SG--SG contact in Arpeggia's covalent-distance band whose absolute
+CB--SG--SG--CB dihedral is 60--120 degrees, but whose residue pair lacks input
+bonding evidence. Its public interaction label is `PotentialDisulfide`.
+_Avoid_: Disulfide bond, inferred disulfide bond
+
 **Resolved Explicit Bond**:
 An input bond declaration that matches two atoms in the selected model and
 Selected Conformer. Contact calculation represents it with compact selected-atom
