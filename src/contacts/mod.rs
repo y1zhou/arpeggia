@@ -85,7 +85,7 @@ pub fn analyze_contacts(
         ));
     }
     Ok(crate::Analysis::new(
-        contacts_from_complex(complex),
+        contacts_from_complex(complex)?,
         warnings,
     ))
 }
@@ -185,7 +185,7 @@ pub fn get_contacts_with_metadata(
     )
 }
 
-fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> DataFrame {
+fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> crate::ArpeggiaResult<DataFrame> {
     // Information on the sequence of the chains in the model
     debug!(
         "Parsed ligand chains {lig:?}; receptor chains {receptor:?}",
@@ -195,7 +195,7 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> DataFrame {
 
     // Find interactions
     let atomic_contacts = i_complex.get_atomic_contacts();
-    let df_atomic = results_to_df(&atomic_contacts);
+    let df_atomic = results_to_df(&atomic_contacts)?;
     debug!(
         "Found {} atom-atom contacts\n{}",
         df_atomic.height(),
@@ -205,13 +205,13 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> DataFrame {
     let mut ring_contacts: Vec<ResultEntry> = Vec::new();
     ring_contacts.extend(i_complex.get_ring_atom_contacts());
     ring_contacts.extend(i_complex.get_ring_ring_contacts());
-    let df_ring = results_to_df(&ring_contacts);
+    let df_ring = results_to_df(&ring_contacts)?;
     debug!("Found {} ring contacts\n{}", df_ring.height(), df_ring);
 
     // Annotate sidechain centroid distances and dihedrals
     let sc_dist_dihedrals = i_complex.collect_sc_stats(&atomic_contacts, &ring_contacts);
 
-    let df_sc_stats = sc_results_to_df(&sc_dist_dihedrals);
+    let df_sc_stats = sc_results_to_df(&sc_dist_dihedrals)?;
 
     // Concatenate dataframes
     let contacts_sc_join_cols = [
@@ -225,7 +225,7 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> DataFrame {
         "to_insertion",
         "to_altloc",
     ];
-    df_atomic
+    Ok(df_atomic
         .vstack(&df_ring)
         .unwrap()
         .join(
@@ -251,50 +251,65 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> DataFrame {
             ],
             SortMultipleOptions::default(),
         )
-        .unwrap()
+        .unwrap())
 }
 
 /// Convert a slice of `ResultEntry` into a Polars `DataFrame`.
-pub(crate) fn results_to_df(res: &[ResultEntry]) -> DataFrame {
-    df!(
-        "model" => res.iter().map(|x| x.model as u64).collect::<Vec<u64>>(),
+pub(crate) fn results_to_df(res: &[ResultEntry]) -> crate::ArpeggiaResult<DataFrame> {
+    Ok(df!(
+        "model" => res.iter().map(|x| compact_model_id(x.model)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
         "distance" => res.iter().map(|x| x.distance as f32).collect::<Vec<f32>>(),
         "from_chain" => res.iter().map(|x| x.ligand.chain.clone()).collect::<Vec<String>>(),
         "from_resn" => res.iter().map(|x| x.ligand.resn.clone()).collect::<Vec<String>>(),
-        "from_resi" => res.iter().map(|x| x.ligand.resi as i64).collect::<Vec<i64>>(),
+        "from_resi" => res.iter().map(|x| compact_residue_id(x.ligand.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "from_insertion" => res.iter().map(|x| x.ligand.insertion.clone()).collect::<Vec<String>>(),
         "from_altloc" => res.iter().map(|x| x.ligand.altloc.clone()).collect::<Vec<String>>(),
         "from_atomn" => res.iter().map(|x| x.ligand.atomn.clone()).collect::<Vec<String>>(),
-        "from_atomi" => res.iter().map(|x| x.ligand.atomi as u64).collect::<Vec<u64>>(),
+        "from_atomi" => res.iter().map(|x| compact_atom_id(x.ligand.atomi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "to_chain" => res.iter().map(|x| x.receptor.chain.clone()).collect::<Vec<String>>(),
         "to_resn" => res.iter().map(|x| x.receptor.resn.clone()).collect::<Vec<String>>(),
-        "to_resi" => res.iter().map(|x| x.receptor.resi as i64).collect::<Vec<i64>>(),
+        "to_resi" => res.iter().map(|x| compact_residue_id(x.receptor.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "to_insertion" => res.iter().map(|x| x.receptor.insertion.clone()).collect::<Vec<String>>(),
         "to_altloc" => res.iter().map(|x| x.receptor.altloc.clone()).collect::<Vec<String>>(),
         "to_atomn" => res.iter().map(|x| x.receptor.atomn.clone()).collect::<Vec<String>>(),
-        "to_atomi" => res.iter().map(|x| x.receptor.atomi as u64).collect::<Vec<u64>>(),
+        "to_atomi" => res.iter().map(|x| compact_atom_id(x.receptor.atomi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
     )
-    .unwrap()
+    .unwrap())
 }
 
 /// Convert sidechain statistics into a Polars `DataFrame`.
-pub(crate) fn sc_results_to_df(res: &[SidechainStat<'_>]) -> DataFrame {
-    df!(
-        "model" => res.iter().map(|(k, _)| k.0.model as u64).collect::<Vec<u64>>(),
+pub(crate) fn sc_results_to_df(res: &[SidechainStat<'_>]) -> crate::ArpeggiaResult<DataFrame> {
+    Ok(df!(
+        "model" => res.iter().map(|(k, _)| compact_model_id(k.0.model)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "from_chain" => res.iter().map(|(k, _)| k.0.chain.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.iter().map(|(k, _)| k.0.resi as i64).collect::<Vec<i64>>(),
+        "from_resi" => res.iter().map(|(k, _)| compact_residue_id(k.0.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "from_insertion" => res.iter().map(|(k, _)| k.0.insertion.to_owned()).collect::<Vec<String>>(),
         "from_altloc" => res.iter().map(|(k, _)| k.0.altloc.to_owned()).collect::<Vec<String>>(),
         "to_chain" => res.iter().map(|(k, _)| k.1.chain.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.iter().map(|(k, _)| k.1.resi as i64).collect::<Vec<i64>>(),
+        "to_resi" => res.iter().map(|(k, _)| compact_residue_id(k.1.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "to_insertion" => res.iter().map(|(k, _)| k.1.insertion.to_owned()).collect::<Vec<String>>(),
         "to_altloc" => res.iter().map(|(k, _)| k.1.altloc.to_owned()).collect::<Vec<String>>(),
         "sc_centroid_dist" => res.iter().map(|(_, v)| v.0 as f32).collect::<Vec<f32>>(),
         "sc_dihedral" => res.iter().map(|(_, v)| v.1 as f32).collect::<Vec<f32>>(),
         "sc_centroid_angle" => res.iter().map(|(_, v)| v.2 as f32).collect::<Vec<f32>>(),
     )
-    .unwrap()
+    .unwrap())
+}
+
+fn compact_model_id(value: usize) -> crate::ArpeggiaResult<u32> {
+    u32::try_from(value)
+        .map_err(|_| crate::ArpeggiaError::Calculation("model identifier exceeds UInt32".into()))
+}
+
+fn compact_residue_id(value: isize) -> crate::ArpeggiaResult<i32> {
+    i32::try_from(value)
+        .map_err(|_| crate::ArpeggiaError::Calculation("residue identifier exceeds Int32".into()))
+}
+
+fn compact_atom_id(value: usize) -> crate::ArpeggiaResult<u32> {
+    u32::try_from(value)
+        .map_err(|_| crate::ArpeggiaError::Calculation("atom identifier exceeds UInt32".into()))
 }
 
 #[cfg(test)]
@@ -451,6 +466,19 @@ END                                                                             
                 interactions.iter().flatten().any(|value| value == expected),
                 "expected {expected} at {distance} Å; got {interactions:?}"
             );
+        }
+    }
+
+    #[test]
+    fn contact_identifier_columns_use_compact_dtypes() {
+        let contacts = default_contacts(&two_carbon_atoms(3.6), "A/B", 0.1, 6.5);
+
+        assert_eq!(contacts.column("model").unwrap().dtype(), &DataType::UInt32);
+        for column in ["from_resi", "to_resi"] {
+            assert_eq!(contacts.column(column).unwrap().dtype(), &DataType::Int32);
+        }
+        for column in ["from_atomi", "to_atomi"] {
+            assert_eq!(contacts.column(column).unwrap().dtype(), &DataType::UInt32);
         }
     }
 

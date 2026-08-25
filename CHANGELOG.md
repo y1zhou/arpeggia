@@ -50,8 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retaining direct DataFrame/scalar/list results. CPU-bound parsing and
   calculations release the GIL.
 - Contact interaction labels and SASA/RSA columns changed as described above.
-  Model/atom identifiers in contact and surface DataFrames are unsigned 64-bit
-  integers and residue identifiers are signed 64-bit integers. Python adds
+  Model/atom identifiers in contact and surface DataFrames are unsigned 32-bit
+  integers and residue identifiers are signed 32-bit integers. Python adds
   `dsasa_components()` and `seqres()`.
 - `get_contacts` now accepts protonation mode and pH. dSASA component results
   and detailed directional SC results are public typed records.

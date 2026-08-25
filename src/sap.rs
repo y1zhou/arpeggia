@@ -27,10 +27,10 @@ use std::collections::{BTreeMap, BTreeSet};
 struct AtomSapRecord {
     chain: String,
     resn: String,
-    resi: i64,
+    resi: i32,
     insertion: String,
     atomn: String,
-    atomi: u64,
+    atomi: u32,
     sasa: f32,
     sap_score: f32,
 }
@@ -39,7 +39,7 @@ struct AtomSapRecord {
 struct ResidueSapRecord {
     chain: String,
     resn: String,
-    resi: i64,
+    resi: i32,
     insertion: String,
     sc_sasa: f32,
     sap_score: f32,
@@ -244,7 +244,7 @@ fn calculate_per_atom_sap_records(
             !unsupported.contains(&record.resn) && is_sap_sidechain(&record.resn, &record.atomn)
         })
         .filter_map(|(record, entity)| {
-            debug_assert_eq!(record.atomi, entity.atom().serial_number() as u64);
+            debug_assert_eq!(record.atomi as usize, entity.atom().serial_number());
             let hydrophobicity = get_hydrophobicity(&record.resn)?;
             let max_asa = get_sc_max_asa(&record.resn)?;
             let position = entity.atom().pos();
@@ -369,10 +369,10 @@ fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
     df!(
         "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
         "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i64>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
         "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
         "atomn" => records.iter().map(|r| r.atomn.clone()).collect::<Vec<String>>(),
-        "atomi" => records.iter().map(|r| r.atomi).collect::<Vec<u64>>(),
+        "atomi" => records.iter().map(|r| r.atomi).collect::<Vec<u32>>(),
         "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
         "sap_score" => records.iter().map(|r| r.sap_score).collect::<Vec<f32>>(),
     )
@@ -447,7 +447,7 @@ fn calculate_per_residue_sap_records(
     n_points: usize,
     sap_radius: f32,
 ) -> crate::ArpeggiaResult<(Vec<ResidueSapRecord>, BTreeSet<String>)> {
-    let mut grouped: BTreeMap<(String, String, i64, String), (f32, f32)> = BTreeMap::new();
+    let mut grouped: BTreeMap<(String, String, i32, String), (f32, f32)> = BTreeMap::new();
 
     for model in pdb.models() {
         for chain in model.chains() {
@@ -458,11 +458,14 @@ fn calculate_per_residue_sap_records(
                 else {
                     continue;
                 };
+                let resi = i32::try_from(residue.serial_number()).map_err(|_| {
+                    crate::ArpeggiaError::Calculation("residue identifier exceeds Int32".into())
+                })?;
                 grouped.insert(
                     (
                         chain.id().to_string(),
                         resn.to_string(),
-                        residue.serial_number() as i64,
+                        resi,
                         residue.insertion_code().unwrap_or("").to_string(),
                     ),
                     (0.0, 0.0),
@@ -510,7 +513,7 @@ fn residue_sap_records_to_dataframe(records: &[ResidueSapRecord]) -> DataFrame {
     df!(
         "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
         "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i64>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
         "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
         "sc_sasa" => records.iter().map(|r| r.sc_sasa).collect::<Vec<f32>>(),
         "sap_score" => records.iter().map(|r| r.sap_score).collect::<Vec<f32>>(),
@@ -625,8 +628,8 @@ END                                                                             
         assert!(columns.contains(&"atomi".to_string()));
         assert!(columns.contains(&"sasa".to_string()));
         assert!(columns.contains(&"sap_score".to_string()));
-        assert_eq!(df.column("resi").unwrap().dtype(), &DataType::Int64);
-        assert_eq!(df.column("atomi").unwrap().dtype(), &DataType::UInt64);
+        assert_eq!(df.column("resi").unwrap().dtype(), &DataType::Int32);
+        assert_eq!(df.column("atomi").unwrap().dtype(), &DataType::UInt32);
     }
 
     #[test]
@@ -766,7 +769,7 @@ END                                                                             
         let atom = atom.unwrap().value;
         let residue = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
         let residue = residue.unwrap().value;
-        let mut expected = BTreeMap::<(String, String, i64, String), (f32, f32)>::new();
+        let mut expected = BTreeMap::<(String, String, i32, String), (f32, f32)>::new();
 
         for row in 0..atom.height() {
             let key = (
@@ -786,7 +789,7 @@ END                                                                             
                     .to_string(),
                 atom.column("resi")
                     .unwrap()
-                    .i64()
+                    .i32()
                     .unwrap()
                     .get(row)
                     .unwrap(),
@@ -838,7 +841,7 @@ END                                                                             
                 residue
                     .column("resi")
                     .unwrap()
-                    .i64()
+                    .i32()
                     .unwrap()
                     .get(row)
                     .unwrap(),

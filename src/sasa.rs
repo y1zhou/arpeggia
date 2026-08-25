@@ -37,11 +37,11 @@ enum RadiusScheme {
 pub(crate) struct AtomSasaRecord {
     pub(crate) chain: String,
     pub(crate) resn: String,
-    pub(crate) resi: i64,
+    pub(crate) resi: i32,
     pub(crate) insertion: String,
     pub(crate) altloc: String,
     pub(crate) atomn: String,
-    pub(crate) atomi: u64,
+    pub(crate) atomi: u32,
     pub(crate) sasa: f32,
     pub(crate) polarity: AtomPolarity,
 }
@@ -50,7 +50,7 @@ pub(crate) struct AtomSasaRecord {
 pub(crate) struct ResidueSasaRecord {
     pub(crate) chain: String,
     pub(crate) resn: String,
-    pub(crate) resi: i64,
+    pub(crate) resi: i32,
     pub(crate) insertion: String,
     pub(crate) sasa: f32,
     pub(crate) polar_sasa: f32,
@@ -71,7 +71,7 @@ pub(crate) struct ChainSasaRecord {
 pub(crate) struct RelativeSasaRecord {
     pub(crate) chain: String,
     pub(crate) resn: String,
-    pub(crate) resi: i64,
+    pub(crate) resi: i32,
     pub(crate) insertion: String,
     pub(crate) sasa: f32,
     pub(crate) polar_sasa: f32,
@@ -247,14 +247,14 @@ fn calculate_prepared_atom_sasa_records(
             Ok(AtomSasaRecord {
                 chain: entity.chain,
                 resn: entity.resn,
-                resi: i64::try_from(entity.resi).map_err(|_| {
-                    crate::ArpeggiaError::InvalidArgument("residue identifier exceeds Int64".into())
+                resi: i32::try_from(entity.resi).map_err(|_| {
+                    crate::ArpeggiaError::Calculation("residue identifier exceeds Int32".into())
                 })?,
                 insertion: entity.insertion,
                 altloc: entity.altloc,
                 atomn: entity.atomn,
-                atomi: u64::try_from(entity.atomi).map_err(|_| {
-                    crate::ArpeggiaError::InvalidArgument("atom identifier exceeds UInt64".into())
+                atomi: u32::try_from(entity.atomi).map_err(|_| {
+                    crate::ArpeggiaError::Calculation("atom identifier exceeds UInt32".into())
                 })?,
                 sasa,
                 polarity: rosetta_sasa_filter_polarity(hier),
@@ -399,12 +399,12 @@ fn is_n_terminal(entity: &AtomConformerResidueChainModel) -> bool {
 
 pub(crate) fn atom_sasa_records_to_dataframe(records: &[AtomSasaRecord]) -> DataFrame {
     df!(
-        "atomi" => records.iter().map(|x| x.atomi).collect::<Vec<u64>>(),
+        "atomi" => records.iter().map(|x| x.atomi).collect::<Vec<u32>>(),
         "sasa" => records.iter().map(|x| x.sasa).collect::<Vec<f32>>(),
         "polarity" => records.iter().map(|x| x.polarity.as_str()).collect::<Vec<&str>>(),
         "chain" => records.iter().map(|x| x.chain.clone()).collect::<Vec<String>>(),
         "resn" => records.iter().map(|x| x.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|x| x.resi).collect::<Vec<i64>>(),
+        "resi" => records.iter().map(|x| x.resi).collect::<Vec<i32>>(),
         "insertion" => records.iter().map(|x| x.insertion.clone()).collect::<Vec<String>>(),
         "altloc" => records.iter().map(|x| x.altloc.clone()).collect::<Vec<String>>(),
         "atomn" => records.iter().map(|x| x.atomn.clone()).collect::<Vec<String>>(),
@@ -465,7 +465,7 @@ pub fn get_residue_sasa(
 }
 
 fn aggregate_residue_records(records: Vec<AtomSasaRecord>) -> Vec<ResidueSasaRecord> {
-    let mut totals = BTreeMap::<(String, String, i64, String), [f32; 4]>::new();
+    let mut totals = BTreeMap::<(String, String, i32, String), [f32; 4]>::new();
     for atom in records {
         let values = totals
             .entry((atom.chain, atom.resn, atom.resi, atom.insertion))
@@ -498,7 +498,7 @@ pub(crate) fn residue_sasa_records_to_dataframe(records: &[ResidueSasaRecord]) -
     df!(
         "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
         "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i64>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
         "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
         "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
         "polar_sasa" => records.iter().map(|r| r.polar_sasa).collect::<Vec<f32>>(),
@@ -867,7 +867,7 @@ fn relative_sasa_records_to_dataframe(records: &[RelativeSasaRecord]) -> DataFra
     df!(
         "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
         "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i64>>(),
+        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
         "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
         "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
         "polar_sasa" => records.iter().map(|r| r.polar_sasa).collect::<Vec<f32>>(),
@@ -944,8 +944,8 @@ mod tests {
             "Should have 'atomn' column"
         );
         assert!(columns.contains(&"polarity".to_string()));
-        assert_eq!(df.column("resi").unwrap().dtype(), &DataType::Int64);
-        assert_eq!(df.column("atomi").unwrap().dtype(), &DataType::UInt64);
+        assert_eq!(df.column("resi").unwrap().dtype(), &DataType::Int32);
+        assert_eq!(df.column("atomi").unwrap().dtype(), &DataType::UInt32);
     }
 
     #[test]

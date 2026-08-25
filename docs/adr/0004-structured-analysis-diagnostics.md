@@ -14,3 +14,10 @@ distance-backed `PotentialCovalent`, `StericClash`, `VanDerWaalsClash`, and
 disulfide declarations, other resolved connectivity, qualifying undeclared CYS
 geometry, then generic covalent-distance inference. These category changes are
 treated as a breaking API change rather than hidden behind misleading aliases.
+
+DataFrame identifier columns retain the compact schema adopted for memory and
+serialized-file efficiency: model and atom identifiers are unsigned 32-bit
+integers, while residue identifiers are signed 32-bit integers because residue
+numbers can be negative. These ranges are sufficient for regular structure
+files. An identifier outside them produces a Calculation Failure instead of
+panicking or silently truncating the value.
