@@ -613,21 +613,7 @@ pub(crate) fn chain_sasa_records_to_dataframe(records: &[ChainSasaRecord]) -> Da
 ///
 /// # Returns
 ///
-/// The buried surface area at the interface in square Ångströms.
-pub fn get_dsasa(
-    pdb: &PDB,
-    groups: &str,
-    probe_radius: f32,
-    n_points: usize,
-    model_num: usize,
-) -> crate::ArpeggiaResult<crate::Analysis<f32>> {
-    Ok(
-        get_dsasa_components(pdb, groups, probe_radius, n_points, model_num)?
-            .map(|result| result.dsasa),
-    )
-}
-
-/// Calculate two-sided dSASA and its additive polarity partition.
+/// The two-sided dSASA and its additive polarity partition.
 pub fn get_dsasa_components(
     pdb: &PDB,
     groups: &str,
@@ -1296,26 +1282,30 @@ ENDMDL\nEND\n";
     }
 
     #[test]
-    fn test_get_dsasa_returns_positive() {
+    fn test_dsasa_returns_positive() {
         // 6bft has multiple chains with interfaces
         let pdb = load_multi_chain();
 
         // Calculate dSASA between groups A,B,C and G,H,L
-        let dsasa = run_with_threads(1, || get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0));
-        let dsasa = dsasa.unwrap().value;
+        let dsasa = run_with_threads(1, || get_dsasa_components(&pdb, "A,B,C/G,H,L", 1.4, 100, 0))
+            .unwrap()
+            .value
+            .dsasa;
 
         // dSASA should be positive for an interface
         assert!(dsasa > 0.0, "dSASA should be positive, got {dsasa}");
     }
 
     #[test]
-    fn test_get_dsasa_interface_value() {
+    fn test_dsasa_interface_value() {
         // 6bft has multiple chains with interfaces
         let pdb = load_multi_chain();
 
         // Calculate dSASA between groups A,B,C and G,H,L
-        let dsasa = run_with_threads(1, || get_dsasa(&pdb, "C/H,L", 1.4, 100, 0));
-        let dsasa = dsasa.unwrap().value;
+        let dsasa = run_with_threads(1, || get_dsasa_components(&pdb, "C/H,L", 1.4, 100, 0))
+            .unwrap()
+            .value
+            .dsasa;
 
         // Regression test: the dSASA should be around 1644-1665 Å²
         // as calculated from PyMOL and Rosetta InterfaceAnalyzer
@@ -1329,14 +1319,18 @@ ENDMDL\nEND\n";
     }
 
     #[test]
-    fn test_get_dsasa_symmetric() {
+    fn test_dsasa_symmetric() {
         // dSASA should be the same regardless of which group is first
         let pdb = load_multi_chain();
 
-        let dsasa1 = run_with_threads(1, || get_dsasa(&pdb, "A,B,C/G,H,L", 1.4, 100, 0));
-        let dsasa2 = run_with_threads(1, || get_dsasa(&pdb, "G,H,L/A,B,C", 1.4, 100, 0));
-        let dsasa1 = dsasa1.unwrap().value;
-        let dsasa2 = dsasa2.unwrap().value;
+        let dsasa1 = run_with_threads(1, || get_dsasa_components(&pdb, "A,B,C/G,H,L", 1.4, 100, 0))
+            .unwrap()
+            .value
+            .dsasa;
+        let dsasa2 = run_with_threads(1, || get_dsasa_components(&pdb, "G,H,L/A,B,C", 1.4, 100, 0))
+            .unwrap()
+            .value
+            .dsasa;
 
         let diff = (dsasa1 - dsasa2).abs();
         assert!(

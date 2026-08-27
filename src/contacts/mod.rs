@@ -23,7 +23,8 @@ use pdbtbx::*;
 use polars::prelude::*;
 use tracing::debug;
 
-/// Analyze contacts with explicit connectivity and histidine-protonation policy.
+/// Analyze contacts with optional explicit connectivity and a
+/// histidine-protonation policy.
 #[allow(clippy::too_many_arguments)]
 pub fn analyze_contacts(
     pdb: &PDB,
@@ -121,68 +122,6 @@ fn protonation_warnings(
             Some(crate::AnalysisWarning::new(code, message))
         })
         .collect()
-}
-
-/// Calculate atomic and ring contacts in a PDB structure.
-///
-/// # Arguments
-///
-/// * `pdb` - Reference to a PDB structure
-/// * `groups` - Chain groups specification (e.g., "A,B/C,D" or "/" for all-to-all)
-/// * `vdw_comp` - VdW radii compensation factor (typically 0.1)
-/// * `dist_cutoff` - Distance cutoff for neighbor searches (typically 6.5 Å)
-///
-/// # Returns
-///
-/// A Polars `DataFrame` containing all identified contacts with columns:
-/// - model, interaction, distance
-/// - `from_chain`, `from_resn`, `from_resi`, `from_insertion`, `from_alt_loc`, `from_atomn`, `from_atomi`
-/// - `to_chain`, `to_resn`, `to_resi`, `to_insertion`, `to_altloc`, `to_atomn`, `to_atomi`
-/// - `sc_centroid_dist`, `sc_dihedral`, `sc_centroid_angle`
-///
-/// # Example
-///
-/// ```no_run
-/// use arpeggia::{load_model, get_contacts};
-///
-/// let input_file = "path/to/structure.pdb".to_string();
-/// let pdb = load_model(&input_file).unwrap().value;
-/// let contacts_df = get_contacts(
-///     &pdb, "/", 0.1, 6.5,
-///     arpeggia::ProtonationMode::AllCharged, 7.4,
-/// ).unwrap().value;
-/// println!("Found {} contacts", contacts_df.height());
-/// ```
-pub fn get_contacts(
-    pdb: &PDB,
-    groups: &str,
-    vdw_comp: f64,
-    dist_cutoff: f64,
-    protonation: ProtonationMode,
-    ph: f64,
-) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
-    analyze_contacts(pdb, None, groups, vdw_comp, dist_cutoff, protonation, ph)
-}
-
-/// Calculate contacts using explicit connectivity parsed from the input file.
-pub fn get_contacts_with_metadata(
-    pdb: &PDB,
-    metadata: &crate::StructureMetadata,
-    groups: &str,
-    vdw_comp: f64,
-    dist_cutoff: f64,
-    protonation: ProtonationMode,
-    ph: f64,
-) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
-    analyze_contacts(
-        pdb,
-        Some(metadata),
-        groups,
-        vdw_comp,
-        dist_cutoff,
-        protonation,
-        ph,
-    )
 }
 
 fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> crate::ArpeggiaResult<DataFrame> {
@@ -318,8 +257,9 @@ mod tests {
     use std::io::BufReader;
 
     fn default_contacts(pdb: &PDB, groups: &str, vdw_comp: f64, cutoff: f64) -> DataFrame {
-        get_contacts(
+        analyze_contacts(
             pdb,
+            None,
             groups,
             vdw_comp,
             cutoff,
@@ -438,9 +378,9 @@ END                                                                             
         let metadata = crate::read_metadata(&path).unwrap().value;
         std::fs::remove_file(path).unwrap();
 
-        let contacts = get_contacts_with_metadata(
+        let contacts = analyze_contacts(
             &pdb,
-            &metadata,
+            Some(&metadata),
             "/",
             0.1,
             6.5,
@@ -498,9 +438,9 @@ CONECT    1    2\nEND                                                           
         let metadata = crate::read_metadata(&path).unwrap().value;
         std::fs::remove_file(path).unwrap();
 
-        let contacts = get_contacts_with_metadata(
+        let contacts = analyze_contacts(
             &pdb,
-            &metadata,
+            Some(&metadata),
             "A/B",
             0.1,
             6.5,
@@ -549,9 +489,9 @@ CONECT    1    2\nEND                                                           
         let metadata = crate::read_metadata(&path).unwrap().value;
         std::fs::remove_file(path).unwrap();
 
-        let contacts = get_contacts_with_metadata(
+        let contacts = analyze_contacts(
             &pdb,
-            &metadata,
+            Some(&metadata),
             "/",
             0.1,
             6.5,
@@ -665,9 +605,9 @@ END                                                                             
         let metadata = crate::read_metadata(&path).unwrap().value;
         std::fs::remove_file(path).unwrap();
 
-        let contacts = get_contacts_with_metadata(
+        let contacts = analyze_contacts(
             &pdb,
-            &metadata,
+            Some(&metadata),
             "A/B",
             0.1,
             6.5,

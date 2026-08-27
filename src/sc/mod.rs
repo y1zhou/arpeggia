@@ -11,7 +11,7 @@ pub mod surface_generator;
 pub mod types;
 pub mod vector3;
 
-use crate::structure::{parse_groups, prepare_structure_with_chains};
+use crate::structure::{StructurePreparation, parse_groups};
 use pdbtbx::PDB;
 use sc_calculator::ScCalculator;
 use std::collections::HashSet;
@@ -60,27 +60,18 @@ pub struct ScResult {
 ///
 /// # Returns
 ///
-/// The SC score as f64.
+/// The combined and directional SC scores.
 ///
 /// # Example
 ///
 /// ```no_run
-/// use arpeggia::{load_model, get_sc};
+/// use arpeggia::{get_sc_details, load_model};
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
 /// let pdb = load_model(&input_file).unwrap().value;
-/// let sc_score = get_sc(&pdb, "H,L/A", 0).unwrap().value;
-/// println!("Shape complementarity: {:.3}", sc_score);
+/// let result = get_sc_details(&pdb, "H,L/A", 0).unwrap().value;
+/// println!("Shape complementarity: {:.3}", result.sc);
 /// ```
-pub fn get_sc(
-    pdb: &PDB,
-    groups: &str,
-    model_num: usize,
-) -> crate::ArpeggiaResult<crate::Analysis<f64>> {
-    Ok(get_sc_details(pdb, groups, model_num)?.map(|result| result.sc))
-}
-
-/// Calculate combined and both directional SC scores.
 pub fn get_sc_details(
     pdb: &PDB,
     groups: &str,
@@ -103,7 +94,11 @@ pub fn get_sc_details(
 
     let all_selected_chains: HashSet<String> =
         group1_chains.union(&group2_chains).cloned().collect();
-    let analysis = prepare_structure_with_chains(pdb, model_num, true, &all_selected_chains);
+    let analysis = StructurePreparation::new(model_num)
+        .remove_hydrogens(true)
+        .remove_solvent_and_ions(true)
+        .chain_set(&all_selected_chains)
+        .prepare(pdb);
 
     let mut calc = ScCalculator::default();
 
@@ -178,7 +173,7 @@ mod tests {
     fn sc_rejects_overlapping_groups() {
         let pdb = load_multi_chain();
         assert!(matches!(
-            get_sc(&pdb, "H/H", 0),
+            get_sc_details(&pdb, "H/H", 0),
             Err(crate::ArpeggiaError::InvalidArgument(_))
         ));
     }
@@ -186,8 +181,8 @@ mod tests {
     #[test]
     fn test_h_vs_c() {
         let pdb = load_multi_chain();
-        let sc_value = match run_with_threads(0, || get_sc(&pdb, "H/C", 0)) {
-            Ok(value) => value.value,
+        let sc_value = match run_with_threads(0, || get_sc_details(&pdb, "H/C", 0)) {
+            Ok(value) => value.value.sc,
             Err(e) => panic!("Error calculating SC: {:?}", e),
         };
 
@@ -202,8 +197,8 @@ mod tests {
     #[test]
     fn test_hl_vs_cg() {
         let pdb = load_multi_chain();
-        let sc_value = match run_with_threads(0, || get_sc(&pdb, "H,L/C,G", 0)) {
-            Ok(value) => value.value,
+        let sc_value = match run_with_threads(0, || get_sc_details(&pdb, "H,L/C,G", 0)) {
+            Ok(value) => value.value.sc,
             Err(e) => panic!("Error calculating SC: {:?}", e),
         };
 
@@ -218,7 +213,7 @@ mod tests {
     #[test]
     fn chains_without_interface_return_an_error() {
         let pdb = load_multi_chain();
-        let result = run_with_threads(1, || get_sc(&pdb, "H/B", 0));
+        let result = run_with_threads(1, || get_sc_details(&pdb, "H/B", 0));
         assert!(matches!(result, Err(crate::ArpeggiaError::Calculation(_))));
     }
 
@@ -236,7 +231,7 @@ END                                                                             
             .0;
 
         assert!(matches!(
-            get_sc(&pdb, "A/B", 0),
+            get_sc_details(&pdb, "A/B", 0),
             Err(crate::ArpeggiaError::Calculation(message))
                 if message.contains("interface")
         ));
@@ -256,7 +251,7 @@ END                                                                             
             .0;
 
         assert!(matches!(
-            get_sc(&pdb, "A/B", 0),
+            get_sc_details(&pdb, "A/B", 0),
             Err(crate::ArpeggiaError::Calculation(message))
                 if message.contains("van der Waals radius")
         ));
@@ -280,7 +275,7 @@ ENDMDL\nEND\n";
             .0;
 
         assert!(matches!(
-            get_sc(&pdb, "B/D", 7),
+            get_sc_details(&pdb, "B/D", 7),
             Err(crate::ArpeggiaError::InvalidArgument(_))
         ));
     }

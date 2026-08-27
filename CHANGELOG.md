@@ -53,8 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Model/atom identifiers in contact and surface DataFrames are unsigned 32-bit
   integers and residue identifiers are signed 32-bit integers. Python adds
   `dsasa_components()` and `seqres()`.
-- `get_contacts` now accepts protonation mode and pH. dSASA component results
-  and detailed directional SC results are public typed records.
+- Removed redundant Rust convenience wrappers in favor of the canonical
+  `analyze_contacts`, `get_dsasa_components`, and `get_sc_details` entry points.
+  Python function names, return values, and CLI command names are unchanged.
 
 ### Performance and security
 

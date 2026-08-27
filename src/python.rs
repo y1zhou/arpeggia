@@ -501,12 +501,12 @@ fn sc(
     let analysis = py
         .detach(|| {
             crate::run_with_threads(num_threads as isize, || {
-                crate::get_sc(&pdb, groups, model_num)
+                crate::get_sc_details(&pdb, groups, model_num)
             })
         })
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
-    Ok(analysis.value)
+    Ok(analysis.value.sc)
 }
 
 /// Python module for protein structure analysis.

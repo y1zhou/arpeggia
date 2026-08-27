@@ -41,11 +41,11 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     // Calculate SC
     let analysis = run_with_threads(args.num_threads as isize, || {
         debug!("Using {} thread(s)", rayon::current_num_threads());
-        arpeggia::get_sc(&pdb, &args.groups, args.model_num)
+        arpeggia::get_sc_details(&pdb, &args.groups, args.model_num)
     })?;
     for warning in analysis.warnings {
         tracing::warn!("{warning}");
     }
-    info!("SC: {:.4}", analysis.value);
+    info!("SC: {:.4}", analysis.value.sc);
     Ok(())
 }

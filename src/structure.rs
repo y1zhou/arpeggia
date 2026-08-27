@@ -275,20 +275,6 @@ pub(crate) fn prepare_structure(
         .prepare(pdb)
 }
 
-/// Prepare a structure for a specific set of chain IDs.
-pub(crate) fn prepare_structure_with_chains(
-    pdb: &PDB,
-    model_num: usize,
-    remove_hydrogens: bool,
-    chains: &HashSet<String>,
-) -> Analysis<PDB> {
-    StructurePreparation::new(model_num)
-        .remove_hydrogens(remove_hydrogens)
-        .remove_solvent_and_ions(true)
-        .chain_set(chains)
-        .prepare(pdb)
-}
-
 /// Filter a PDB structure to keep only the specified model.
 pub(crate) fn filter_pdb_by_model(pdb: &PDB, model_num: usize) -> PDB {
     let all_model_nums: Vec<usize> = pdb.models().map(|m| m.serial_number()).collect();

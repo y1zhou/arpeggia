@@ -29,13 +29,13 @@ pub use structure::{load_model, parse_groups};
 pub use utils::{DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file};
 
 // Re-export public functions from modules
-pub use contacts::{analyze_contacts, get_contacts, get_contacts_with_metadata};
+pub use contacts::analyze_contacts;
 pub use sap::{get_per_atom_sap_score, get_per_residue_sap_score};
 pub use sasa::{
-    DsasaResult, get_atom_sasa, get_chain_sasa, get_dsasa, get_dsasa_components, get_max_asa,
+    DsasaResult, get_atom_sasa, get_chain_sasa, get_dsasa_components, get_max_asa,
     get_relative_sasa, get_residue_sasa,
 };
-pub use sc::{ScResult, get_sc, get_sc_details};
+pub use sc::{ScResult, get_sc_details};
 pub use sequences::get_sequences;
 
 // Python bindings module (only compiled when python feature is enabled)
