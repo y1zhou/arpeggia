@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           uv pip install dist/*.whl
-          python python/tests/smoke_wheel.py
+          uv run --active --no-sync python python/tests/smoke_wheel.py
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
