@@ -12,15 +12,16 @@
 //!
 //! Where:
 //! - Neighbors are atoms within radius R of atom i
-//! - Hydrophobicity uses the Black & Mould (1991) scale, normalized so glycine = 0
+//! - Hydrophobicity uses Rosetta's Black & Mould-derived constants
 //! - SASA is the side-chain solvent accessible surface area
 //! - SASA_max is the maximum SASA for that residue type
 
-use crate::sasa::{AtomSasaRecord, calculate_atom_sasa_records};
+use crate::sasa::{calculate_prepared_sap_atom_sasa_records, validate_sasa_input};
 use crate::structure::prepare_structure;
 use pdbtbx::*;
 use polars::prelude::*;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use rstar::{RTree, primitives::GeomWithData};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug)]
 struct AtomSapRecord {
@@ -29,7 +30,7 @@ struct AtomSapRecord {
     resi: i32,
     insertion: String,
     atomn: String,
-    atomi: i32,
+    atomi: u32,
     sasa: f32,
     sap_score: f32,
 }
@@ -46,13 +47,18 @@ struct ResidueSapRecord {
     relative_sc_sasa: f32,
 }
 
+struct SapAtom {
+    record: AtomSapRecord,
+    position: [f64; 3],
+    contribution: f32,
+}
+
 /// Black & Mould (1991) hydrophobicity scale values for amino acids.
 /// These values are normalized so that the scale ranges from 0 to 1,
 /// with Arginine being least hydrophobic (0.0) and Phenylalanine most hydrophobic (1.0).
 ///
-/// For SAP calculations, we normalize this scale so that Glycine = 0.
-/// This means hydrophobic residues (more hydrophobic than Gly) have positive values,
-/// and hydrophilic residues (less hydrophobic than Gly) have negative values.
+/// Rosetta stores this scale relative to 0.5, leaving glycine at 0.001.
+/// Hydrophobic residues have positive values and hydrophilic residues have negative values.
 ///
 /// Original Black & Mould values (0-1 normalized):
 /// - PHE: 1.000, ILE: 0.943, LEU: 0.943, TYR: 0.880, TRP: 0.878, VAL: 0.825
@@ -61,67 +67,96 @@ struct ResidueSapRecord {
 /// - GLN: 0.251, ASN: 0.236, HIS: 0.165, GLU: 0.043
 /// - ASP: 0.028, ARG: 0.000
 ///
-/// We subtract 0.501 (Glycine's value) to get the normalized scale.
 fn get_hydrophobicity(resn: &str) -> Option<f32> {
-    // Black & Mould values minus Glycine (0.501)
-    match resn.to_uppercase().as_str() {
-        "ALA" => Some(0.616 - 0.501),         // 0.115
-        "ARG" => Some(0.000 - 0.501),         // -0.501
-        "ASN" => Some(0.236 - 0.501),         // -0.265
-        "ASP" => Some(0.028 - 0.501),         // -0.473
-        "CYS" => Some(0.680 - 0.501),         // 0.179
-        "GLU" => Some(0.043 - 0.501),         // -0.458
-        "GLN" => Some(0.251 - 0.501),         // -0.250
-        "GLY" => Some(0.000),                 // 0.0 (reference)
-        "HIS" => Some(0.165 - 0.501),         // -0.336
-        "ILE" | "LEU" => Some(0.943 - 0.501), // 0.442
-        "LYS" => Some(0.283 - 0.501),         // -0.218
-        "MET" => Some(0.738 - 0.501),         // 0.237
-        "PHE" => Some(1.000 - 0.501),         // 0.499
-        "PRO" => Some(0.711 - 0.501),         // 0.210
-        "SER" => Some(0.359 - 0.501),         // -0.142
-        "THR" => Some(0.450 - 0.501),         // -0.051
-        "TRP" => Some(0.878 - 0.501),         // 0.377
-        "TYR" => Some(0.880 - 0.501),         // 0.379
-        "VAL" => Some(0.825 - 0.501),         // 0.324
-        _ => None,
-    }
+    Some(match canonical_sap_residue(resn)? {
+        "ALA" => 0.116,
+        "ARG" => -0.500,
+        "ASN" => -0.264,
+        "ASP" => -0.472,
+        "CYS" => 0.180,
+        "GLN" => -0.249,
+        "GLU" => -0.457,
+        "GLY" => 0.001,
+        "HIS" => -0.335,
+        "ILE" | "LEU" => 0.443,
+        "LYS" => -0.217,
+        "MET" => 0.238,
+        "PHE" => 0.500,
+        "PRO" => 0.211,
+        "SER" => -0.141,
+        "THR" => -0.050,
+        "TRP" => 0.378,
+        "TYR" => 0.380,
+        "VAL" => 0.325,
+        _ => unreachable!(),
+    })
 }
 
 /// Get the maximum side-chain solvent accessible surface area (SASA).
 ///
-/// These values are adapted from the Rosetta database file
-/// `database/scoring/score_functions/sap_sasa_calib.dat` and represent
-/// the maximum SASA contribution from side-chain atoms only.
-///
-/// Note: Glycine uses the H atom contribution as it has no side-chain.
+/// These values are produced by Rosetta's `SapDatabase::generate_max_sasa()`
+/// and represent the maximum full-atom side-chain SASA for each residue.
 ///
 /// Returns the maximum side-chain SASA in Å² for a given 3-letter amino acid code,
 /// or None if the residue is not a standard amino acid.
 fn get_sc_max_asa(resn: &str) -> Option<f32> {
-    match resn.to_uppercase().as_str() {
-        "ALA" => Some(15.395),
-        "ARG" => Some(124.338),
-        "ASN" => Some(90.303),
-        "ASP" => Some(87.601),
-        "CYS" => Some(46.456),
-        "GLN" => Some(99.186),
-        "GLY" => Some(3.229), // Using H
-        "GLU" => Some(95.534),
-        "HIS" => Some(96.532),
-        "ILE" => Some(31.448),
-        "LEU" => Some(30.271),
-        "LYS" => Some(61.962),
-        "MET" => Some(65.233),
-        "PHE" => Some(67.945),
-        "PRO" => Some(17.812),
-        "SER" => Some(39.355),
-        "THR" => Some(42.648),
-        "TRP" => Some(101.491),
-        "TYR" => Some(94.478),
-        "VAL" => Some(26.702),
-        _ => None,
-    }
+    // Generated by Rosetta's SapDatabase::generate_max_sasa().
+    Some(match canonical_sap_residue(resn)? {
+        "ALA" => 52.342_068,
+        "ARG" => 170.430_51,
+        "ASN" => 104.330_7,
+        "ASP" => 83.842_09,
+        "CYS" => 81.805_786,
+        "GLN" => 124.870_65,
+        "GLU" => 120.095_19,
+        "GLY" => 0.0,
+        "HIS" => 131.226_61,
+        "ILE" => 135.597_52,
+        "LEU" => 133.754_7,
+        "LYS" => 161.418_81,
+        "MET" => 133.666_67,
+        "PHE" => 136.542_05,
+        "PRO" => 84.366_356,
+        "SER" => 66.747_58,
+        "THR" => 83.251_59,
+        "TRP" => 165.838_12,
+        "TYR" => 162.805_04,
+        "VAL" => 108.051_186,
+        _ => unreachable!(),
+    })
+}
+
+fn canonical_sap_residue(resn: &str) -> Option<&str> {
+    Some(match resn {
+        "ALA" | "ARG" | "ASN" | "ASP" | "CYS" | "GLN" | "GLU" | "GLY" | "ILE" | "LEU" | "LYS"
+        | "PHE" | "PRO" | "SER" | "THR" | "TRP" | "TYR" | "VAL" => resn,
+        "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => "HIS",
+        "MET" | "MSE" => "MET",
+        _ => return None,
+    })
+}
+
+fn is_sap_sidechain(resn: &str, atomn: &str) -> bool {
+    canonical_sap_residue(resn).is_some()
+        && !matches!(
+            atomn,
+            "N" | "CA"
+                | "C"
+                | "O"
+                | "OXT"
+                | "H"
+                | "1H"
+                | "2H"
+                | "3H"
+                | "H1"
+                | "H2"
+                | "H3"
+                | "HA"
+                | "1HA"
+                | "2HA"
+                | "HA2"
+                | "HA3"
+        )
 }
 
 /// Calculate the SAP score for each atom in a PDB structure.
@@ -132,7 +167,7 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.4)
+/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.1)
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)
@@ -149,14 +184,14 @@ fn get_sc_max_asa(resn: &str) -> Option<f32> {
 /// use arpeggia::{load_model, get_per_atom_sap_score};
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
-/// let (pdb, _errors) = load_model(&input_file);
+/// let pdb = load_model(&input_file).unwrap().value;
 ///
 /// // Calculate SAP for all chains
-/// let sap_df = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, "");
+/// let sap_df = get_per_atom_sap_score(&pdb, 1.1, 100, 0, 5.0, "").unwrap().value;
 /// println!("Calculated SAP score for {} atoms", sap_df.height());
 ///
 /// // Calculate SAP for only chains H and L (antibody heavy and light chain)
-/// let sap_hl = get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, "H,L");
+/// let sap_hl = get_per_atom_sap_score(&pdb, 1.1, 100, 0, 5.0, "H,L").unwrap().value;
 /// ```
 pub fn get_per_atom_sap_score(
     pdb: &PDB,
@@ -165,14 +200,22 @@ pub fn get_per_atom_sap_score(
     model_num: usize,
     sap_radius: f32,
     chains: &str,
-) -> DataFrame {
-    atom_sap_records_to_dataframe(&calculate_per_atom_sap_records(
-        pdb,
-        probe_radius,
-        n_points,
-        model_num,
-        sap_radius,
-        chains,
+) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
+    if !sap_radius.is_finite() || sap_radius <= 0.0 {
+        return Err(crate::ArpeggiaError::InvalidArgument(
+            "sap_radius must be finite and positive".into(),
+        ));
+    }
+    validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
+    let analysis = prepare_structure(pdb, model_num, false, chains);
+    let (records, unsupported) =
+        calculate_per_atom_sap_records(&analysis.value, probe_radius, n_points, sap_radius)?;
+    let mut warnings = analysis.warnings;
+    append_unsupported_monomer_warning(&unsupported, &mut warnings);
+    append_prepared_input_warnings(&analysis.value, &mut warnings);
+    Ok(crate::Analysis::new(
+        atom_sap_records_to_dataframe(&records),
+        warnings,
     ))
 }
 
@@ -180,77 +223,145 @@ fn calculate_per_atom_sap_records(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
-    model_num: usize,
     sap_radius: f32,
-    chains: &str,
-) -> Vec<AtomSapRecord> {
-    let atom_sasa_records =
-        calculate_atom_sasa_records(pdb, probe_radius, n_points, model_num, true, chains);
-    let atom_sasa_map: HashMap<i32, f32> = atom_sasa_records
+) -> crate::ArpeggiaResult<(Vec<AtomSapRecord>, BTreeSet<String>)> {
+    // SAP applies Rosetta's Reduce-radius exposure definition to all supplied
+    // atoms; standard SASA remains a separate heavy-atom ProtOr calculation.
+    let atom_sasa_records = calculate_prepared_sap_atom_sasa_records(pdb, probe_radius, n_points)?;
+    let unsupported = atom_sasa_records
         .iter()
-        .map(|record| (record.atomi, record.sasa))
-        .collect();
-
-    let resn_hydrophobicity_map: HashMap<String, f32> = atom_sasa_records
-        .iter()
-        .filter_map(|record| get_hydrophobicity(&record.resn).map(|h| (record.resn.clone(), h)))
-        .collect();
-
-    let pdb_no_hydrogens = prepare_structure(pdb, model_num, true, chains);
-    let tree = pdb_no_hydrogens.create_hierarchy_rtree();
-    let sap_radius_sq = f64::from(sap_radius * sap_radius);
-
-    let sap_scores_map: HashMap<i32, f32> = pdb_no_hydrogens
-        .atoms_with_hierarchy()
-        .filter(|h| h.is_sidechain())
-        .map(|x| {
-            let x_atomi = x.atom().serial_number() as i32;
-            let atom_sap_score = tree
-                .locate_within_distance(x.atom().pos(), sap_radius_sq)
-                .filter(|y| y.is_sidechain())
-                .map(|y| {
-                    let neighbor_resn = y.residue().name().unwrap();
-                    if let (Some(neighbor_atom_sasa), Some(neighbor_res_hydrophobicity)) = (
-                        atom_sasa_map.get(&(y.atom().serial_number() as i32)),
-                        resn_hydrophobicity_map.get(neighbor_resn),
-                    ) {
-                        let max_res_asa = get_sc_max_asa(neighbor_resn).unwrap();
-                        neighbor_res_hydrophobicity
-                            * (neighbor_atom_sasa / max_res_asa).clamp(0.0, 1.0)
-                    } else {
-                        0.0
-                    }
-                })
-                .sum::<f32>();
-            (x_atomi, atom_sap_score)
+        .filter(|record| {
+            get_hydrophobicity(&record.resn).is_none() || get_sc_max_asa(&record.resn).is_none()
         })
-        .collect();
-
-    let sidechain_atomi: HashSet<i32> = pdb_no_hydrogens
-        .atoms_with_hierarchy()
-        .filter(|h| h.is_sidechain())
-        .map(|h| h.atom().serial_number() as i32)
-        .collect();
-
-    let mut records = atom_sasa_records
+        .map(|record| record.resn.clone())
+        .collect::<BTreeSet<_>>();
+    // [WARNING] Rosetta publishes no SAP calibration for these monomers. They
+    // are omitted and diagnosed instead of borrowing an unjustified constant.
+    let atoms = atom_sasa_records
         .into_iter()
-        .filter(|record| sidechain_atomi.contains(&record.atomi))
-        .map(|record| atom_sasa_to_sap(record, &sap_scores_map))
+        .zip(pdb.atoms_with_hierarchy())
+        .filter(|(record, _)| {
+            !unsupported.contains(&record.resn) && is_sap_sidechain(&record.resn, &record.atomn)
+        })
+        .filter_map(|(record, entity)| {
+            debug_assert_eq!(record.atomi as usize, entity.atom().serial_number());
+            let hydrophobicity = get_hydrophobicity(&record.resn)?;
+            let max_asa = get_sc_max_asa(&record.resn)?;
+            let position = entity.atom().pos();
+            Some(SapAtom {
+                contribution: if max_asa == 0.0 {
+                    0.0
+                } else {
+                    hydrophobicity * record.sasa / max_asa
+                },
+                position: [position.0, position.1, position.2],
+                record: AtomSapRecord {
+                    chain: record.chain,
+                    resn: record.resn,
+                    resi: record.resi,
+                    insertion: record.insertion,
+                    atomn: record.atomn,
+                    atomi: record.atomi,
+                    sasa: record.sasa,
+                    sap_score: 0.0,
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+    let tree = RTree::bulk_load(
+        atoms
+            .iter()
+            .enumerate()
+            .map(|(index, atom)| GeomWithData::new(atom.position, index))
+            .collect(),
+    );
+    let sap_radius_sq = f64::from(sap_radius * sap_radius);
+    let scores = atoms
+        .iter()
+        .map(|atom| {
+            tree.locate_within_distance(atom.position, sap_radius_sq)
+                .filter(|neighbor| {
+                    let position = atoms[neighbor.data].position;
+                    atom.position
+                        .iter()
+                        .zip(position)
+                        .map(|(left, right)| (left - right).powi(2))
+                        .sum::<f64>()
+                        < sap_radius_sq
+                })
+                .map(|neighbor| atoms[neighbor.data].contribution)
+                .sum::<f32>()
+        })
+        .collect::<Vec<_>>();
+    let mut records = atoms
+        .into_iter()
+        .zip(scores)
+        .map(|(atom, sap_score)| AtomSapRecord {
+            sap_score,
+            ..atom.record
+        })
         .collect::<Vec<_>>();
     records.sort_by_key(|record| record.atomi);
-    records
+    Ok((records, unsupported))
 }
 
-fn atom_sasa_to_sap(record: AtomSasaRecord, sap_scores_map: &HashMap<i32, f32>) -> AtomSapRecord {
-    AtomSapRecord {
-        chain: record.chain,
-        resn: record.resn,
-        resi: record.resi,
-        insertion: record.insertion,
-        atomn: record.atomn,
-        atomi: record.atomi,
-        sasa: record.sasa,
-        sap_score: *sap_scores_map.get(&record.atomi).unwrap_or(&0.0),
+fn append_unsupported_monomer_warning(
+    unsupported: &BTreeSet<String>,
+    warnings: &mut Vec<crate::AnalysisWarning>,
+) {
+    if !unsupported.is_empty() {
+        warnings.push(crate::AnalysisWarning::new(
+            crate::WarningCode::UnsupportedMonomer,
+            format!(
+                "SAP omitted monomers without Rosetta calibration: {}",
+                unsupported.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        ));
+    }
+}
+
+fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisWarning>) {
+    let Some(model) = pdb.models().next() else {
+        return;
+    };
+    let selected_chains = model.chains().collect::<Vec<_>>();
+    if selected_chains
+        .iter()
+        .flat_map(|chain| chain.atoms())
+        .all(|atom| atom.element() != Some(&Element::H))
+    {
+        warnings.push(crate::AnalysisWarning::new(
+            crate::WarningCode::HydrogenFreeInput,
+            "SAP numerical compatibility requires a caller-prepared full-atom structure, but the selected input contains no hydrogens",
+        ));
+    }
+
+    let mut unresolved = 0;
+    let mut inconsistent = 0;
+    for residue in selected_chains.iter().flat_map(|chain| chain.residues()) {
+        match crate::contacts::ionic::histidine_preparation_issue(residue) {
+            Some(crate::contacts::ionic::HistidinePreparationIssue::Unresolved) => unresolved += 1,
+            Some(crate::contacts::ionic::HistidinePreparationIssue::Inconsistent) => {
+                inconsistent += 1;
+            }
+            None => {}
+        }
+    }
+    if unresolved > 0 {
+        warnings.push(crate::AnalysisWarning::new(
+            crate::WarningCode::UnresolvedHistidine,
+            format!(
+                "{unresolved} histidine residues have no explicit tautomer or ring-hydrogen evidence"
+            ),
+        ));
+    }
+    if inconsistent > 0 {
+        warnings.push(crate::AnalysisWarning::new(
+            crate::WarningCode::InconsistentHistidine,
+            format!(
+                "{inconsistent} histidine residues have names inconsistent with their explicit ring hydrogens"
+            ),
+        ));
     }
 }
 
@@ -261,7 +372,7 @@ fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
         "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
         "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
         "atomn" => records.iter().map(|r| r.atomn.clone()).collect::<Vec<String>>(),
-        "atomi" => records.iter().map(|r| r.atomi).collect::<Vec<i32>>(),
+        "atomi" => records.iter().map(|r| r.atomi).collect::<Vec<u32>>(),
         "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
         "sap_score" => records.iter().map(|r| r.sap_score).collect::<Vec<f32>>(),
     )
@@ -278,7 +389,7 @@ fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.4)
+/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.1)
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)
@@ -295,14 +406,14 @@ fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
 /// use arpeggia::{load_model, get_per_residue_sap_score};
 ///
 /// let input_file = "path/to/structure.pdb".to_string();
-/// let (pdb, _errors) = load_model(&input_file);
+/// let pdb = load_model(&input_file).unwrap().value;
 ///
 /// // Calculate SAP for all chains
-/// let sap_df = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, "");
+/// let sap_df = get_per_residue_sap_score(&pdb, 1.1, 100, 0, 5.0, "").unwrap().value;
 /// println!("Calculated SAP score for {} residues", sap_df.height());
 ///
 /// // Calculate SAP for only chain A
-/// let sap_a = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, "A");
+/// let sap_a = get_per_residue_sap_score(&pdb, 1.1, 100, 0, 5.0, "A").unwrap().value;
 /// ```
 pub fn get_per_residue_sap_score(
     pdb: &PDB,
@@ -311,14 +422,22 @@ pub fn get_per_residue_sap_score(
     model_num: usize,
     sap_radius: f32,
     chains: &str,
-) -> DataFrame {
-    residue_sap_records_to_dataframe(&calculate_per_residue_sap_records(
-        pdb,
-        probe_radius,
-        n_points,
-        model_num,
-        sap_radius,
-        chains,
+) -> crate::ArpeggiaResult<crate::Analysis<DataFrame>> {
+    if !sap_radius.is_finite() || sap_radius <= 0.0 {
+        return Err(crate::ArpeggiaError::InvalidArgument(
+            "sap_radius must be finite and positive".into(),
+        ));
+    }
+    validate_sasa_input(pdb, probe_radius, n_points, model_num, chains)?;
+    let analysis = prepare_structure(pdb, model_num, false, chains);
+    let (records, unsupported) =
+        calculate_per_residue_sap_records(&analysis.value, probe_radius, n_points, sap_radius)?;
+    let mut warnings = analysis.warnings;
+    append_unsupported_monomer_warning(&unsupported, &mut warnings);
+    append_prepared_input_warnings(&analysis.value, &mut warnings);
+    Ok(crate::Analysis::new(
+        residue_sap_records_to_dataframe(&records),
+        warnings,
     ))
 }
 
@@ -326,21 +445,44 @@ fn calculate_per_residue_sap_records(
     pdb: &PDB,
     probe_radius: f32,
     n_points: usize,
-    model_num: usize,
     sap_radius: f32,
-    chains: &str,
-) -> Vec<ResidueSapRecord> {
+) -> crate::ArpeggiaResult<(Vec<ResidueSapRecord>, BTreeSet<String>)> {
     let mut grouped: BTreeMap<(String, String, i32, String), (f32, f32)> = BTreeMap::new();
 
-    for record in
-        calculate_per_atom_sap_records(pdb, probe_radius, n_points, model_num, sap_radius, chains)
-            .into_iter()
-            .filter(|record| record.sap_score > 0.0)
-    {
+    for model in pdb.models() {
+        for chain in model.chains() {
+            for residue in chain.residues() {
+                let Some(resn) = residue
+                    .name()
+                    .filter(|name| canonical_sap_residue(name).is_some())
+                else {
+                    continue;
+                };
+                let resi = i32::try_from(residue.serial_number()).map_err(|_| {
+                    crate::ArpeggiaError::Calculation("residue identifier exceeds Int32".into())
+                })?;
+                grouped.insert(
+                    (
+                        chain.id().to_string(),
+                        resn.to_string(),
+                        resi,
+                        residue.insertion_code().unwrap_or("").to_string(),
+                    ),
+                    (0.0, 0.0),
+                );
+            }
+        }
+    }
+
+    let (atom_records, unsupported) =
+        calculate_per_atom_sap_records(pdb, probe_radius, n_points, sap_radius)?;
+    for record in atom_records {
         let key = (record.chain, record.resn, record.resi, record.insertion);
         let (sc_sasa, sap_score) = grouped.entry(key).or_insert((0.0, 0.0));
         *sc_sasa += record.sasa;
-        *sap_score += record.sap_score;
+        // [ACCEPTED DEVIATION] Match Rosetta's positive-only per-residue SAP
+        // accumulation while keeping the complete side-chain SASA above.
+        *sap_score += record.sap_score.max(0.0);
     }
 
     let mut records = grouped
@@ -355,12 +497,16 @@ fn calculate_per_residue_sap_records(
                 sc_sasa,
                 sap_score,
                 max_sc_asa,
-                relative_sc_sasa: (sc_sasa / max_sc_asa).clamp(0.0, 1.0),
+                relative_sc_sasa: if max_sc_asa == 0.0 {
+                    0.0
+                } else {
+                    sc_sasa / max_sc_asa
+                },
             }
         })
         .collect::<Vec<_>>();
     records.sort_by(|a, b| (&a.chain, a.resi, &a.insertion).cmp(&(&b.chain, b.resi, &b.insertion)));
-    records
+    Ok((records, unsupported))
 }
 
 fn residue_sap_records_to_dataframe(records: &[ResidueSapRecord]) -> DataFrame {
@@ -380,42 +526,39 @@ fn residue_sap_records_to_dataframe(records: &[ResidueSapRecord]) -> DataFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{load_model, run_with_threads};
+    use crate::{WarningCode, load_model, run_with_threads};
+    use std::io::BufReader;
 
     fn load_ubiquitin() -> PDB {
         let root = env!("CARGO_MANIFEST_DIR");
         let path = format!("{}/{}", root, "test-data/1ubq.pdb");
-        let (pdb, _) = load_model(&path);
-        pdb
+        load_model(&path).unwrap().value
     }
 
     fn load_multi_chain() -> PDB {
         let root = env!("CARGO_MANIFEST_DIR");
         let path = format!("{}/{}", root, "test-data/6bft.pdb");
-        let (pdb, _) = load_model(&path);
-        pdb
+        load_model(&path).unwrap().value
     }
 
     #[test]
     fn test_hydrophobicity_values() {
-        // Glycine should be 0 (reference)
-        assert!((get_hydrophobicity("GLY").unwrap() - 0.0).abs() < 1e-6);
+        assert_eq!(get_hydrophobicity("GLY"), Some(0.001));
+        assert_eq!(get_hydrophobicity("PHE"), Some(0.500));
+        assert_eq!(get_hydrophobicity("ARG"), Some(-0.500));
 
-        // Phenylalanine should be most hydrophobic (positive)
-        let phe = get_hydrophobicity("PHE").unwrap();
-        assert!(phe > 0.4, "PHE hydrophobicity should be high: {phe}");
-
-        // Arginine should be most hydrophilic (negative)
-        let arg = get_hydrophobicity("ARG").unwrap();
-        assert!(arg < -0.4, "ARG hydrophobicity should be low: {arg}");
-
-        // Unknown residues should return None
         assert!(get_hydrophobicity("XXX").is_none());
+
+        for alias in ["HID", "HIE", "HIP", "HSD", "HSE", "HSP"] {
+            assert_eq!(get_hydrophobicity(alias), get_hydrophobicity("HIS"));
+            assert_eq!(get_sc_max_asa(alias), get_sc_max_asa("HIS"));
+        }
+        assert_eq!(get_hydrophobicity("MSE"), get_hydrophobicity("MET"));
+        assert_eq!(get_sc_max_asa("MSE"), get_sc_max_asa("MET"));
     }
 
     #[test]
     fn test_max_asa_values() {
-        // All standard amino acids should have values (using get_max_asa from sasa.rs)
         let amino_acids = [
             "ALA", "ARG", "ASN", "ASP", "CYS", "GLU", "GLN", "GLY", "HIS", "ILE", "LEU", "LYS",
             "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
@@ -425,24 +568,49 @@ mod tests {
             let max_sasa = get_sc_max_asa(aa);
             assert!(max_sasa.is_some(), "Should have max SASA for {aa}");
             assert!(
-                max_sasa.unwrap() > 0.0,
-                "Max SASA for {aa} should be positive"
+                max_sasa.unwrap() >= 0.0,
+                "Max SASA for {aa} should be nonnegative"
             );
         }
 
-        // Larger residues should have larger max SASA
-        let gly_sasa = get_sc_max_asa("GLY").unwrap();
-        let trp_sasa = get_sc_max_asa("TRP").unwrap();
-        assert!(
-            trp_sasa > gly_sasa,
-            "TRP should have larger max SASA than GLY"
-        );
+        assert_eq!(get_sc_max_asa("GLY"), Some(0.0));
+        assert_eq!(get_sc_max_asa("TRP"), Some(165.838_12));
+    }
+
+    #[test]
+    fn sap_sidechains_include_hydrogens_and_mse_but_not_oxt() {
+        let input =
+            b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+ATOM      2  HB1 ALA A   1       1.000   0.000   0.000  1.00 20.00           H  \n\
+ATOM      3  OXT ALA A   1       2.000   0.000   0.000  1.00 20.00           O  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+        let df = get_per_atom_sap_score(&pdb, 1.1, 20, 0, 5.0, "")
+            .unwrap()
+            .value;
+        let names = df
+            .column("atomn")
+            .unwrap()
+            .str()
+            .unwrap()
+            .iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, ["CB", "HB1"]);
+        assert!(is_sap_sidechain("MSE", "SE"));
+        assert!(!is_sap_sidechain("GLY", "HA2"));
     }
 
     #[test]
     fn test_per_atom_sap_returns_data() {
         let pdb = load_ubiquitin();
         let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
+        let df = df.unwrap().value;
 
         // Check that we get results
         assert!(df.height() > 0, "SAP DataFrame should not be empty");
@@ -460,12 +628,15 @@ mod tests {
         assert!(columns.contains(&"atomi".to_string()));
         assert!(columns.contains(&"sasa".to_string()));
         assert!(columns.contains(&"sap_score".to_string()));
+        assert_eq!(df.column("resi").unwrap().dtype(), &DataType::Int32);
+        assert_eq!(df.column("atomi").unwrap().dtype(), &DataType::UInt32);
     }
 
     #[test]
     fn test_per_atom_sap_values_reasonable() {
         let pdb = load_ubiquitin();
         let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
+        let df = df.unwrap().value;
 
         // Get SAP scores
         let sap_values: Vec<f32> = df
@@ -487,9 +658,31 @@ mod tests {
     }
 
     #[test]
+    fn unsupported_sap_monomers_are_omitted_with_a_warning() {
+        let input =
+            b"ATOM      1  CB  SEC A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+
+        let analysis = get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, "").unwrap();
+        assert_eq!(analysis.value.height(), 0);
+        assert!(
+            analysis
+                .warnings
+                .iter()
+                .any(|warning| warning.code == WarningCode::UnsupportedMonomer)
+        );
+    }
+
+    #[test]
     fn test_per_residue_sap_returns_data() {
         let pdb = load_ubiquitin();
         let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
+        let df = df.unwrap().value;
 
         // Check that we get results
         assert!(df.height() > 0, "Residue SAP DataFrame should not be empty");
@@ -508,9 +701,230 @@ mod tests {
     }
 
     #[test]
+    fn residue_sap_includes_zero_valued_glycines() {
+        let pdb = load_ubiquitin();
+        let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.1, 100, 0, 5.0, ""))
+            .unwrap()
+            .value;
+        assert_eq!(df.height(), 76);
+
+        let glycine = df
+            .filter(&df.column("resn").unwrap().str().unwrap().equal("GLY"))
+            .unwrap();
+        assert_eq!(glycine.height(), 6);
+        for column in ["sc_sasa", "sap_score", "max_sc_asa", "relative_sc_sasa"] {
+            assert!(
+                glycine
+                    .column(column)
+                    .unwrap()
+                    .f32()
+                    .unwrap()
+                    .iter()
+                    .flatten()
+                    .all(|value| value == 0.0),
+                "{column} should be zero for GLY"
+            );
+        }
+    }
+
+    #[test]
+    fn sap_warns_about_unprepared_full_atom_input() {
+        let ubiquitin = get_per_atom_sap_score(&load_ubiquitin(), 1.1, 20, 0, 5.0, "").unwrap();
+        assert!(
+            ubiquitin
+                .warnings
+                .iter()
+                .any(|warning| warning.code == WarningCode::HydrogenFreeInput)
+        );
+
+        let input =
+            b"ATOM      1  ND1 HIS A   1       0.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      2  ND1 HID A   2       4.000   0.000   0.000  1.00 20.00           N  \n\
+ATOM      3  HE2 HID A   2       5.000   0.000   0.000  1.00 20.00           H  \n\
+END                                                                             \n";
+        let (pdb, _) = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap();
+        let analysis = get_per_atom_sap_score(&pdb, 1.1, 20, 0, 5.0, "").unwrap();
+        assert!(
+            analysis
+                .warnings
+                .iter()
+                .any(|warning| warning.code == WarningCode::UnresolvedHistidine)
+        );
+        assert!(
+            analysis
+                .warnings
+                .iter()
+                .any(|warning| warning.code == WarningCode::InconsistentHistidine)
+        );
+    }
+
+    #[test]
+    fn residue_sap_keeps_complete_sidechain_sasa() {
+        let pdb = load_ubiquitin();
+        let atom = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
+        let atom = atom.unwrap().value;
+        let residue = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
+        let residue = residue.unwrap().value;
+        let mut expected = BTreeMap::<(String, String, i32, String), (f32, f32)>::new();
+
+        for row in 0..atom.height() {
+            let key = (
+                atom.column("chain")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .get(row)
+                    .unwrap()
+                    .to_string(),
+                atom.column("resn")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .get(row)
+                    .unwrap()
+                    .to_string(),
+                atom.column("resi")
+                    .unwrap()
+                    .i32()
+                    .unwrap()
+                    .get(row)
+                    .unwrap(),
+                atom.column("insertion")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .get(row)
+                    .unwrap()
+                    .to_string(),
+            );
+            let entry = expected.entry(key).or_default();
+            entry.0 += atom
+                .column("sasa")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(row)
+                .unwrap();
+            entry.1 += atom
+                .column("sap_score")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(row)
+                .unwrap()
+                .max(0.0);
+        }
+
+        assert!(residue.height() >= expected.len());
+        for row in 0..residue.height() {
+            let key = (
+                residue
+                    .column("chain")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .get(row)
+                    .unwrap()
+                    .to_string(),
+                residue
+                    .column("resn")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .get(row)
+                    .unwrap()
+                    .to_string(),
+                residue
+                    .column("resi")
+                    .unwrap()
+                    .i32()
+                    .unwrap()
+                    .get(row)
+                    .unwrap(),
+                residue
+                    .column("insertion")
+                    .unwrap()
+                    .str()
+                    .unwrap()
+                    .get(row)
+                    .unwrap()
+                    .to_string(),
+            );
+            let Some(&(expected_sasa, expected_score)) = expected.get(&key) else {
+                assert_eq!(key.1, "GLY");
+                continue;
+            };
+            let actual_sasa = residue
+                .column("sc_sasa")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(row)
+                .unwrap();
+            let actual_score = residue
+                .column("sap_score")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(row)
+                .unwrap();
+            assert!(
+                (actual_sasa - expected_sasa).abs() < 1e-4,
+                "wrong SASA for {key:?}"
+            );
+            assert!(
+                (actual_score - expected_score).abs() < 1e-4,
+                "wrong SAP for {key:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sap_exposure_ratio_is_not_silently_clamped() {
+        let input =
+            b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+END                                                                             \n";
+        let pdb = ReadOptions::default()
+            .set_format(Format::Pdb)
+            .set_only_atomic_coords(true)
+            .read_raw(BufReader::new(input.as_slice()))
+            .unwrap()
+            .0;
+        let residue = get_per_residue_sap_score(&pdb, 1.1, 100, 0, 5.0, "")
+            .unwrap()
+            .value;
+
+        assert!(
+            residue
+                .column("relative_sc_sasa")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                > 1.0
+        );
+        assert!(
+            residue
+                .column("sap_score")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                > get_hydrophobicity("ALA").unwrap()
+        );
+    }
+
+    #[test]
     fn test_sap_multi_chain() {
         let pdb = load_multi_chain();
         let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
+        let df = df.unwrap().value;
 
         // Should have results
         assert!(df.height() > 0, "Multi-chain SAP should not be empty");

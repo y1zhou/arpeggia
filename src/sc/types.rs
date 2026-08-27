@@ -1,20 +1,12 @@
 //! SC calculation types.
 
-use std::collections::HashMap;
-
 use super::vector3::Vec3;
 
 /// Atom attention/visibility state.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-#[allow(clippy::enum_variant_names)]
 pub enum Attention {
     /// Far from the interface; not considered for surface emission
     Far,
-    /// Intermediate state for geometric constructions (from sc-rs algorithm).
-    /// Currently unused as our attention assignment only uses Far/Buried states.
-    /// The checks against this variant exist for algorithmic completeness.
-    #[allow(dead_code)]
-    Consider,
     /// Buried and flagged for interface processing
     #[default]
     Buried,
@@ -23,22 +15,27 @@ pub enum Attention {
 #[derive(Clone, Debug, Default)]
 pub struct ScAtom {
     pub atomi: usize,
-    pub molecule: usize,
+    pub molecule: u8,
     pub radius: f64,
-    /// Per-atom sampling density (~15 dots/Å²)
-    pub density: f64,
     pub attention: Attention,
     /// Is atom accessible to solvent/contact surface
     pub accessible: bool,
     pub atomn: String,
     pub resn: String,
     pub coor: Vec3,
-    /// Indices of all neighbors and their distance^2 to limit search space
-    pub neighbors_atomi_dist2: HashMap<usize, f64>,
-    /// Neighbor indices on same molecule
+    /// Same-molecule neighbors sorted by distance.
     pub neighbor_indices: Vec<usize>,
-    /// Neighbor indices on opposite molecule that bury this atom
-    pub buried_by_indices: Vec<usize>,
+    /// Same-molecule neighbor distances sorted by compact atom index.
+    pub neighbor_distances: Vec<(usize, f64)>,
+}
+
+impl ScAtom {
+    pub fn neighbor_distance_squared(&self, index: usize) -> Option<f64> {
+        self.neighbor_distances
+            .binary_search_by_key(&index, |&(neighbor, _)| neighbor)
+            .ok()
+            .map(|position| self.neighbor_distances[position].1)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -50,67 +47,29 @@ pub struct Probe {
     pub alt: Vec3,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum DotKind {
-    Contact,
-    Reentrant,
-    Cavity,
-}
-
 #[derive(Clone, Debug)]
 pub struct Dot {
     /// Discretized surface point
     pub coor: Vec3,
     /// Outward unit normal at the point
     pub outnml: Vec3,
-    pub area: f64,
     pub buried: bool,
-    // The following fields are set during surface generation but currently
-    // only used internally. They're kept for potential debugging and future use.
-    #[allow(dead_code)]
-    /// Type of surface (contact, reentrant, cavity)
-    pub kind: DotKind,
-    #[allow(dead_code)]
-    /// Index of the atom this dot belongs to
-    pub atom_index: usize,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct DotStats {
-    pub convex: usize,
-    pub toroidal: usize,
-    pub concave: usize,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct SurfaceStats {
-    pub n_atoms: usize,
-    pub n_buried_atoms: usize,
-    pub n_blocked_atoms: usize,
-    pub d_mean: f64,
-    pub d_median: f64,
-    pub s_mean: f64,
     pub s_median: f64,
-    pub n_all_dots: usize,
-    pub n_trimmed_dots: usize,
-    pub trimmed_area: f64,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Results {
-    pub valid: i32,
-    pub n_atoms: usize,
     pub surfaces: [SurfaceStats; 2],
-    pub combined: SurfaceStats,
-    pub dots: DotStats,
     pub sc: f64,
-    pub distance: f64,
-    pub area: f64,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct AtomRadius {
-    pub residue: String,
-    pub atom: String,
+    pub residue: &'static str,
+    pub atom: &'static str,
     pub radius: f64,
 }

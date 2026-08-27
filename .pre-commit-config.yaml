@@ -28,12 +28,6 @@ repos:
       - id: ruff-format
         types_or: [python, pyi, jupyter]
 
-  # yaml formatting
-  # - repo: https://github.com/google/yamlfmt
-  #   rev: v0.17.
-  #   hooks:
-  #     - id: yamlfmt
-
   # shell scripts linter
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
@@ -47,13 +41,6 @@ repos:
       - id: rumdl # Lint only (fails on issues)
         args: ["-d", "MD013"] # comma-separated ignored rules
       - id: rumdl-fmt # Auto-format and fail if issues remain
-
-  # jupyter notebook cell output clearing
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.9.1
-    hooks:
-      - id: nbstripout
-        args: ["--drop-empty-cells", "--keep-output", "--unix-newline"]
 
   # Rust hooks
   - repo: local

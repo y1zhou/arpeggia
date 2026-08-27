@@ -1,7 +1,7 @@
-use arpeggia::{get_dsasa, load_model, run_with_threads};
+use arpeggia::{ArpeggiaResult, get_dsasa_components, run_with_threads};
 use clap::Parser;
 use std::path::{Path, PathBuf};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
@@ -35,38 +35,34 @@ pub(crate) struct Args {
     num_threads: usize,
 }
 
-pub(crate) fn run(args: &Args) {
+pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     trace!("{args:?}");
 
     // Make sure `input` exists
-    let input_path = Path::new(&args.input).canonicalize().unwrap();
-    let input_file: String = input_path.to_str().unwrap().parse().unwrap();
-
-    // Load file as complex structure
-    let (pdb, pdb_warnings) = load_model(&input_file);
-    if !pdb_warnings.is_empty() {
-        for e in &pdb_warnings {
-            match e.level() {
-                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-                _ => warn!("{e}"),
-            }
-        }
-    }
+    let pdb = super::load_input(Path::new(&args.input))?;
 
     // Convert thread count to isize for rust-sasa
     let dsasa = run_with_threads(args.num_threads as isize, || {
         debug!("Using {} thread(s)", rayon::current_num_threads());
-        get_dsasa(
+        get_dsasa_components(
             &pdb,
             &args.groups,
             args.probe_radius,
             args.n_points,
             args.model_num,
         )
-    });
+    })?;
+    for warning in dsasa.warnings {
+        tracing::warn!("{warning}");
+    }
+    let dsasa = dsasa.value;
     info!(
         "Buried surface area (dSASA) at the interface between chains [{}]: {:.2} Å²",
-        args.groups, dsasa
+        args.groups, dsasa.dsasa
     );
+    info!(
+        "polar={:.2} Å² hydrophobic={:.2} Å² unclassified={:.2} Å²",
+        dsasa.polar_dsasa, dsasa.hydrophobic_dsasa, dsasa.unclassified_dsasa
+    );
+    Ok(())
 }

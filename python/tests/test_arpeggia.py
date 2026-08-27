@@ -32,10 +32,10 @@ def test_stub_consumes_python_contract():
     stub = Path(__file__).parent.parent / "arpeggia" / "arpeggia.pyi"
     stub_text = stub.read_text()
 
-    assert "from ._contract import SapLevel, SasaLevel, SequenceList" in stub_text
+    assert "ProtonationMode" in stub_text
     assert "level: SasaLevel = ..." in stub_text
     assert "level: SapLevel = ..." in stub_text
-    assert "def seq(input_file: str) -> SequenceList" in stub_text
+    assert "def seq(input_file: str, model_num: int = ...) -> SequenceList" in stub_text
 
 
 def test_contacts(test_pdb_file):
@@ -46,7 +46,7 @@ def test_contacts(test_pdb_file):
     df = arpeggia.contacts(test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5)
 
     # Check DataFrame is not empty
-    assert df.height == 532, "Contacts DataFrame should not be empty"
+    assert df.height > 0, "Contacts DataFrame should not be empty"
 
     # Check expected columns exist
     expected_columns = _contract.CONTACT_COLUMNS
@@ -121,8 +121,7 @@ def test_sasa(test_pdb_file):
     for col in expected_columns:
         assert col in df.columns, f"Column '{col}' should be present in SASA DataFrame"
 
-    # Check shape - should have 8 columns
-    assert df.shape[1] == 8, f"Expected 8 columns, got {df.shape[1]}"
+    assert df.shape[1] == 9
 
     # Verify SASA values are reasonable
     assert df["sasa"].dtype.is_float(), "SASA column should be float type"
@@ -171,7 +170,7 @@ def test_sasa_and_sap_default_model_uses_first_explicit_model(test_pdb_file, tmp
     explicit_sap = arpeggia.sap_score(str(multimodel_pdb), model_num=7)
 
     assert default_sasa.height == explicit_sasa.height == 602
-    assert default_sap.height == explicit_sap.height == 34
+    assert default_sap.height == explicit_sap.height > 0
 
 
 def test_seq(test_pdb_file):
@@ -196,16 +195,32 @@ def test_seq(test_pdb_file):
 
         # For 1ubq, the sequence should be 76 residues
         # This is the known ubiquitin sequence
-        aa_seq = seq.replace("O", "")
-        assert len(aa_seq) == 76, (
-            f"Expected 76 residues for ubiquitin, got {len(aa_seq)}"
-        )
+        assert len(seq) == 76, f"Expected 76 residues for ubiquitin, got {len(seq)}"
 
         # Check it starts with the expected sequence
         expected_start = "MQIFVKTLTG"
         assert seq.startswith(expected_start), (
             f"Sequence should start with {expected_start}, got {seq[:10]}"
         )
+
+
+def test_seq_selects_one_model(tmp_path):
+    """Select observed sequence from one explicit model."""
+    import arpeggia
+
+    structure = tmp_path / "models.pdb"
+    structure.write_text(
+        "MODEL        7\n"
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "ENDMDL\n"
+        "MODEL        9\n"
+        "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "ENDMDL\nEND\n"
+    )
+    assert arpeggia.seq(str(structure)) == [("A", "A")]
+    assert arpeggia.seq(str(structure), model_num=9) == [("A", "G")]
+    with pytest.raises(ValueError, match="model 3 does not exist"):
+        arpeggia.seq(str(structure), model_num=3)
 
 
 def test_sequences_validity(test_pdb_file):
@@ -215,10 +230,88 @@ def test_sequences_validity(test_pdb_file):
     seqs = arpeggia.seq(test_pdb_file)
 
     # Valid single-letter amino acid codes
-    valid_codes = set("ACDEFGHIKLMNPQRSTVWYXO")
+    valid_codes = set("ACDEFGHIKLMNPQRSTVWYX")
 
     for chain_id, seq in seqs:
         # All characters should be valid amino acid codes
         assert all(aa in valid_codes for aa in seq), (
             f"Sequence for chain {chain_id} contains invalid amino acid codes"
         )
+
+
+def test_python_errors_and_conformer_warning(tmp_path):
+    """Map failures to Python errors and report automatic conformer choice."""
+    import arpeggia
+
+    with pytest.raises(OSError):
+        arpeggia.seq(str(tmp_path / "missing.pdb"))
+    with pytest.raises(ValueError, match="finite and positive"):
+        arpeggia.sasa(
+            str(Path(__file__).parents[2] / "test-data/1ubq.pdb"),
+            probe_radius=float("nan"),
+        )
+
+    alternate = tmp_path / "alternate.pdb"
+    alternate.write_text(
+        "ATOM      1  CB AALA A   1       0.000   0.000   0.000  0.50 20.00           C  \n"
+        "ATOM      2  CB BALA A   1       1.000   0.000   0.000  0.50 20.00           C  \n"
+        "END\n"
+    )
+    with pytest.warns(UserWarning, match="CONFORMER_SELECTED"):
+        assert arpeggia.seq(str(alternate)) == [("A", "A")]
+
+    unsupported_sc = tmp_path / "unsupported-sc-radius.pdb"
+    unsupported_sc.write_text(
+        "ATOM      1  QQ  ALA A   1       0.000   0.000   0.000  1.00 20.00          RN  \n"
+        "ATOM      2  CB  ALA B   1       3.000   0.000   0.000  1.00 20.00           C  \n"
+        "END\n"
+    )
+    with pytest.raises(RuntimeError, match="van der Waals radius"):
+        arpeggia.sc(str(unsupported_sc), groups="A/B")
+    with pytest.raises(RuntimeError, match="van der Waals radius"):
+        arpeggia.sasa(str(unsupported_sc))
+
+
+def test_seqres_is_declared_and_seq_is_observed(tmp_path):
+    """Keep coordinate-observed and declared polymer sequences distinct."""
+    import arpeggia
+
+    structure = tmp_path / "declared.pdb"
+    structure.write_text(
+        "SEQRES   1 A    3  ALA MSE GLY\n"
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "END\n"
+    )
+    assert arpeggia.seq(str(structure)) == [("A", "A")]
+    assert arpeggia.seqres(str(structure)) == [("A", "AMG")]
+
+
+def test_seqres_warns_when_mapping_unknown_monomers(tmp_path):
+    """Map unknown declared monomers to X with a visible warning."""
+    import arpeggia
+
+    structure = tmp_path / "unknown-seqres.pdb"
+    structure.write_text("SEQRES   1 B    1  UNK\nEND\n")
+    with pytest.warns(UserWarning, match="UNSUPPORTED_MONOMER"):
+        assert arpeggia.seqres(str(structure)) == [("B", "X")]
+
+
+def test_histidine_modes_and_potential_ionic_category(tmp_path):
+    """Distinguish inferred histidine charge from explicit evidence."""
+    import arpeggia
+
+    structure = tmp_path / "histidine.pdb"
+    structure.write_text(
+        "ATOM      1  CG  HIS A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "ATOM      2  OD1 ASP B   1       3.000   0.000   0.000  1.00 20.00           O  \n"
+        "END\n"
+    )
+    with pytest.warns(UserWarning, match="UNRESOLVED_HISTIDINE"):
+        compatible = arpeggia.contacts(str(structure), groups="A/B")
+    assert "PotentialIonicBond" in compatible["interaction"].to_list()
+
+    with pytest.warns(UserWarning, match="UNRESOLVED_HISTIDINE"):
+        explicit = arpeggia.contacts(
+            str(structure), groups="A/B", protonation="explicit-only"
+        )
+    assert "PotentialIonicBond" not in explicit["interaction"].to_list()

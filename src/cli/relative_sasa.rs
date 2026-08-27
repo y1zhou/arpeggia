@@ -1,10 +1,10 @@
 use arpeggia::{
-    DataFrameFileType, load_model, prepare_df_output_dir, run_with_threads, write_df_to_file,
+    ArpeggiaResult, DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file,
 };
 use clap::Parser;
 use polars::prelude::ChunkCompareEq;
 use std::path::{Path, PathBuf};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace};
 
 #[derive(Parser, Debug, Clone)]
 #[command(version, about = "Calculate relative SASA (RSA) for each residue")]
@@ -46,27 +46,14 @@ pub(crate) struct Args {
     chains: String,
 }
 
-pub(crate) fn run(args: &Args) {
+pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     trace!("{args:?}");
 
     // Make sure `input` exists
-    let input_path = Path::new(&args.input).canonicalize().unwrap();
-    let input_file: String = input_path.to_str().unwrap().parse().unwrap();
-
-    // Load file as complex structure
-    let (pdb, pdb_warnings) = load_model(&input_file);
-    if !pdb_warnings.is_empty() {
-        for e in &pdb_warnings {
-            match e.level() {
-                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-                _ => warn!("{e}"),
-            }
-        }
-    }
+    let pdb = super::load_input(Path::new(&args.input))?;
 
     // Calculate relative SASA
-    let mut df_relative_sasa = run_with_threads(args.num_threads as isize, || {
+    let analysis = run_with_threads(args.num_threads as isize, || {
         debug!("Using {} thread(s)", rayon::current_num_threads());
         arpeggia::get_relative_sasa(
             &pdb,
@@ -75,32 +62,38 @@ pub(crate) fn run(args: &Args) {
             args.model_num,
             &args.chains,
         )
-    });
+    })?;
+    for warning in analysis.warnings {
+        tracing::warn!("{warning}");
+    }
+    let mut df_relative_sasa = analysis.value;
 
     if df_relative_sasa.height() == 0 {
         error!(
             "No data found in the input file. Please check the provided arguments, especially the model number."
         );
-        return;
+        return Ok(());
     }
 
     // Log summary statistics
-    let non_zero_sasa_mask = df_relative_sasa
-        .column("sasa")
-        .unwrap()
-        .as_materialized_series()
-        .not_equal(0.0)
-        .unwrap();
-    let df_sasa_nonzero = df_relative_sasa.filter(&non_zero_sasa_mask).unwrap();
-    debug!(
-        "Found {} residues with non-zero SASA\n{}",
-        df_sasa_nonzero.height(),
-        df_sasa_nonzero
-    );
+    if tracing::enabled!(tracing::Level::DEBUG) {
+        let non_zero_sasa_mask = df_relative_sasa
+            .column("sasa")
+            .unwrap()
+            .as_materialized_series()
+            .not_equal(0.0)
+            .unwrap();
+        let df_sasa_nonzero = df_relative_sasa.filter(&non_zero_sasa_mask).unwrap();
+        debug!(
+            "Found {} residues with non-zero SASA\n{}",
+            df_sasa_nonzero.height(),
+            df_sasa_nonzero
+        );
+    }
 
     // Save results to file
-    let output_file = prepare_df_output_dir(&args.output, &args.filename, args.output_format);
-    write_df_to_file(&mut df_relative_sasa, &output_file, args.output_format);
-    let output_file_str = output_file.to_str().unwrap();
-    info!("Results saved to {output_file_str}");
+    let output_file = prepare_df_output_dir(&args.output, &args.filename, args.output_format)?;
+    write_df_to_file(&mut df_relative_sasa, &output_file, args.output_format)?;
+    info!("Results saved to {}", output_file.display());
+    Ok(())
 }

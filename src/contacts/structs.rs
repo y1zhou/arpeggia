@@ -4,18 +4,26 @@ use pdbtbx::*;
 /// Interaction types.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Interaction {
-    /// Within covalent radii
-    StericClash,
-    /// Covalent bonded
-    CovalentBond,
-    /// CB-S-S-CB bond
+    /// A non-disulfide bond explicitly declared by the input structure.
+    Covalent,
+    /// A disulfide explicitly declared by the input structure.
     Disulfide,
-    /// Within van der Waals radii
+    /// A nonbonded overlap shorter than the potential-covalent band.
+    StericClash,
+    /// Within the covalent-distance band without input bond evidence
+    PotentialCovalent,
+    /// Cysteine SG geometry consistent with a disulfide, without input bond evidence
+    PotentialDisulfide,
+    /// Nonbonded overlap inside the van der Waals envelope
+    VanDerWaalsClash,
+    /// Within the compensated outer van der Waals envelope
     VanDerWaalsContact,
 
     // Electrostatic
     /// Negative and positive charged ions
     IonicBond,
+    /// An ionic bond that depends on unresolved histidine protonation.
+    PotentialIonicBond,
     /// Donor-H-acceptor hydrogen bonds
     HydrogenBond,
     /// C-H...O hydrogen bond
@@ -27,6 +35,8 @@ pub enum Interaction {
     WeakPolarContact,
     /// Like charges repelling each other
     IonicRepulsion,
+    /// Like-charge repulsion that depends on unresolved histidine protonation.
+    PotentialIonicRepulsion,
     /// Presence of both ionic and hydrogen bonding
     SaltBridge,
 
@@ -45,9 +55,23 @@ pub enum Interaction {
     PiLStacking,
     /// Cation-pi interaction
     CationPi,
+    /// Cation-pi interaction that depends on unresolved histidine protonation.
+    PotentialCationPi,
 
     /// Hydrophobic interaction
     HydrophobicContact,
+}
+
+/// Policy for interpreting histidine protonation in ionic contacts.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+pub enum ProtonationMode {
+    /// Treat every histidine as potentially charged, matching legacy Arpeggio typing.
+    #[default]
+    AllCharged,
+    /// Resolve explicit evidence first, then use an intrinsic-pKa population heuristic.
+    Heuristic,
+    /// Treat histidine as charged only when the input contains explicit evidence.
+    ExplicitOnly,
 }
 
 /// Entity interacting with another.
@@ -112,7 +136,7 @@ impl InteractingEntity {
             hierarchy.residue().serial_number(),
             hierarchy.residue().insertion_code().unwrap_or(""),
             hierarchy.conformer().alternative_location().unwrap_or(""),
-            hierarchy.residue().name().unwrap(),
+            hierarchy.residue().name().unwrap_or(""),
             hierarchy.atom().name(),
             hierarchy.atom().serial_number(),
         )

@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-27
+
+### Scientific corrections
+
+- Restored both directional SC surfaces after fixing the inverted atom-2
+  toroidal-surface branch and model-local plane traversal. Ringless structures
+  are valid; absolute parity with the pinned `sc-rs` CLI remains explicitly
+  documented in the regression test.
+- Split resolved `Disulfide` and `Covalent` evidence from geometry-inferred
+  `PotentialDisulfide` and distance-inferred `PotentialCovalent`, and named
+  steric clash, van der Waals clash, and van der Waals contact regions
+  separately.
+- Associated hydrogen geometry with the specific donor rather than every
+  hydrogen in its residue, restricted weak donors to carbon sites bearing
+  hydrogen, restored explicitly protonated terminal-Pro donation, and added
+  missing-hydrogen diagnostics.
+- Added `AllCharged`, `Heuristic`, and `ExplicitOnly` histidine policies with
+  potential ionic and cation-pi categories for inferred charge, including
+  consistent treatment of histidine aliases and contradictory-input warnings.
+- Preserved model, alternate-location, residue-name, and mmCIF label identity
+  when applying explicit connectivity to selected atoms.
+- Applied deterministic highest-occupancy alternate-conformer selection with an
+  `A` tie-break and visible warnings across analyses.
+- Unified standard atom, residue, and chain SASA over one selected atom
+  population with ProtOr/fallback radii. Added Rosetta `SasaFilter` atom
+  polarity and additive polar, hydrophobic, and unclassified areas.
+- Aligned SAP with Rosetta's full-atom Reduce-radius exposure definition,
+  1.1 Å probe, precise hydrophobicities, and runtime maximum side-chain areas.
+  Exposure ratios remain unclamped; residue output retains complete side-chain
+  SASA and eligible zero/nonpositive-score residues.
+- Kept dSASA as the established two-sided buried area, corrected its docs,
+  required disjoint groups, and added polarity components.
+- Fixed coordinate-observed `seq` output to omit solvent and added `seqres` for
+  PDB `SEQRES` and mmCIF entity-polymer declarations.
+
+### API and schema changes
+
+- Rust parsing and analysis entry points now return typed errors and successful
+  `Analysis<T>` values with stable warning codes instead of panicking.
+- Python emits `UserWarning`, `ValueError`, `RuntimeError`, or `OSError` while
+  retaining direct DataFrame/scalar/list results. CPU-bound parsing and
+  calculations release the GIL.
+- Contact interaction labels and SASA/RSA columns changed as described above.
+  Model/atom identifiers in contact and surface DataFrames are unsigned 32-bit
+  integers and residue identifiers are signed 32-bit integers. Python adds
+  `dsasa_components()` and `seqres()`.
+- Removed redundant Rust convenience wrappers in favor of the canonical
+  `analyze_contacts`, `get_dsasa_components`, and `get_sc_details` entry points.
+  Python function names, return values, and CLI command names are unchanged.
+
+### Performance and security
+
+- Prepare dSASA structures once, avoid debug-only DataFrame work unless debug
+  logging is enabled, and remove an arbitrary SC sampling ceiling.
+- Restrict output filenames to a single normal path component.
+- Pin release-critical GitHub Actions to immutable commits, track Cargo and uv
+  lockfiles, use locked/frozen CI and release commands, and smoke-test every
+  built wheel before upload.
+- Lock Python artifacts to official PyPI and publish only the CPython/platform
+  combinations supported by the release dependencies.
+- Updated locked `h2` metadata to 0.4.16 for RUSTSEC-2026-0258. The optional
+  dependency is not compiled by Arpeggia, but the release lock remains clean.
+- Stream the narrow mmCIF metadata parser and discard unrelated loop values
+  without allocating them.
+
+### Simplified
+
+- Replaced dynamic SC radii with static data, deleted duplicate geometry and
+  sequence abstractions, removed redundant SAP maps/wrappers and unused Cargo
+  features, removed write-only SC surface state, centralized CLI input
+  diagnostics, and replaced stale build notes.
+
 ## [0.8.1] - 2026-06-23
 
 ### Changed
@@ -104,7 +176,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `arpeggia` Python package for easy installation and usage
 - GitHub Actions workflow for building and testing the Python package
 
-
 ## [0.4.2] - 2025-03-17
 
 ### Added
@@ -122,7 +193,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Better logging messages and documentation of methods
-
 
 ## [0.4.1] - 2025-02-19
 
@@ -159,7 +229,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance/memory footprint improvement by switching from 64-bit numbers to 32-bit
 - Logging is now less verbose
 
-
 ## [0.3.1]
 
 ### Fixed
@@ -170,7 +239,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Defaults to searching for all intra- and inter-chain interactions when `-g '/'` is passed to `contacts`
-
 
 ## [0.3.0] - 2024-08-14
 
@@ -203,7 +271,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - As a consequence of the `pdbtbx` update, only atomic coordinates are now parsed
 
-
 ## [0.1.0] - 2024-05-09
 
 ### Added
@@ -211,7 +278,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.1
 [0.8.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.0
 [0.7.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.7.0

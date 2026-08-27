@@ -3,7 +3,7 @@ use pdbtbx::*;
 use rayon::prelude::*;
 
 /// The struct for a residue identifier
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct ResidueId<'a> {
     /// Model identifier
     pub model: usize,
@@ -51,14 +51,6 @@ impl Plane {
             rad = std::f64::consts::PI - rad;
         }
         rad.to_degrees()
-    }
-
-    /// Calculate the angle between the plane normal and the vector pointing from
-    /// the plane center to the point (tuple).
-    #[allow(dead_code)]
-    pub fn point_angle(&self, point: &(f64, f64, f64)) -> f64 {
-        let atom_point = na::Vector3::new(point.0, point.1, point.2);
-        self.point_vec_angle(&atom_point)
     }
 
     /// Calculate the angle between two planes
@@ -127,44 +119,44 @@ pub trait ResidueExt {
     fn center_and_normal(&self, atoms: Option<Vec<&Atom>>) -> Option<Plane>;
 }
 
+pub(crate) fn one_letter_code(name: &str) -> Option<&'static str> {
+    Some(match name.trim().to_ascii_uppercase().as_str() {
+        "ALA" => "A",
+        "ARG" => "R",
+        "ASN" => "N",
+        "ASP" => "D",
+        "CYS" => "C",
+        "GLN" => "Q",
+        "GLU" => "E",
+        "GLY" => "G",
+        "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => "H",
+        "ILE" => "I",
+        "LEU" => "L",
+        "LYS" => "K",
+        "MET" | "MSE" => "M",
+        "PHE" => "F",
+        "PRO" => "P",
+        "SER" => "S",
+        "THR" => "T",
+        "TRP" => "W",
+        "TYR" => "Y",
+        "VAL" => "V",
+        "SEC" => "U",
+        "PYL" => "O",
+        _ => return None,
+    })
+}
+
 impl ResidueExt for Residue {
     fn resn(&self) -> Option<&str> {
-        let aa_code = match self.name().unwrap().to_uppercase().as_str() {
-            "ALA" => "A",
-            "ARG" => "R",
-            "ASN" => "N",
-            "ASP" => "D",
-            "CYS" => "C",
-            "GLN" => "Q",
-            "GLU" => "E",
-            "GLY" => "G",
-            "HIS" => "H",
-            "ILE" => "I",
-            "LEU" => "L",
-            "LYS" => "K",
-            "MET" => "M",
-            "PHE" => "F",
-            "PRO" => "P",
-            "SER" => "S",
-            "THR" => "T",
-            "TRP" => "W",
-            "TYR" => "Y",
-            "VAL" => "V",
-            "HOH" => "O", // water
-            _ => "X",
-        };
-
-        match aa_code {
-            "X" => None,
-            _ => Some(aa_code),
-        }
+        one_letter_code(self.name()?)
     }
 
     fn ring_atoms(&self) -> Vec<&Atom> {
         let res_name = self.name().unwrap_or(""); // Some conformers have different names
 
         match res_name {
-            "HIS" => self
+            "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => self
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "ND1" | "CE1" | "NE2" | "CD2"))
                 .collect(),
@@ -174,6 +166,9 @@ impl ResidueExt for Residue {
                 .collect(),
             "TRP" => self
                 .par_atoms()
+                // [WARNING] The fused indole rings share one plane, but this
+                // combined center differs from separate five- and six-member
+                // ring centers near aromatic-contact distance thresholds.
                 .filter(|atom| {
                     matches!(
                         atom.name(),
@@ -213,7 +208,7 @@ impl ResidueExt for Residue {
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "CD" | "OE1" | "NE2"))
                 .collect(),
-            "HIS" => self
+            "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => self
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "ND1" | "CE1" | "NE2" | "CD2"))
                 .collect(),
@@ -336,7 +331,7 @@ mod tests {
         let root = env!("CARGO_MANIFEST_DIR");
         let path = format!("{}/{}", root, "test-data/1ubq.pdb");
 
-        let (pdb, _) = load_model(&path);
+        let pdb = load_model(&path).unwrap().value;
 
         // First Met has no rings
         let residue = pdb.residues().next().unwrap();

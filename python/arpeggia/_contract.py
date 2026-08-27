@@ -6,8 +6,10 @@ EXPORTED_FUNCTIONS = (
     "relative_sasa",
     "sap_score",
     "dsasa",
+    "dsasa_components",
     "sc",
     "seq",
+    "seqres",
 )
 
 SASA_LEVELS = ("atom", "residue", "chain")
@@ -19,6 +21,8 @@ DEFAULTS = {
         "vdw_comp": 0.1,
         "dist_cutoff": 6.5,
         "ignore_zero_occupancy": False,
+        "protonation": "all-charged",
+        "ph": 7.4,
         "num_threads": 1,
     },
     "sasa": {
@@ -44,7 +48,7 @@ DEFAULTS = {
     },
     "sap_score": {
         "level": "residue",
-        "probe_radius": 1.4,
+        "probe_radius": 1.1,
         "n_points": 100,
         "model_num": 0,
         "sap_radius": 5.0,
@@ -90,9 +94,25 @@ SASA_COLUMNS = {
         "insertion",
         "altloc",
         "atomn",
+        "polarity",
     ),
-    "residue": ("chain", "resn", "resi", "insertion", "sasa", "is_polar"),
-    "chain": ("chain", "sasa"),
+    "residue": (
+        "chain",
+        "resn",
+        "resi",
+        "insertion",
+        "sasa",
+        "polar_sasa",
+        "hydrophobic_sasa",
+        "unclassified_sasa",
+    ),
+    "chain": (
+        "chain",
+        "sasa",
+        "polar_sasa",
+        "hydrophobic_sasa",
+        "unclassified_sasa",
+    ),
 }
 
 RELATIVE_SASA_COLUMNS = (
@@ -101,7 +121,9 @@ RELATIVE_SASA_COLUMNS = (
     "resi",
     "insertion",
     "sasa",
-    "is_polar",
+    "polar_sasa",
+    "hydrophobic_sasa",
+    "unclassified_sasa",
     "relative_sasa",
 )
 

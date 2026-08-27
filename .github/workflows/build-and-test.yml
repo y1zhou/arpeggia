@@ -1,25 +1,28 @@
 name: Build and test
 
 on:
-  # push:
-  #   branches: ["master"]
-  #   paths:
-  #     - src/**
-  #     - Cargo.toml
-  #     - python/**
-  #     - pyproject.toml
-  #     - .github/workflows/build-and-test.yml
   workflow_dispatch: # manual trigger
   pull_request:
     branches: ["master"]
     types:
+      - opened
+      - synchronize
+      - reopened
       - ready_for_review
     paths:
       - src/**
       - Cargo.toml
+      - Cargo.lock
       - python/**
+      - tests/**
+      - test-data/**
       - pyproject.toml
-      - .github/workflows/build-and-test.yml
+      - uv.lock
+      - .github/workflows/**
+
+concurrency:
+  group: build-and-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,37 +30,34 @@ env:
 jobs:
   build-rust:
     name: Rust
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Set up Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           toolchain: stable
           override: true
-      - name: Build Rust library
-        run: cargo build
       - name: Run Rust tests
-        run: cargo test --verbose
+        run: cargo test --locked --verbose
 
   build-python:
     name: Python package
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
-      # - name: Set up Rust
-      #   uses: actions-rust-lang/setup-rust-toolchain@v1
-      #   with:
-      #     toolchain: stable
-      #     override: true
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
 
       - name: Build Python package
         run: |
-          uv sync -v --all-extras
+          uv sync --frozen -v --all-extras
 
       - name: Run Python tests
         run: uv run --no-sync pytest python/tests/ -v
+
+      - name: Check Python types
+        run: uv run --no-sync ty check python

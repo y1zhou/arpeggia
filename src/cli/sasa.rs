@@ -1,10 +1,10 @@
 use arpeggia::{
-    DataFrameFileType, load_model, prepare_df_output_dir, run_with_threads, write_df_to_file,
+    ArpeggiaResult, DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file,
 };
 use clap::{Parser, ValueEnum};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace};
 
 /// Granularity level for SASA calculation.
 #[derive(ValueEnum, Clone, Debug, Copy, Default)]
@@ -72,27 +72,14 @@ pub(crate) struct Args {
     chains: String,
 }
 
-pub(crate) fn run(args: &Args) {
+pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     trace!("{args:?}");
 
     // Make sure `input` exists
-    let input_path = Path::new(&args.input).canonicalize().unwrap();
-    let input_file: String = input_path.to_str().unwrap().parse().unwrap();
-
-    // Load file as complex structure
-    let (pdb, pdb_warnings) = load_model(&input_file);
-    if !pdb_warnings.is_empty() {
-        for e in &pdb_warnings {
-            match e.level() {
-                pdbtbx::ErrorLevel::BreakingError => error!("{e}"),
-                pdbtbx::ErrorLevel::InvalidatingError => error!("{e}"),
-                _ => warn!("{e}"),
-            }
-        }
-    }
+    let pdb = super::load_input(Path::new(&args.input))?;
 
     // Calculate SASA based on the specified level
-    let mut df_sasa = run_with_threads(args.num_threads as isize, || {
+    let analysis = run_with_threads(args.num_threads as isize, || {
         debug!("Using {} thread(s)", rayon::current_num_threads());
         match args.level {
             SasaLevel::Atom => arpeggia::get_atom_sasa(
@@ -100,7 +87,6 @@ pub(crate) fn run(args: &Args) {
                 args.probe_radius,
                 args.n_points,
                 args.model_num,
-                true,
                 &args.chains,
             ),
             SasaLevel::Residue => arpeggia::get_residue_sasa(
@@ -118,38 +104,44 @@ pub(crate) fn run(args: &Args) {
                 &args.chains,
             ),
         }
-    });
+    })?;
+    for warning in analysis.warnings {
+        tracing::warn!("{warning}");
+    }
+    let mut df_sasa = analysis.value;
 
     if df_sasa.height() == 0 {
         error!(
             "No data found in the input file. Please check the provided arguments, especially the model number."
         );
-        return;
+        return Ok(());
     }
 
     // Save results and log the identified SASA
-    let non_zero_sasa_mask = df_sasa
-        .column("sasa")
-        .unwrap()
-        .as_materialized_series()
-        .not_equal(0.0)
-        .unwrap();
-    let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
-    let entity_name = match args.level {
-        SasaLevel::Atom => "atoms",
-        SasaLevel::Residue => "residues",
-        SasaLevel::Chain => "chains",
-    };
-    debug!(
-        "Found {} {} with non-zero SASA\n{}",
-        df_sasa_nonzero.height(),
-        entity_name,
-        df_sasa_nonzero
-    );
+    if tracing::enabled!(tracing::Level::DEBUG) {
+        let non_zero_sasa_mask = df_sasa
+            .column("sasa")
+            .unwrap()
+            .as_materialized_series()
+            .not_equal(0.0)
+            .unwrap();
+        let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
+        let entity_name = match args.level {
+            SasaLevel::Atom => "atoms",
+            SasaLevel::Residue => "residues",
+            SasaLevel::Chain => "chains",
+        };
+        debug!(
+            "Found {} {} with non-zero SASA\n{}",
+            df_sasa_nonzero.height(),
+            entity_name,
+            df_sasa_nonzero
+        );
+    }
 
     // Save res to CSV files
-    let output_file = prepare_df_output_dir(&args.output, &args.filename, args.output_format);
-    write_df_to_file(&mut df_sasa, &output_file, args.output_format);
-    let output_file_str = output_file.to_str().unwrap();
-    info!("Results saved to {output_file_str}");
+    let output_file = prepare_df_output_dir(&args.output, &args.filename, args.output_format)?;
+    write_df_to_file(&mut df_sasa, &output_file, args.output_format)?;
+    info!("Results saved to {}", output_file.display());
+    Ok(())
 }
