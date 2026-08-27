@@ -3,7 +3,7 @@
 This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library to Rust, with a focus on identifying certain protein-protein interactions in PDB and mmCIF files.
 
 [![PyPI version](https://img.shields.io/pypi/v/arpeggia)](https://pypi.org/project/arpeggia/)
-![License](https://img.shields.io/pypi/l/arpeggia)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 ![Python versions](https://img.shields.io/pypi/pyversions/arpeggia)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/y1zhou/arpeggia)
 
