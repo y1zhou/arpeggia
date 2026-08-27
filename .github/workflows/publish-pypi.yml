@@ -44,6 +44,8 @@ jobs:
         uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           python-version: ${{ matrix.interpreter }}
+          activate-environment: true
+          venv-path: ${{ runner.temp }}/wheel-test
           ignore-nothing-to-cache: true
           ignore-empty-workdir: true
 
@@ -71,7 +73,7 @@ jobs:
       - name: Install and smoke-test wheel
         shell: bash
         run: |
-          uv pip install --system dist/*.whl
+          uv pip install dist/*.whl
           python python/tests/smoke_wheel.py
 
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
