@@ -21,20 +21,20 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
 @media(max-width:800px) { .cards,.plots { grid-template-columns:1fr; } table { font-size:.8rem; } }
 </style></head><body>
 <h1>Arpeggia 0.9.0 release validation</h1>
-<p class="lede">Durable numerical and performance evidence for the selected SASA, SAP, SC, and metadata-parser definitions. This is documentation only; generated benchmark inputs, intermediate candidates, and this HTML file are excluded from Rust and Python packages.</p>
+<p class="lede">Durable numerical and performance evidence for the August 27, 2026 release and its selected SASA, SAP, SC, and metadata-parser definitions. This is documentation only; generated benchmark inputs, intermediate candidates, and this HTML file are excluded from Rust and Python packages.</p>
 <section class="cards">
  <div class="card"><strong>52.5%</strong>Hydrophobic-SASA MAE reduction</div>
  <div class="card"><strong>8.522</strong>Production SAP whole-structure MAE</div>
  <div class="card"><strong>exact</strong>Matched-input SC core parity</div>
 </section>
 <p class="note"><strong>Scope:</strong> numerical similarity is claimed only for the same caller-prepared input. Arpeggia does not add hydrogens, reconstruct missing atoms, relax structures, or fit benchmark outputs.</p>
-<h2>SASA: improvement from main</h2>
+<h2>SASA: improvement from master</h2>
 <table><thead><tr><th>Metric</th><th>Version</th><th>MAE</th><th>Median AE</th><th>RMSE</th><th>P95 AE</th><th>Max AE</th><th>Bias</th><th>Spearman</th><th>MAE reduction</th><th>Structures improved</th></tr></thead>
-<tbody><tr><th>Total</th><td>main</td><td>536.70</td><td>384.27</td><td>756.87</td><td>1679.45</td><td>3130.44</td><td>+486.00</td><td>0.999511</td><td>—</td><td>—</td></tr><tr><th>Total</th><td>HEAD</td><td>395.42</td><td>291.68</td><td>558.55</td><td>1101.01</td><td>2450.31</td><td>+326.65</td><td>0.999648</td><td>26.3%</td><td>71/85</td></tr><tr><th>Polar</th><td>main</td><td>1945.53</td><td>1625.39</td><td>2510.64</td><td>4739.11</td><td>11182.60</td><td>+1945.53</td><td>0.999179</td><td>—</td><td>—</td></tr><tr><th>Polar</th><td>HEAD</td><td>1019.28</td><td>773.32</td><td>1343.56</td><td>2456.74</td><td>6362.36</td><td>+1019.28</td><td>0.999062</td><td>47.6%</td><td>85/85</td></tr><tr><th>Hydrophobic</th><td>main</td><td>1459.53</td><td>1188.46</td><td>1817.96</td><td>3253.89</td><td>8052.17</td><td>-1459.53</td><td>0.999394</td><td>—</td><td>—</td></tr><tr><th>Hydrophobic</th><td>HEAD</td><td>692.62</td><td>564.62</td><td>858.18</td><td>1463.21</td><td>3911.95</td><td>-692.62</td><td>0.999355</td><td>52.5%</td><td>85/85</td></tr></tbody></table>
-<p class="note"><strong>Interpretation:</strong> HEAD changes the standard heavy-atom surface from elemental radii to ProtOr/fallback radii. It improves absolute errors substantially, but it does not make Shrake–Rupley numerically identical to Rosetta's full-atom LeGrand calculation. Rank agreement was already very high; HEAD slightly improves total-SASA Spearman and slightly lowers the two partition correlations.</p>
+<tbody><tr><th>Total</th><td>master</td><td>536.70</td><td>384.27</td><td>756.87</td><td>1679.45</td><td>3130.44</td><td>+486.00</td><td>0.999511</td><td>—</td><td>—</td></tr><tr><th>Total</th><td>v0.9.0</td><td>395.42</td><td>291.68</td><td>558.55</td><td>1101.01</td><td>2450.31</td><td>+326.65</td><td>0.999648</td><td>26.3%</td><td>71/85</td></tr><tr><th>Polar</th><td>master</td><td>1945.53</td><td>1625.39</td><td>2510.64</td><td>4739.11</td><td>11182.60</td><td>+1945.53</td><td>0.999179</td><td>—</td><td>—</td></tr><tr><th>Polar</th><td>v0.9.0</td><td>1019.28</td><td>773.32</td><td>1343.56</td><td>2456.74</td><td>6362.36</td><td>+1019.28</td><td>0.999062</td><td>47.6%</td><td>85/85</td></tr><tr><th>Hydrophobic</th><td>master</td><td>1459.53</td><td>1188.46</td><td>1817.96</td><td>3253.89</td><td>8052.17</td><td>-1459.53</td><td>0.999394</td><td>—</td><td>—</td></tr><tr><th>Hydrophobic</th><td>v0.9.0</td><td>692.62</td><td>564.62</td><td>858.18</td><td>1463.21</td><td>3911.95</td><td>-692.62</td><td>0.999355</td><td>52.5%</td><td>85/85</td></tr></tbody></table>
+<p class="note"><strong>Interpretation:</strong> v0.9.0 changes the standard heavy-atom surface from elemental radii to ProtOr/fallback radii. It improves absolute errors substantially, but it does not make Shrake–Rupley numerically identical to Rosetta's full-atom LeGrand calculation. Rank agreement was already very high; v0.9.0 slightly improves total-SASA Spearman and slightly lowers the two partition correlations.</p>
 <h2>Scatter plots</h2><div class="plots">
-    <figure><figcaption>main: Total SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="main: Total SASA">
+    <figure><figcaption>master: Total SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="master: Total SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -46,8 +46,8 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
         <text x="45" y="34" text-anchor="end">141,132</text>
       </svg>
     </figure>
-    <figure><figcaption>HEAD: Total SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="HEAD: Total SASA">
+    <figure><figcaption>v0.9.0: Total SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="v0.9.0: Total SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -59,8 +59,8 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
         <text x="45" y="34" text-anchor="end">140,431</text>
       </svg>
     </figure>
-    <figure><figcaption>main: Polar SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="main: Polar SASA">
+    <figure><figcaption>master: Polar SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="master: Polar SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -72,8 +72,8 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
         <text x="45" y="34" text-anchor="end">69,497</text>
       </svg>
     </figure>
-    <figure><figcaption>HEAD: Polar SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="HEAD: Polar SASA">
+    <figure><figcaption>v0.9.0: Polar SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="v0.9.0: Polar SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -85,8 +85,8 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
         <text x="45" y="34" text-anchor="end">64,532</text>
       </svg>
     </figure>
-    <figure><figcaption>main: Hydrophobic SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="main: Hydrophobic SASA">
+    <figure><figcaption>master: Hydrophobic SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="master: Hydrophobic SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -98,8 +98,8 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
         <text x="45" y="34" text-anchor="end">79,928</text>
       </svg>
     </figure>
-    <figure><figcaption>HEAD: Hydrophobic SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="HEAD: Hydrophobic SASA">
+    <figure><figcaption>v0.9.0: Hydrophobic SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="v0.9.0: Hydrophobic SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -167,7 +167,8 @@ awk '/^ATOM/ { print }' 2eab-arpeggia.pdb | sha256sum</code></pre>
 <h2>Assembled release audit</h2>
 <ul>
  <li><code>release/v0.9.0</code> was created from <code>master</code> and contains only selected production, regression-test, ADR, final-report, and release commits. It contains no benchmark driver, machine-result JSON, prepared structure, or intermediate report.</li>
- <li>All repository hooks passed, including formatting, Ruff, rumdl, and Clippy. The locked suite passed 93 Rust library tests, 7 CLI tests, 9 doctests, 15 Python tests, and <code>ty</code>.</li>
+ <li>All repository hooks passed, including formatting, Ruff, rumdl, and Clippy. The locked suite passed 98 Rust library tests, 7 CLI tests, 8 doctests, 15 Python tests, and <code>ty</code>.</li>
+ <li>The final API cleanup routes Rust callers through <code>analyze_contacts</code>, <code>get_dsasa_components</code>, and <code>get_sc_details</code>; Python return values and CLI command names remain unchanged.</li>
  <li>The locked release build, wheel, source distribution, Cargo package listing, isolated wheel installation, and installed-wheel calculation passed. No HTML report is present in any package.</li>
  <li>RustSec found no applicable vulnerability after updating <code>h2</code> to 0.4.16. The recorded unmaintained warnings are <code>bincode</code> through Polars and <code>paste</code> through rust-sasa; two ignored <code>quick-xml</code> advisories are confined to uncompiled optional Polars metadata. The exact Python runtime packages, Polars 1.38.1 and polars-runtime-32 1.38.1, have no known vulnerability.</li>
  <li>The release replay verified all 85 prepared-file hashes and reproduced the SASA/SAP figures in this report. The optimized 6BFT H/L CLI repeated SC 0.725407 in 0.23 s at 29,780 KB median peak RSS, while the external 2EAB A/B run repeated SC 0.3778 in 0.36 s at 68,696 KB; these runtime measurements are local observations, not portable limits.</li>
@@ -177,8 +178,8 @@ awk '/^ATOM/ { print }' 2eab-arpeggia.pdb | sha256sum</code></pre>
  <li>Corpus: 85 retained PDBs from the RustSASA FreeSASA-reference set after one Rosetta preparation pass; identical prepared-file hashes were used for both versions.</li>
  <li>Reference: installed Rosetta revision <code>597b55d6600c3939574ffee30a4469b26c3337bd</code>, legacy TotalSasa/SasaFilter values from the existing benchmark artifact.</li>
  <li>Arpeggia settings: public atom-level SASA path, hydrogens removed, 1.4 Å probe, 100 Shrake–Rupley points, one thread.</li>
- <li>SASA versions: <code>main</code> 4135403 versus the assembled v0.9.0 production surface definition. The final N-terminal proline polarity correction is included in the reported partition metrics.</li>
- <li>Because <code>main</code> did not expose polar/hydrophobic columns, its per-atom areas were partitioned afterward with the exact same Rosetta SasaFilter heavy-atom classifier used by HEAD. Thus the comparison isolates the change in surface radii/calculation path.</li>
+ <li>SASA versions: <code>master</code> 4135403 versus the assembled v0.9.0 production surface definition. The final N-terminal proline polarity correction is included in the reported partition metrics.</li>
+ <li>Because <code>master</code> did not expose polar/hydrophobic columns, its per-atom areas were partitioned afterward with the exact same Rosetta SasaFilter heavy-atom classifier used by v0.9.0. Thus the comparison isolates the change in surface radii/calculation path.</li>
  <li>SAP reference: the same 85 Rosetta-prepared structures, installed Rosetta revision <code>597b55d6600c3939574ffee30a4469b26c3337bd</code>, and 55,138 matched residue rows.</li>
  <li>SC reference: pinned <code>sc-rs</code> core with identical 6BFT H/L atom input; the stock CLI value is shown only to document its preprocessing difference.</li>
  <li>Runtime measurements are local observations, not portable hard limits.</li>

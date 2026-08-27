@@ -155,6 +155,12 @@ cython_debug/
 # IDE
 .vscode/
 .idea/
+.zed/
 *.swp
 *.swo
 *~
+
+# Local structure and benchmark inputs
+/*.pdb
+/*.zip
+/docs/benchmarks/*-vs-*.html

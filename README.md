@@ -109,7 +109,7 @@ contacts_df = arpeggia.contacts(
     groups="/",                    # All-to-all chain interactions
     vdw_comp=0.1,                 # VdW radii compensation
     dist_cutoff=6.5,              # Distance cutoff in Ångströms
-    ignore_zero_occupancy=False   # Set True to ignore zero occupancy atoms
+    ignore_zero_occupancy=False,  # Set True to ignore zero occupancy atoms
     protonation="all-charged",    # Or "heuristic" / "explicit-only"
     ph=7.4,
 )
