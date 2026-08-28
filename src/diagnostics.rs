@@ -10,6 +10,8 @@ pub enum WarningCode {
     Parser,
     /// One alternate conformer was selected from several.
     ConformerSelected,
+    /// The first coordinate model was selected from a multi-model input.
+    ModelSelected,
     /// A donor had no directly associated explicit hydrogen.
     MissingDonorHydrogen,
     /// A full-atom reference calculation received no hydrogen atoms.
@@ -31,6 +33,7 @@ impl Display for WarningCode {
         let code = match self {
             Self::Parser => "PARSER",
             Self::ConformerSelected => "CONFORMER_SELECTED",
+            Self::ModelSelected => "MODEL_SELECTED",
             Self::MissingDonorHydrogen => "MISSING_DONOR_HYDROGEN",
             Self::HydrogenFreeInput => "HYDROGEN_FREE_INPUT",
             Self::UnresolvedHistidine => "UNRESOLVED_HISTIDINE",
