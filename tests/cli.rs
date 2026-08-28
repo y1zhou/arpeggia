@@ -213,7 +213,18 @@ fn cluster_structs_saves_and_reuses_pairwise_rmsd() {
 
     let second = arpeggia()
         .env("RUST_LOG", "debug")
-        .args(arguments)
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            output.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--pairwise-rmsd",
+            "--residues",
+            "A:1-10",
+        ])
         .output()
         .unwrap();
     assert!(second.status.success());

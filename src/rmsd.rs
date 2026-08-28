@@ -553,6 +553,18 @@ mod tests {
     }
 
     #[test]
+    fn kabsch_does_not_fit_scale() {
+        let reference = [
+            [1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0],
+        ];
+        let scaled = reference.map(|point| point.map(|value| value * 2.0));
+        assert!((kabsch_rmsd(&reference, &scaled).unwrap() - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
     fn kabsch_rejects_invalid_arrays() {
         assert!(kabsch_rmsd(&[[0.0; 3]; 2], &[[0.0; 3]; 2]).is_err());
         assert!(
@@ -633,6 +645,21 @@ mod tests {
                 .len(),
             2
         );
+    }
+
+    #[test]
+    fn exact_correspondence_rejects_missing_or_different_atoms() {
+        let atom = AtomIdentity {
+            chain: "A".into(),
+            residue_number: 1,
+            insertion: String::new(),
+            residue_name: "ALA".into(),
+            atom_name: "CA".into(),
+        };
+        let mut different = atom.clone();
+        different.atom_name = "N".into();
+        assert!(validate_correspondence(std::slice::from_ref(&atom), &[]).is_err());
+        assert!(validate_correspondence(&[atom], &[different]).is_err());
     }
 
     #[test]

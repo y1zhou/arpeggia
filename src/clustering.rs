@@ -21,9 +21,21 @@ const FALLBACK_WARNING_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StructureObservation {
     /// Case-sensitive identifier used in result tables.
-    pub id: String,
+    id: String,
     /// Canonical path to the structure file.
-    pub path: PathBuf,
+    path: PathBuf,
+}
+
+impl StructureObservation {
+    /// Case-sensitive identifier used in result tables.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Canonical structure path.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 /// Options controlling pairwise structural superposition.
@@ -220,15 +232,17 @@ impl PairwiseRmsdMatrix {
     ) -> ArpeggiaResult<Self> {
         let left = dataframe
             .column("id_1")
-            .map_err(polars_error)?
+            .map_err(|_| missing_table_column("pairwise", "id_1"))?
             .str()
-            .map_err(polars_error)?;
+            .map_err(|_| invalid_table_type("pairwise", "id_1", "String"))?;
         let right = dataframe
             .column("id_2")
-            .map_err(polars_error)?
+            .map_err(|_| missing_table_column("pairwise", "id_2"))?
             .str()
-            .map_err(polars_error)?;
-        let rmsd = dataframe.column("rmsd").map_err(polars_error)?;
+            .map_err(|_| invalid_table_type("pairwise", "id_2", "String"))?;
+        let rmsd = dataframe
+            .column("rmsd")
+            .map_err(|_| missing_table_column("pairwise", "rmsd"))?;
         if !rmsd.dtype().is_numeric() {
             return Err(ArpeggiaError::InvalidArgument(
                 "pairwise rmsd must be numeric".into(),
@@ -351,6 +365,11 @@ pub fn get_pairwise_rmsd_matrix(
     observations: &[StructureObservation],
     options: &PairwiseRmsdOptions,
 ) -> ArpeggiaResult<Analysis<PairwiseRmsdMatrix>> {
+    if observations.len() < 2 {
+        return Err(ArpeggiaError::InvalidArgument(
+            "pairwise RMSD requires at least two structures".into(),
+        ));
+    }
     let pair_count = checked_pair_count(observations.len())?;
     let matrix_bytes = pair_count.checked_mul(size_of::<f64>()).ok_or_else(|| {
         ArpeggiaError::InvalidArgument("pairwise matrix size overflows usize".into())
@@ -631,14 +650,14 @@ fn read_structure_manifest(
     let dataframe = read_dataframe(manifest)?;
     let ids = dataframe
         .column(id_column)
-        .map_err(polars_error)?
+        .map_err(|_| missing_table_column("manifest", id_column))?
         .str()
-        .map_err(polars_error)?;
+        .map_err(|_| invalid_table_type("manifest", id_column, "String"))?;
     let paths = dataframe
         .column(path_column)
-        .map_err(polars_error)?
+        .map_err(|_| missing_table_column("manifest", path_column))?
         .str()
-        .map_err(polars_error)?;
+        .map_err(|_| invalid_table_type("manifest", path_column, "String"))?;
     let base = manifest.parent().unwrap_or_else(|| Path::new("."));
     (0..dataframe.height())
         .map(|row| {
@@ -855,6 +874,14 @@ fn polars_error(error: PolarsError) -> ArpeggiaError {
     ArpeggiaError::Io(std::io::Error::other(error.to_string()))
 }
 
+fn missing_table_column(table: &str, column: &str) -> ArpeggiaError {
+    ArpeggiaError::InvalidArgument(format!("{table} table requires column {column}"))
+}
+
+fn invalid_table_type(table: &str, column: &str, expected: &str) -> ArpeggiaError {
+    ArpeggiaError::InvalidArgument(format!("{table} column {column} must have type {expected}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,6 +908,19 @@ mod tests {
     }
 
     #[test]
+    fn pairwise_dataframe_normalizes_row_and_id_order() {
+        let dataframe = df!(
+            "id_1" => ["c", "a", "c"],
+            "id_2" => ["a", "b", "b"],
+            "rmsd" => [2.0, 1.0, 3.0]
+        )
+        .unwrap();
+        let matrix = PairwiseRmsdMatrix::from_dataframe(&dataframe, None, 3).unwrap();
+        assert_eq!(matrix.ids, ["a", "b", "c"]);
+        assert_eq!(matrix.data, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
     fn pairwise_dataframe_rejects_duplicate_pairs() {
         let dataframe = df!(
             "id_1" => ["a", "b", "a"],
@@ -900,6 +940,25 @@ mod tests {
         )
         .unwrap();
         assert!(PairwiseRmsdMatrix::from_dataframe(&dataframe, None, 3).is_err());
+    }
+
+    #[test]
+    fn pairwise_dataframe_schema_errors_are_invalid_arguments() {
+        let missing = df!("wrong" => [1_u32]).unwrap();
+        assert!(matches!(
+            PairwiseRmsdMatrix::from_dataframe(&missing, None, 3),
+            Err(ArpeggiaError::InvalidArgument(_))
+        ));
+        let wrong_type = df!(
+            "id_1" => [1_u32, 1, 2],
+            "id_2" => [2_u32, 3, 3],
+            "rmsd" => [1.0, 2.0, 3.0]
+        )
+        .unwrap();
+        assert!(matches!(
+            PairwiseRmsdMatrix::from_dataframe(&wrong_type, None, 3),
+            Err(ArpeggiaError::InvalidArgument(_))
+        ));
     }
 
     #[test]
@@ -996,6 +1055,14 @@ mod tests {
                 .into_no_null_iter()
                 .all(|value| value < 1e-12)
         );
+    }
+
+    #[test]
+    fn pairwise_matrix_requires_two_observations() {
+        assert!(matches!(
+            get_pairwise_rmsd_matrix(&[], &PairwiseRmsdOptions::default()),
+            Err(ArpeggiaError::InvalidArgument(_))
+        ));
     }
 
     #[test]

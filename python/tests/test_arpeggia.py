@@ -79,6 +79,12 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
         arpeggia.cluster_structs(
             input=str(structures), pairwise_rmsd=pairs, num_clusters=1
         )
+    with pytest.raises(ValueError, match="exactly one"):
+        arpeggia.cluster_structs(num_clusters=1)
+    with pytest.raises(ValueError, match="requires column id_1"):
+        arpeggia.cluster_structs(
+            pairwise_rmsd=pl.DataFrame({"wrong": [1]}), num_clusters=1
+        )
 
 
 def test_contacts(test_pdb_file):

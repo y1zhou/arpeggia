@@ -141,6 +141,11 @@ fn cluster_structs(
     num_threads: usize,
     bypass_mem_check: bool,
 ) -> PyResult<PyDataFrame> {
+    if input.is_some() == pairwise_rmsd.is_some() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "exactly one of input or pairwise_rmsd is required",
+        ));
+    }
     let cluster_options = crate::ClusterOptions {
         method: clustering_method(method)?,
         num_clusters,

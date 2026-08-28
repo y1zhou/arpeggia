@@ -118,7 +118,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     let matrix = if let Some(path) = pairwise_path.as_deref().filter(|path| path.exists()) {
         let expected_ids = observations
             .iter()
-            .map(|observation| observation.id.clone())
+            .map(|observation| observation.id().to_string())
             .collect::<Vec<_>>();
         let matrix = read_pairwise_matrix(path, &expected_ids).map_err(|error| {
             ArpeggiaError::InvalidArgument(format!(
