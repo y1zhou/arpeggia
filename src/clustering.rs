@@ -501,9 +501,10 @@ fn run_dynmsc(
     let (_, _, initial_medoids) = kmedoids::pam_build::<_, f64, f64>(matrix, max_k);
     let (_, assignments, iterations, _, medoids, _) =
         kmedoids::dynmsc::<_, f64, f64>(matrix, &initial_medoids, 2, max_iterations);
-    if iterations >= max_iterations {
+    let stage_limit = max_iterations.saturating_mul(max_k - 1);
+    if iterations >= stage_limit {
         return Err(ArpeggiaError::Calculation(format!(
-            "automatic k-medoids reached the {max_iterations}-iteration limit"
+            "every automatic k-medoids stage reached the {max_iterations}-iteration limit"
         )));
     }
     Ok((medoids, assignments))

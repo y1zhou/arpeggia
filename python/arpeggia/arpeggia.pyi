@@ -3,6 +3,8 @@
 import polars as pl
 
 from ._contract import (
+    AtomSubset,
+    ClusteringMethod,
     DsasaComponents,
     ProtonationMode,
     SapLevel,
@@ -10,6 +12,38 @@ from ._contract import (
     SequenceList,
 )
 
+def rmsd(
+    reference: str,
+    mobile: str,
+    model_num: int = ...,
+    residues: str = ...,
+    atoms: AtomSubset = ...,
+) -> float: ...
+def pairwise_rmsd(
+    input: str,
+    id_col: str = ...,
+    path_col: str = ...,
+    model_num: int = ...,
+    residues: str = ...,
+    atoms: AtomSubset = ...,
+    num_threads: int = ...,
+    bypass_mem_check: bool = ...,
+) -> pl.DataFrame: ...
+def cluster_structs(
+    input: str | None = ...,
+    pairwise_rmsd: pl.DataFrame | None = ...,
+    id_col: str = ...,
+    path_col: str = ...,
+    method: ClusteringMethod = ...,
+    num_clusters: int | None = ...,
+    max_clusters: int | None = ...,
+    max_iterations: int = ...,
+    model_num: int = ...,
+    residues: str = ...,
+    atoms: AtomSubset = ...,
+    num_threads: int = ...,
+    bypass_mem_check: bool = ...,
+) -> pl.DataFrame: ...
 def contacts(
     input_file: str,
     groups: str = ...,

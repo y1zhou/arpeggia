@@ -48,6 +48,144 @@ fn protonation_mode(value: &str) -> PyResult<crate::ProtonationMode> {
     }
 }
 
+fn atom_subset(value: &str) -> PyResult<crate::AtomSubset> {
+    match value.to_ascii_lowercase().as_str() {
+        "ca" => Ok(crate::AtomSubset::Ca),
+        "backbone" => Ok(crate::AtomSubset::Backbone),
+        "heavy" => Ok(crate::AtomSubset::Heavy),
+        "all" => Ok(crate::AtomSubset::All),
+        _ => Err(pyo3::exceptions::PyValueError::new_err(
+            "atoms must be 'ca', 'backbone', 'heavy', or 'all'",
+        )),
+    }
+}
+
+fn clustering_method(value: &str) -> PyResult<crate::ClusteringMethod> {
+    match value.to_ascii_lowercase().replace('_', "-").as_str() {
+        "k-medoids" => Ok(crate::ClusteringMethod::KMedoids),
+        _ => Err(pyo3::exceptions::PyValueError::new_err(
+            "method must be 'k-medoids'",
+        )),
+    }
+}
+
+/// Superpose two structures and return RMSD in Angstroms.
+#[pyfunction]
+#[pyo3(signature = (reference, mobile, model_num=0, residues="", atoms="ca"))]
+fn rmsd(
+    py: Python<'_>,
+    reference: String,
+    mobile: String,
+    model_num: usize,
+    residues: &str,
+    atoms: &str,
+) -> PyResult<f64> {
+    let reference = load_for_python(py, &reference)?;
+    let mobile = load_for_python(py, &mobile)?;
+    let atoms = atom_subset(atoms)?;
+    let analysis = py
+        .detach(|| crate::get_rmsd(&reference, &mobile, model_num, residues, atoms))
+        .map_err(python_error)?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(analysis.value)
+}
+
+/// Calculate every unordered RMSD pair in a structure ensemble.
+#[pyfunction]
+#[pyo3(signature = (input, id_col="id", path_col="path", model_num=0, residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
+#[allow(clippy::too_many_arguments)]
+fn pairwise_rmsd(
+    py: Python<'_>,
+    input: String,
+    id_col: &str,
+    path_col: &str,
+    model_num: usize,
+    residues: &str,
+    atoms: &str,
+    num_threads: usize,
+    bypass_mem_check: bool,
+) -> PyResult<PyDataFrame> {
+    let options = crate::PairwiseRmsdOptions {
+        model_num,
+        residues: residues.to_string(),
+        atoms: atom_subset(atoms)?,
+        num_threads,
+        bypass_mem_check,
+    };
+    let analysis = py
+        .detach(|| {
+            crate::get_pairwise_rmsd(std::path::Path::new(&input), id_col, path_col, &options)
+        })
+        .map_err(python_error)?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(PyDataFrame(analysis.value))
+}
+
+/// Cluster structures from an ensemble input or a complete pairwise RMSD table.
+#[pyfunction]
+#[pyo3(signature = (input=None, pairwise_rmsd=None, id_col="id", path_col="path", method="k-medoids", num_clusters=None, max_clusters=None, max_iterations=100, model_num=0, residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
+#[allow(clippy::too_many_arguments)]
+fn cluster_structs(
+    py: Python<'_>,
+    input: Option<String>,
+    pairwise_rmsd: Option<PyDataFrame>,
+    id_col: &str,
+    path_col: &str,
+    method: &str,
+    num_clusters: Option<usize>,
+    max_clusters: Option<usize>,
+    max_iterations: usize,
+    model_num: usize,
+    residues: &str,
+    atoms: &str,
+    num_threads: usize,
+    bypass_mem_check: bool,
+) -> PyResult<PyDataFrame> {
+    let matrix = match (input, pairwise_rmsd) {
+        (Some(input), None) => {
+            let observations = py
+                .detach(|| {
+                    crate::read_structure_observations(
+                        std::path::Path::new(&input),
+                        id_col,
+                        path_col,
+                    )
+                })
+                .map_err(python_error)?;
+            let options = crate::PairwiseRmsdOptions {
+                model_num,
+                residues: residues.to_string(),
+                atoms: atom_subset(atoms)?,
+                num_threads,
+                bypass_mem_check,
+            };
+            let analysis = py
+                .detach(|| crate::get_pairwise_rmsd_matrix(&observations, &options))
+                .map_err(python_error)?;
+            emit_python_warnings(py, analysis.warnings)?;
+            analysis.value
+        }
+        (None, Some(dataframe)) => crate::PairwiseRmsdMatrix::from_dataframe(&dataframe.0, None, 3)
+            .map_err(python_error)?,
+        _ => {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "exactly one of input or pairwise_rmsd is required",
+            ));
+        }
+    };
+    let options = crate::ClusterOptions {
+        method: clustering_method(method)?,
+        num_clusters,
+        max_clusters,
+        max_iterations,
+    };
+    let analysis = py
+        .detach(|| crate::cluster_pairwise_rmsd(&matrix, &options))
+        .map_err(python_error)?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(PyDataFrame(analysis.value))
+}
+
 /// Load a PDB or mmCIF file and calculate atomic and ring contacts.
 ///
 /// Args:
@@ -515,6 +653,9 @@ fn sc(
 /// including contact detection, SASA calculation, SAP score calculation, and sequence extraction.
 #[pymodule]
 fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(rmsd, m)?)?;
+    m.add_function(wrap_pyfunction!(pairwise_rmsd, m)?)?;
+    m.add_function(wrap_pyfunction!(cluster_structs, m)?)?;
     m.add_function(wrap_pyfunction!(contacts, m)?)?;
     m.add_function(wrap_pyfunction!(sasa, m)?)?;
     m.add_function(wrap_pyfunction!(dsasa, m)?)?;

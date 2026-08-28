@@ -59,10 +59,13 @@ from importlib.metadata import version
 
 from arpeggia._contract import EXPORTED_FUNCTIONS
 from arpeggia.arpeggia import (  # noqa: F401
+    cluster_structs,
     contacts,
     dsasa,
     dsasa_components,
+    pairwise_rmsd,
     relative_sasa,
+    rmsd,
     sap_score,
     sasa,
     sc,

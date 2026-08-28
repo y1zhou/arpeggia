@@ -157,3 +157,65 @@ fn sc_calculation_failure_exits_without_a_score() {
     assert!(stderr.contains("van der Waals radius"));
     assert!(!stderr.contains("INFO arpeggia::cli::sc: SC:"));
 }
+
+#[test]
+fn rmsd_prints_one_scalar() {
+    let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let output = arpeggia()
+        .args(["rmsd", &input, &input, "--residues", "A:1-20"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value = String::from_utf8(output.stdout)
+        .unwrap()
+        .trim()
+        .parse::<f64>()
+        .unwrap();
+    assert!(value < 1e-12);
+}
+
+#[test]
+fn cluster_structs_saves_and_reuses_pairwise_rmsd() {
+    let source = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let root = std::env::temp_dir().join(format!("arpeggia-cli-clustering-{}", std::process::id()));
+    let input = root.join("input");
+    let output = root.join("output");
+    std::fs::create_dir_all(&input).unwrap();
+    for id in ["a", "b", "c"] {
+        std::fs::copy(&source, input.join(format!("{id}.pdb"))).unwrap();
+    }
+    let arguments = [
+        "cluster-structs",
+        "--input",
+        input.to_str().unwrap(),
+        "--output",
+        output.to_str().unwrap(),
+        "--num-clusters",
+        "1",
+        "--pairwise-rmsd",
+        "--residues",
+        "A:1-20",
+        "--num-threads",
+        "2",
+    ];
+    let first = arpeggia().args(arguments).output().unwrap();
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert!(output.join("clusters.csv").is_file());
+    assert!(output.join("pairwise_rmsd.csv").is_file());
+
+    let second = arpeggia()
+        .env("RUST_LOG", "debug")
+        .args(arguments)
+        .output()
+        .unwrap();
+    assert!(second.status.success());
+    assert!(String::from_utf8_lossy(&second.stderr).contains("Reusing pairwise RMSD cache"));
+}

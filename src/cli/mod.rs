@@ -1,3 +1,4 @@
+pub mod cluster_structs;
 pub mod contacts;
 pub mod dsasa;
 pub mod pdb2seq;
@@ -12,7 +13,12 @@ use std::path::Path;
 use tracing::warn;
 
 pub(crate) fn load_input(path: &Path) -> ArpeggiaResult<PDB> {
-    let path = path.canonicalize()?;
+    let path = path.canonicalize().map_err(|error| {
+        ArpeggiaError::Io(std::io::Error::new(
+            error.kind(),
+            format!("cannot resolve input {}: {error}", path.display()),
+        ))
+    })?;
     let input = path
         .to_str()
         .ok_or_else(|| ArpeggiaError::InvalidArgument("input path is not valid UTF-8".into()))?;
@@ -22,3 +28,4 @@ pub(crate) fn load_input(path: &Path) -> ArpeggiaResult<PDB> {
     }
     Ok(analysis.value)
 }
+pub mod rmsd;

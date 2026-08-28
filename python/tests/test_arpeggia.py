@@ -24,6 +24,8 @@ def test_import():
     assert hasattr(arpeggia, "contacts")
     assert hasattr(arpeggia, "sasa")
     assert hasattr(arpeggia, "seq")
+    assert hasattr(arpeggia, "rmsd")
+    assert hasattr(arpeggia, "cluster_structs")
     assert arpeggia.__all__ == list(_contract.EXPORTED_FUNCTIONS)
 
 
@@ -36,6 +38,47 @@ def test_stub_consumes_python_contract():
     assert "level: SasaLevel = ..." in stub_text
     assert "level: SapLevel = ..." in stub_text
     assert "def seq(input_file: str, model_num: int = ...) -> SequenceList" in stub_text
+    assert "atoms: AtomSubset = ..." in stub_text
+
+
+def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
+    """Expose exact-correspondence RMSD and clustering through Python."""
+    import arpeggia
+    import polars as pl
+    from arpeggia import _contract
+
+    assert (
+        arpeggia.rmsd(
+            test_pdb_file,
+            test_pdb_file,
+            residues="A:1-20",
+        )
+        < 1e-12
+    )
+
+    structures = tmp_path / "structures"
+    structures.mkdir()
+    for structure_id in ("a", "b", "c"):
+        (structures / f"{structure_id}.pdb").write_bytes(
+            Path(test_pdb_file).read_bytes()
+        )
+    pairs = arpeggia.pairwise_rmsd(str(structures), residues="A:1-20", num_threads=2)
+    assert tuple(pairs.columns) == _contract.PAIRWISE_RMSD_COLUMNS
+    assert pairs.height == 3
+    assert pairs["rmsd"].max() == pytest.approx(0.0, abs=1e-12)
+
+    clusters = arpeggia.cluster_structs(pairwise_rmsd=pairs, num_clusters=1)
+    assert tuple(clusters.columns) == _contract.CLUSTER_COLUMNS
+    assert clusters.schema == {
+        "id": pl.String,
+        "cluster_id": pl.UInt32,
+        "medoid_id": pl.String,
+        "rmsd_to_medoid": pl.Float64,
+    }
+    with pytest.raises(ValueError, match="exactly one"):
+        arpeggia.cluster_structs(
+            input=str(structures), pairwise_rmsd=pairs, num_clusters=1
+        )
 
 
 def test_contacts(test_pdb_file):
