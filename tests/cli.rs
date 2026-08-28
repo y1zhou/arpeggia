@@ -219,3 +219,34 @@ fn cluster_structs_saves_and_reuses_pairwise_rmsd() {
     assert!(second.status.success());
     assert!(String::from_utf8_lossy(&second.stderr).contains("Reusing pairwise RMSD cache"));
 }
+
+#[test]
+fn cluster_structs_rejects_colliding_outputs() {
+    let source = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let root = std::env::temp_dir().join(format!(
+        "arpeggia-cli-cluster-output-collision-{}",
+        std::process::id()
+    ));
+    let input = root.join("input");
+    std::fs::create_dir_all(&input).unwrap();
+    for id in ["a", "b", "c"] {
+        std::fs::copy(&source, input.join(format!("{id}.pdb"))).unwrap();
+    }
+    let result = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            root.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--pairwise-rmsd",
+            "--pairwise-filename",
+            "clusters",
+        ])
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("output paths must differ"));
+}

@@ -141,6 +141,12 @@ fn cluster_structs(
     num_threads: usize,
     bypass_mem_check: bool,
 ) -> PyResult<PyDataFrame> {
+    let cluster_options = crate::ClusterOptions {
+        method: clustering_method(method)?,
+        num_clusters,
+        max_clusters,
+        max_iterations,
+    };
     let matrix = match (input, pairwise_rmsd) {
         (Some(input), None) => {
             let observations = py
@@ -151,6 +157,9 @@ fn cluster_structs(
                         path_col,
                     )
                 })
+                .map_err(python_error)?;
+            cluster_options
+                .validate(observations.len())
                 .map_err(python_error)?;
             let options = crate::PairwiseRmsdOptions {
                 model_num,
@@ -173,14 +182,8 @@ fn cluster_structs(
             ));
         }
     };
-    let options = crate::ClusterOptions {
-        method: clustering_method(method)?,
-        num_clusters,
-        max_clusters,
-        max_iterations,
-    };
     let analysis = py
-        .detach(|| crate::cluster_pairwise_rmsd(&matrix, &options))
+        .detach(|| crate::cluster_pairwise_rmsd(&matrix, &cluster_options))
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(PyDataFrame(analysis.value))

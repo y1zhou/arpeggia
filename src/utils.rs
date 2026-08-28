@@ -120,6 +120,7 @@ pub enum DataFrameFileType {
     /// Standard JSON
     Json,
     /// Newline-delimited JSON
+    #[value(name = "ndjson")]
     NDJson,
 }
 

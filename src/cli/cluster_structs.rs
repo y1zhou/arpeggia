@@ -90,10 +90,24 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         ));
     }
 
+    let cluster_options = ClusterOptions {
+        method: args.method,
+        num_clusters: args.num_clusters,
+        max_clusters: args.max_clusters,
+        max_iterations: args.max_iterations,
+    };
+    cluster_options.validate(observations.len())?;
+
+    let output_path = prepare_df_output_dir(&args.output, &args.filename, args.output_format)?;
     let pairwise_path = args
         .pairwise_rmsd
         .then(|| prepare_df_output_dir(&args.output, &args.pairwise_filename, args.output_format))
         .transpose()?;
+    if pairwise_path.as_ref() == Some(&output_path) {
+        return Err(ArpeggiaError::InvalidArgument(
+            "cluster and pairwise RMSD output paths must differ".into(),
+        ));
+    }
     let pairwise_options = PairwiseRmsdOptions {
         model_num: args.model_num,
         residues: args.residues.clone(),
@@ -127,19 +141,10 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         analysis.value
     };
 
-    let analysis = cluster_pairwise_rmsd(
-        &matrix,
-        &ClusterOptions {
-            method: args.method,
-            num_clusters: args.num_clusters,
-            max_clusters: args.max_clusters,
-            max_iterations: args.max_iterations,
-        },
-    )?;
+    let analysis = cluster_pairwise_rmsd(&matrix, &cluster_options)?;
     for warning in analysis.warnings {
         warn!("{warning}");
     }
-    let output_path = prepare_df_output_dir(&args.output, &args.filename, args.output_format)?;
     let mut clusters = analysis.value;
     write_df_to_file(&mut clusters, &output_path, args.output_format)?;
     info!("Clusters saved to {}", output_path.display());

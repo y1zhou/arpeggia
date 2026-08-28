@@ -85,6 +85,42 @@ impl Default for ClusterOptions {
     }
 }
 
+impl ClusterOptions {
+    /// Validate clustering bounds for a known structure count.
+    pub fn validate(&self, structure_count: usize) -> ArpeggiaResult<()> {
+        if structure_count < 3 {
+            return Err(ArpeggiaError::InvalidArgument(
+                "structure clustering requires at least three structures".into(),
+            ));
+        }
+        if structure_count > u32::MAX as usize {
+            return Err(ArpeggiaError::InvalidArgument(
+                "structure count exceeds UInt32 cluster output capacity".into(),
+            ));
+        }
+        if self.max_iterations == 0 {
+            return Err(ArpeggiaError::InvalidArgument(
+                "max_iterations must be positive".into(),
+            ));
+        }
+        if let Some(k) = self.num_clusters {
+            validate_cluster_count(k, structure_count, "num_clusters")
+        } else if let Some(k) = self.max_clusters {
+            if k < 2 || k > structure_count {
+                Err(ArpeggiaError::InvalidArgument(format!(
+                    "max_clusters must be between 2 and {structure_count}"
+                )))
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(ArpeggiaError::InvalidArgument(
+                "one of num_clusters or max_clusters is required".into(),
+            ))
+        }
+    }
+}
+
 /// Read structure observations from a directory or tabular manifest.
 pub fn read_structure_observations(
     input: &Path,
@@ -192,11 +228,13 @@ impl PairwiseRmsdMatrix {
             .map_err(polars_error)?
             .str()
             .map_err(polars_error)?;
-        let rmsd = dataframe
-            .column("rmsd")
-            .map_err(polars_error)?
-            .cast(&DataType::Float64)
-            .map_err(polars_error)?;
+        let rmsd = dataframe.column("rmsd").map_err(polars_error)?;
+        if !rmsd.dtype().is_numeric() {
+            return Err(ArpeggiaError::InvalidArgument(
+                "pairwise rmsd must be numeric".into(),
+            ));
+        }
+        let rmsd = rmsd.cast(&DataType::Float64).map_err(polars_error)?;
         let rmsd = rmsd.f64().map_err(polars_error)?;
 
         let mut ids = BTreeSet::new();
@@ -407,21 +445,7 @@ pub fn cluster_pairwise_rmsd(
     options: &ClusterOptions,
 ) -> ArpeggiaResult<Analysis<DataFrame>> {
     let n = matrix.len();
-    if n < 3 {
-        return Err(ArpeggiaError::InvalidArgument(
-            "structure clustering requires at least three structures".into(),
-        ));
-    }
-    if n > u32::MAX as usize {
-        return Err(ArpeggiaError::InvalidArgument(
-            "structure count exceeds UInt32 cluster output capacity".into(),
-        ));
-    }
-    if options.max_iterations == 0 {
-        return Err(ArpeggiaError::InvalidArgument(
-            "max_iterations must be positive".into(),
-        ));
-    }
+    options.validate(n)?;
 
     let mut warnings = Vec::new();
     let requested_clusters = if let Some(k) = options.num_clusters {
@@ -441,16 +465,8 @@ pub fn cluster_pairwise_rmsd(
     };
 
     let (medoids, assignments) = match requested_clusters {
-        ClusterCount::Fixed(k) => {
-            validate_cluster_count(k, n, "num_clusters")?;
-            run_fasterpam(matrix, k, options.max_iterations)?
-        }
+        ClusterCount::Fixed(k) => run_fasterpam(matrix, k, options.max_iterations)?,
         ClusterCount::Automatic(max_k) => {
-            if max_k < 2 || max_k > n {
-                return Err(ArpeggiaError::InvalidArgument(format!(
-                    "max_clusters must be between 2 and {n}"
-                )));
-            }
             if matrix.data.iter().all(|distance| *distance == 0.0) {
                 (vec![0], vec![0; n])
             } else {
@@ -876,6 +892,17 @@ mod tests {
     }
 
     #[test]
+    fn pairwise_dataframe_requires_numeric_rmsd() {
+        let dataframe = df!(
+            "id_1" => ["a", "a", "b"],
+            "id_2" => ["b", "c", "c"],
+            "rmsd" => [true, false, true]
+        )
+        .unwrap();
+        assert!(PairwiseRmsdMatrix::from_dataframe(&dataframe, None, 3).is_err());
+    }
+
+    #[test]
     fn memory_guard_has_a_bypass_and_fallback_warning() {
         assert!(memory_warnings_or_error(90, Some(100), false, "test").is_err());
         assert!(memory_warnings_or_error(90, Some(100), true, "test").is_ok());
@@ -904,6 +931,36 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["A", "b"]
         );
+    }
+
+    #[test]
+    fn manifests_support_all_table_formats_and_relative_paths() {
+        let directory = std::env::temp_dir().join(format!(
+            "arpeggia-ensemble-manifests-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(directory.join("a.pdb"), "END\n").unwrap();
+        std::fs::write(directory.join("b.cif"), "data_b\n#\n").unwrap();
+        let manifest = df!("name" => ["b", "a"], "file" => ["b.cif", "a.pdb"]).unwrap();
+        for format in [
+            crate::DataFrameFileType::Csv,
+            crate::DataFrameFileType::Parquet,
+            crate::DataFrameFileType::Json,
+            crate::DataFrameFileType::NDJson,
+        ] {
+            let base = directory.join(format!("manifest-{format}"));
+            crate::write_df_to_file(&mut manifest.clone(), &base, format).unwrap();
+            let path = base.with_extension(format.to_string());
+            let observations = read_structure_observations(&path, "name", "file").unwrap();
+            assert_eq!(
+                observations
+                    .iter()
+                    .map(|observation| observation.id.as_str())
+                    .collect::<Vec<_>>(),
+                ["a", "b"]
+            );
+        }
     }
 
     #[test]
@@ -1011,6 +1068,37 @@ mod tests {
     }
 
     #[test]
+    fn automatic_k_medoids_selects_within_the_requested_bound() {
+        let matrix = PairwiseRmsdMatrix {
+            ids: ["a", "b", "c", "d", "e", "f"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            data: vec![
+                0.1, 0.2, 0.1, 5.0, 5.1, 5.0, 5.1, 5.0, 5.1, 0.1, 5.0, 5.1, 5.0, 0.2, 0.1,
+            ],
+        };
+        let result = cluster_pairwise_rmsd(
+            &matrix,
+            &ClusterOptions {
+                max_clusters: Some(3),
+                ..ClusterOptions::default()
+            },
+        )
+        .unwrap()
+        .value;
+        let cluster_count = result
+            .column("cluster_id")
+            .unwrap()
+            .u32()
+            .unwrap()
+            .max()
+            .unwrap()
+            + 1;
+        assert!((2..=3).contains(&cluster_count));
+    }
+
+    #[test]
     fn fixed_cluster_count_takes_priority_with_warning() {
         let matrix = PairwiseRmsdMatrix {
             ids: vec!["a".into(), "b".into(), "c".into()],
@@ -1026,5 +1114,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.warnings[0].code, WarningCode::ArgumentIgnored);
+    }
+
+    #[test]
+    fn cluster_options_require_a_valid_bound() {
+        assert!(ClusterOptions::default().validate(3).is_err());
+        assert!(
+            ClusterOptions {
+                max_clusters: Some(4),
+                ..ClusterOptions::default()
+            }
+            .validate(3)
+            .is_err()
+        );
+        assert!(
+            ClusterOptions {
+                num_clusters: Some(2),
+                ..ClusterOptions::default()
+            }
+            .validate(3)
+            .is_ok()
+        );
     }
 }
