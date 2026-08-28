@@ -186,3 +186,50 @@ _Avoid_: SASA of hydrophobic residues
 The sum of SASA for atoms whose Rosetta polarity cannot be reproduced from the
 available chemical identity and topology.
 _Avoid_: Hydrophobic SASA, unknown total
+
+**Structure Observation**:
+One selected coordinate model from one input structure that contributes one
+object to an RMSD comparison or structure clustering calculation.
+_Avoid_: Input file, ensemble
+
+**Structure Selection**:
+The protein atoms retained from a Structure Observation by its chain-residue
+ranges and atom subset.
+_Avoid_: Atom filter, alignment
+
+**Exact Atom Correspondence**:
+A one-to-one pairing in which two Structure Selections contain the same protein
+atom identities. It is the required correspondence for the current RMSD method.
+_Avoid_: Common atoms, atom intersection
+
+**Medoid Structure**:
+An observed structure selected as a cluster representative because it minimizes
+the cluster method's dissimilarity objective. It is an input structure, not an
+average coordinate model.
+_Avoid_: Centroid, average structure
+
+**Pairwise RMSD Matrix**:
+The symmetric dissimilarity values produced by comparing every pair of Structure
+Observations with one shared Structure Selection policy.
+_Avoid_: RMSD features, coordinate matrix
+
+**Pairwise RMSD Table**:
+The long-form interchange representation of a Pairwise RMSD Matrix, with one
+unordered structure pair per row and columns `id_1`, `id_2`, and `rmsd`. It
+excludes diagonal and reverse-duplicate rows.
+_Avoid_: Wide RMSD matrix, square RMSD table
+
+**Pairwise RMSD Cache**:
+A Pairwise RMSD Table at the exact CLI output path that may replace RMSD
+recalculation when its complete ID set matches the current inputs. Cache reuse
+does not verify source coordinates or Structure Selection settings.
+_Avoid_: Verified RMSD cache, provenance-matched matrix
+
+**Fixed Cluster Count**:
+A cluster count specified by the caller before clustering begins.
+_Avoid_: Selected cluster count, automatic clustering
+
+**Bounded Automatic Cluster Count**:
+A cluster count selected by the clustering method within caller-supplied lower
+and upper bounds.
+_Avoid_: Parameter-free clustering, unrestricted cluster count
