@@ -67,9 +67,12 @@ deterministic PAM BUILD initialization followed by FasterPAM. A supplied
 `max_clusters` uses DynMSC to select from 2 through that maximum. One of the
 two bounds is required; when both are present, `num_clusters` wins and a
 structured warning reports that `max_clusters` was ignored. Fixed counts allow
-`1..=n`; automatic maxima allow `2..=n`. An all-zero matrix short-circuits to
-one deterministic cluster. The default iteration limit is 100, and reaching it
-is a Calculation Failure.
+`1..=n`; automatic maxima allow `2..=n`. An all-zero matrix under automatic
+selection short-circuits to one deterministic cluster. The default iteration
+limit is 100. FasterPAM limit exhaustion is a Calculation Failure. The upstream
+DynMSC API exposes only aggregate iterations across its internal cluster-count
+stages, so Arpeggia can detect complete stage-budget exhaustion but cannot
+distinguish one isolated stage reaching its limit.
 
 The cluster table contains `id: String`, `cluster_id: UInt32`,
 `medoid_id: String`, and `rmsd_to_medoid: Float64`. Cluster IDs are contiguous
@@ -81,7 +84,8 @@ explicit `pairwise_rmsd` Polars DataFrame. A supplied table must contain at
 least three IDs, every unordered pair exactly once, no diagonal, finite
 non-negative numeric RMSDs, and string IDs; numeric RMSDs are converted to
 `Float64`, and unrelated columns are ignored. The CLI always starts from a
-directory or structure manifest and does not accept an arbitrary matrix input.
+non-recursive structure directory and does not accept a manifest or arbitrary
+matrix input.
 
 ## Memory and parallel execution
 

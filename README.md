@@ -27,6 +27,7 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 - [x] Calculate relative SASA (RSA) normalized by MaxASA values
 - [x] Calculate SAP (Spatial Aggregation Propensity) scores for aggregation prediction
 - [x] Calculate Shape Complementarity (SC) scores at protein-protein interfaces
+- [x] Superpose structures with Kabsch RMSD and cluster conformations with k-medoids
 - [x] Filter calculations to specific chains
 - [x] Output results in various formats (e.g., JSON, CSV, Parquet)
 - [x] Python bindings via PyO3
@@ -61,6 +62,10 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
   reporting complete side-chain SASA. Arpeggia does not add missing atoms, so
   direct Rosetta comparison requires the same caller-prepared full-atom input.
   Monomers without a Rosetta calibration are omitted with a warning.
+- RMSD uses uniform-weight Kabsch superposition with proper rotations and exact
+  selected-atom correspondence. Structure clustering uses the resulting
+  pairwise RMSD matrix and observed medoid structures; it does not perform
+  sequence alignment or add missing atoms.
 
 ## Installation
 
@@ -161,6 +166,11 @@ for chain_id, seq in sequences:
 
 # Extract declared SEQRES/entity-polymer sequences, including missing coordinates
 declared_sequences = arpeggia.seqres("structure.pdb")
+
+# Superpose two conformations and cluster an existing pairwise matrix
+rmsd = arpeggia.rmsd("reference.cif", "mobile.cif", atoms="ca")
+pairs = arpeggia.pairwise_rmsd("structures/", num_threads=8)
+clusters = arpeggia.cluster_structs(pairwise_rmsd=pairs, max_clusters=10)
 ```
 
 The functions return [Polars](https://pola.rs/) DataFrames for efficient data manipulation. You can easily convert to pandas if needed:
@@ -215,6 +225,11 @@ arpeggia seq structure.pdb
 
 # Extract declared SEQRES/entity-polymer sequences
 arpeggia seqres structure.pdb
+
+# RMSD and fixed-count clustering; save the reusable long pair table
+arpeggia rmsd reference.cif mobile.cif --atoms backbone
+arpeggia cluster-structs -i structures/ -o results/ \
+  --num-clusters 5 --pairwise-rmsd --num-threads 8
 ```
 
 To see all available options:
@@ -223,6 +238,10 @@ To see all available options:
 arpeggia help
 arpeggia contacts --help
 ```
+
+See [Structure RMSD and clustering](docs/structure-clustering.md) for selection
+grammar, exact-correspondence requirements, output schemas, cache semantics,
+memory estimates, and threading behavior.
 
 ## Chain Groups Specification
 

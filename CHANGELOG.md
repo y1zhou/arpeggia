@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added uniform-weight Kabsch RMSD for exact protein-atom correspondence through
+  Rust, Python, and the `rmsd` CLI command, with chain/residue and atom-subset
+  selection.
+- Added deterministic fixed-count FasterPAM and bounded automatic DynMSC
+  structure clustering, packed parallel pairwise RMSD, heuristic memory guards,
+  Polars outputs, and ID-only CLI pair-table reuse.
+
 ## [0.9.0] - 2026-08-27
 
 ### Scientific corrections

@@ -109,6 +109,13 @@ arpeggia sasa \
 
 # Extract sequences
 arpeggia seq structure.pdb
+
+# Cluster a directory of exactly corresponding conformations
+arpeggia cluster-structs \
+    -i structures/ \
+    -o clusters/ \
+    --num-clusters 5 \
+    --pairwise-rmsd
 ```
 
 ### Output Formats
@@ -118,6 +125,9 @@ Supported formats: `csv`, `parquet`, `json`, `ndjson`
 ```bash
 arpeggia contacts -i input.pdb -o output/ -t parquet
 ```
+
+See [Structure RMSD and clustering](docs/structure-clustering.md) for atom and
+residue selection, automatic cluster counts, and pairwise cache behavior.
 
 ## Examples
 
