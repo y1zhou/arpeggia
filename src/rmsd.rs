@@ -167,7 +167,7 @@ fn atom_in_subset(name: &str, element: Option<&Element>, subset: AtomSubset) -> 
     }
 }
 
-fn validate_correspondence(
+pub(crate) fn validate_correspondence(
     reference: &[AtomIdentity],
     mobile: &[AtomIdentity],
 ) -> ArpeggiaResult<()> {
@@ -238,6 +238,13 @@ fn is_non_collinear(points: &[[f64; 3]]) -> bool {
             .iter()
             .any(|right| left.cross(right).norm() > tolerance)
     })
+}
+
+pub(crate) fn prepare_centered_coordinates(
+    coordinates: Vec<[f64; 3]>,
+) -> ArpeggiaResult<Vec<[f64; 3]>> {
+    validate_coordinate_arrays(&coordinates, &coordinates)?;
+    Ok(center(&coordinates))
 }
 
 fn center(points: &[[f64; 3]]) -> Vec<[f64; 3]> {

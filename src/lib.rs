@@ -10,6 +10,7 @@
 //! The library returns results as Polars `DataFrames`, which can be easily converted
 //! to various output formats or used directly in Python via `PyO3` bindings.
 
+mod clustering;
 mod contacts;
 mod diagnostics;
 mod metadata;
@@ -22,6 +23,11 @@ mod structure;
 mod utils;
 
 // Re-export key public types
+pub use clustering::{
+    ClusterOptions, ClusteringMethod, PairwiseRmsdMatrix, PairwiseRmsdOptions,
+    StructureObservation, cluster_pairwise_rmsd, get_pairwise_rmsd, get_pairwise_rmsd_matrix,
+    read_pairwise_matrix, read_structure_observations,
+};
 pub use contacts::residues::{Plane, ResidueExt, ResidueId};
 pub use contacts::{InteractingEntity, Interaction, Interactions, ProtonationMode, ResultEntry};
 pub use diagnostics::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};

@@ -26,6 +26,10 @@ pub enum WarningCode {
     UnsupportedPolarity,
     /// An optional geometric feature could not be built from the available atoms.
     IncompleteGeometry,
+    /// A memory estimate could not be enforced and may exceed practical RAM.
+    MemoryEstimate,
+    /// One argument took precedence over another explicitly supplied argument.
+    ArgumentIgnored,
 }
 
 impl Display for WarningCode {
@@ -41,6 +45,8 @@ impl Display for WarningCode {
             Self::UnsupportedMonomer => "UNSUPPORTED_MONOMER",
             Self::UnsupportedPolarity => "UNSUPPORTED_POLARITY",
             Self::IncompleteGeometry => "INCOMPLETE_GEOMETRY",
+            Self::MemoryEstimate => "MEMORY_ESTIMATE",
+            Self::ArgumentIgnored => "ARGUMENT_IGNORED",
         };
         f.write_str(code)
     }
