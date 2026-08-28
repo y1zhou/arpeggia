@@ -250,3 +250,55 @@ fn cluster_structs_rejects_colliding_outputs() {
     assert!(!result.status.success());
     assert!(String::from_utf8_lossy(&result.stderr).contains("output paths must differ"));
 }
+
+#[test]
+fn cluster_structs_preserves_pairwise_work_and_rejects_bad_cache() {
+    let source = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let root = std::env::temp_dir().join(format!(
+        "arpeggia-cli-cluster-failure-{}",
+        std::process::id()
+    ));
+    let input = root.join("input");
+    let output = root.join("output");
+    std::fs::create_dir_all(&input).unwrap();
+    for id in ["a", "b", "c"] {
+        std::fs::copy(&source, input.join(format!("{id}.pdb"))).unwrap();
+    }
+    let failed = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            output.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--max-iterations",
+            "1",
+            "--pairwise-rmsd",
+            "--residues",
+            "A:1-20",
+        ])
+        .output()
+        .unwrap();
+    assert!(!failed.status.success());
+    assert!(output.join("pairwise_rmsd.csv").is_file());
+    assert!(!output.join("clusters.csv").is_file());
+
+    std::fs::write(output.join("pairwise_rmsd.csv"), "broken\ncache\n").unwrap();
+    let malformed = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            output.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--pairwise-rmsd",
+        ])
+        .output()
+        .unwrap();
+    assert!(!malformed.status.success());
+    assert!(String::from_utf8_lossy(&malformed.stderr).contains("remove it to recalculate"));
+}

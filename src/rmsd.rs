@@ -525,6 +525,34 @@ mod tests {
     }
 
     #[test]
+    fn kabsch_is_stable_for_coplanar_points_and_large_offsets() {
+        let reference = [
+            [1_000_000.0, -2_000_000.0, 3_000_000.0],
+            [1_000_001.0, -2_000_000.0, 3_000_000.0],
+            [1_000_000.0, -1_999_998.0, 3_000_000.0],
+            [1_000_002.0, -1_999_997.0, 3_000_000.0],
+        ];
+        let mobile = reference.map(|[x, y, z]| [-y + 7.0, x - 11.0, z + 5.0]);
+        assert!(kabsch_rmsd(&reference, &mobile).unwrap() < 1e-9);
+    }
+
+    #[test]
+    fn kabsch_noise_is_positive_and_symmetric() {
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 0.0, 3.0],
+        ];
+        let mut noisy = reference;
+        noisy[3][2] += 0.1;
+        let forward = kabsch_rmsd(&reference, &noisy).unwrap();
+        let reverse = kabsch_rmsd(&noisy, &reference).unwrap();
+        assert!(forward > 0.0);
+        assert!((forward - reverse).abs() < 1e-12);
+    }
+
+    #[test]
     fn kabsch_rejects_invalid_arrays() {
         assert!(kabsch_rmsd(&[[0.0; 3]; 2], &[[0.0; 3]; 2]).is_err());
         assert!(
@@ -555,6 +583,56 @@ mod tests {
         assert!(!selector.matches("B", 10, None));
         assert!(selector.matches("B", 10, Some("A")));
         assert!(selector.matches("B", 20, Some("B")));
+    }
+
+    #[test]
+    fn residue_selector_rejects_malformed_and_unknown_chains() {
+        for invalid in ["A:", "A:5-1", "A,,B", ":1"] {
+            assert!(ResidueSelector::parse(invalid).is_err());
+        }
+        let selector = ResidueSelector::parse("missing").unwrap();
+        assert!(selector.validate_chains(["A", "B"].into_iter()).is_err());
+    }
+
+    #[test]
+    fn atom_subsets_include_caps_but_exclude_nonprotein_groups() {
+        let input = std::env::temp_dir().join(format!(
+            "arpeggia-rmsd-atom-subsets-{}.pdb",
+            std::process::id()
+        ));
+        std::fs::write(
+            &input,
+            "HETATM    1  CH3 ACE A   0       0.000   0.000   0.000  1.00 20.00           C  \n\
+             HETATM    2  H1  ACE A   0       0.000   1.000   0.000  1.00 20.00           H  \n\
+             ATOM      3  N   ALA A   1       1.000   0.000   0.000  1.00 20.00           N  \n\
+             ATOM      4  CA  ALA A   1       0.000   0.000   1.000  1.00 20.00           C  \n\
+             HETATM    5  O   HOH A   2       3.000   3.000   3.000  1.00 20.00           O  \n\
+             END\n",
+        )
+        .unwrap();
+        let pdb = crate::load_model(input.to_str().unwrap()).unwrap().value;
+        let selector = ResidueSelector::default();
+        assert_eq!(
+            select_coordinates(&pdb, 0, &selector, AtomSubset::Heavy)
+                .unwrap()
+                .keys
+                .len(),
+            3
+        );
+        assert_eq!(
+            select_coordinates(&pdb, 0, &selector, AtomSubset::All)
+                .unwrap()
+                .keys
+                .len(),
+            4
+        );
+        assert_eq!(
+            select_coordinates(&pdb, 0, &selector, AtomSubset::Backbone)
+                .unwrap()
+                .keys
+                .len(),
+            2
+        );
     }
 
     #[test]

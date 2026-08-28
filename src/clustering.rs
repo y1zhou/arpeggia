@@ -999,6 +999,37 @@ mod tests {
     }
 
     #[test]
+    fn pairwise_rmsd_is_identical_across_thread_counts() {
+        let source = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+        let directory =
+            std::env::temp_dir().join(format!("arpeggia-pairwise-threads-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        for id in ["a", "b", "c", "d"] {
+            std::fs::copy(&source, directory.join(format!("{id}.pdb"))).unwrap();
+        }
+        let observations = read_structure_observations(&directory, "id", "path").unwrap();
+        let options = PairwiseRmsdOptions {
+            residues: "A:1-20".into(),
+            num_threads: 1,
+            ..PairwiseRmsdOptions::default()
+        };
+        let serial = get_pairwise_rmsd_matrix(&observations, &options)
+            .unwrap()
+            .value;
+        let parallel = get_pairwise_rmsd_matrix(
+            &observations,
+            &PairwiseRmsdOptions {
+                num_threads: 4,
+                ..options
+            },
+        )
+        .unwrap()
+        .value;
+        assert_eq!(serial.ids, parallel.ids);
+        assert_eq!(serial.data, parallel.data);
+    }
+
+    #[test]
     fn fixed_k_medoids_separates_two_groups() {
         let matrix = PairwiseRmsdMatrix {
             ids: ["a", "b", "c", "d", "e", "f"]
@@ -1114,6 +1145,68 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.warnings[0].code, WarningCode::ArgumentIgnored);
+    }
+
+    #[test]
+    fn fixed_k_medoids_supports_one_and_every_structure() {
+        let matrix = PairwiseRmsdMatrix {
+            ids: vec!["a".into(), "b".into(), "c".into()],
+            data: vec![1.0, 2.0, 1.0],
+        };
+        for k in [1, 3] {
+            let result = cluster_pairwise_rmsd(
+                &matrix,
+                &ClusterOptions {
+                    num_clusters: Some(k),
+                    ..ClusterOptions::default()
+                },
+            )
+            .unwrap()
+            .value;
+            let cluster_count = result
+                .column("cluster_id")
+                .unwrap()
+                .u32()
+                .unwrap()
+                .max()
+                .unwrap()
+                + 1;
+            assert_eq!(cluster_count as usize, k);
+        }
+    }
+
+    #[test]
+    fn fixed_k_medoids_is_deterministic_for_ties() {
+        let matrix = PairwiseRmsdMatrix {
+            ids: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            data: vec![1.0; 6],
+        };
+        let options = ClusterOptions {
+            num_clusters: Some(2),
+            ..ClusterOptions::default()
+        };
+        let first = cluster_pairwise_rmsd(&matrix, &options).unwrap().value;
+        let second = cluster_pairwise_rmsd(&matrix, &options).unwrap().value;
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn fixed_k_medoids_reports_iteration_exhaustion() {
+        let matrix = PairwiseRmsdMatrix {
+            ids: vec!["a".into(), "b".into(), "c".into()],
+            data: vec![1.0, 2.0, 1.0],
+        };
+        assert!(matches!(
+            cluster_pairwise_rmsd(
+                &matrix,
+                &ClusterOptions {
+                    num_clusters: Some(1),
+                    max_iterations: 1,
+                    ..ClusterOptions::default()
+                }
+            ),
+            Err(ArpeggiaError::Calculation(_))
+        ));
     }
 
     #[test]
