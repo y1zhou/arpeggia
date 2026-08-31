@@ -15,6 +15,41 @@ fn missing_input_exits_nonzero() {
 }
 
 #[test]
+fn rmsd_rejects_selection_before_structure_io() {
+    let output = arpeggia()
+        .args([
+            "rmsd",
+            "missing-reference.pdb",
+            "missing-mobile.pdb",
+            "--residues",
+            "A:",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("empty residue selection"));
+}
+
+#[test]
+fn cluster_structs_rejects_options_before_directory_io() {
+    let output = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            "missing-structure-directory",
+            "--output",
+            "unused-output",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("one of num_clusters or max_clusters is required")
+    );
+}
+
+#[test]
 fn unsafe_output_filename_exits_nonzero() {
     let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
     let output_dir =
@@ -275,6 +310,7 @@ fn cluster_structs_preserves_pairwise_work_and_rejects_bad_cache() {
     for id in ["a", "b", "c"] {
         std::fs::copy(&source, input.join(format!("{id}.pdb"))).unwrap();
     }
+    std::fs::create_dir_all(output.join("clusters.csv")).unwrap();
     let failed = arpeggia()
         .args([
             "cluster-structs",
@@ -283,8 +319,6 @@ fn cluster_structs_preserves_pairwise_work_and_rejects_bad_cache() {
             "--output",
             output.to_str().unwrap(),
             "--num-clusters",
-            "1",
-            "--max-iterations",
             "1",
             "--pairwise-rmsd",
             "--residues",

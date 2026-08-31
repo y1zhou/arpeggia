@@ -7,6 +7,11 @@ use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use std::ffi::CString;
 
+fn value_enum<T: clap::ValueEnum>(value: &str, error: &'static str) -> PyResult<T> {
+    T::from_str(&value.replace('_', "-"), true)
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err(error))
+}
+
 fn python_error(error: crate::ArpeggiaError) -> PyErr {
     match error {
         crate::ArpeggiaError::Io(error) => pyo3::exceptions::PyOSError::new_err(error.to_string()),
@@ -38,35 +43,18 @@ fn emit_python_warnings(py: Python<'_>, warnings: Vec<crate::AnalysisWarning>) -
 }
 
 fn protonation_mode(value: &str) -> PyResult<crate::ProtonationMode> {
-    match value.to_ascii_lowercase().replace('_', "-").as_str() {
-        "all-charged" => Ok(crate::ProtonationMode::AllCharged),
-        "heuristic" => Ok(crate::ProtonationMode::Heuristic),
-        "explicit-only" => Ok(crate::ProtonationMode::ExplicitOnly),
-        _ => Err(pyo3::exceptions::PyValueError::new_err(
-            "protonation must be 'all-charged', 'heuristic', or 'explicit-only'",
-        )),
-    }
+    value_enum(
+        value,
+        "protonation must be 'all-charged', 'heuristic', or 'explicit-only'",
+    )
 }
 
 fn atom_subset(value: &str) -> PyResult<crate::AtomSubset> {
-    match value.to_ascii_lowercase().as_str() {
-        "ca" => Ok(crate::AtomSubset::Ca),
-        "backbone" => Ok(crate::AtomSubset::Backbone),
-        "heavy" => Ok(crate::AtomSubset::Heavy),
-        "all" => Ok(crate::AtomSubset::All),
-        _ => Err(pyo3::exceptions::PyValueError::new_err(
-            "atoms must be 'ca', 'backbone', 'heavy', or 'all'",
-        )),
-    }
+    value_enum(value, "atoms must be 'ca', 'backbone', 'heavy', or 'all'")
 }
 
 fn clustering_method(value: &str) -> PyResult<crate::ClusteringMethod> {
-    match value.to_ascii_lowercase().replace('_', "-").as_str() {
-        "k-medoids" => Ok(crate::ClusteringMethod::KMedoids),
-        _ => Err(pyo3::exceptions::PyValueError::new_err(
-            "method must be 'k-medoids'",
-        )),
-    }
+    value_enum(value, "method must be 'k-medoids'")
 }
 
 /// Superpose two structures and return RMSD in Angstroms.
@@ -80,9 +68,10 @@ fn rmsd(
     residues: &str,
     atoms: &str,
 ) -> PyResult<f64> {
+    let atoms = atom_subset(atoms)?;
+    crate::validate_residue_selection(residues).map_err(python_error)?;
     let reference = load_for_python(py, &reference)?;
     let mobile = load_for_python(py, &mobile)?;
-    let atoms = atom_subset(atoms)?;
     let analysis = py
         .detach(|| crate::get_rmsd(&reference, &mobile, model_num, residues, atoms))
         .map_err(python_error)?;
@@ -105,6 +94,7 @@ fn pairwise_rmsd(
     num_threads: usize,
     bypass_mem_check: bool,
 ) -> PyResult<PyDataFrame> {
+    crate::validate_residue_selection(residues).map_err(python_error)?;
     let options = crate::PairwiseRmsdOptions {
         model_num,
         residues: residues.to_string(),
@@ -152,8 +142,13 @@ fn cluster_structs(
         max_clusters,
         max_iterations,
     };
+    cluster_options
+        .validate_without_structure_count()
+        .map_err(python_error)?;
     let matrix = match (input, pairwise_rmsd) {
         (Some(input), None) => {
+            let atoms = atom_subset(atoms)?;
+            crate::validate_residue_selection(residues).map_err(python_error)?;
             let observations = py
                 .detach(|| {
                     crate::read_structure_observations(
@@ -169,7 +164,7 @@ fn cluster_structs(
             let options = crate::PairwiseRmsdOptions {
                 model_num,
                 residues: residues.to_string(),
-                atoms: atom_subset(atoms)?,
+                atoms,
                 num_threads,
                 bypass_mem_check,
             };
@@ -179,13 +174,17 @@ fn cluster_structs(
             emit_python_warnings(py, analysis.warnings)?;
             analysis.value
         }
-        (None, Some(dataframe)) => crate::PairwiseRmsdMatrix::from_dataframe(&dataframe.0, None, 3)
-            .map_err(python_error)?,
-        _ => {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "exactly one of input or pairwise_rmsd is required",
-            ));
+        (None, Some(dataframe)) => {
+            let warnings = crate::clustering::check_packed_matrix_memory(
+                dataframe.0.height(),
+                bypass_mem_check,
+            )
+            .map_err(python_error)?;
+            emit_python_warnings(py, warnings)?;
+            py.detach(move || crate::PairwiseRmsdMatrix::from_dataframe(&dataframe.0, None, 3))
+                .map_err(python_error)?
         }
+        _ => unreachable!("exactly one clustering input was validated"),
     };
     let analysis = py
         .detach(|| crate::cluster_pairwise_rmsd(&matrix, &cluster_options))

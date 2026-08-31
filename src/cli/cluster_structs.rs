@@ -1,7 +1,8 @@
 use arpeggia::{
     ArpeggiaError, ArpeggiaResult, AtomSubset, ClusterOptions, ClusteringMethod, DataFrameFileType,
     PairwiseRmsdOptions, cluster_pairwise_rmsd, get_pairwise_rmsd_matrix, prepare_df_output_dir,
-    read_pairwise_matrix, read_structure_observations, write_df_to_file,
+    read_pairwise_matrix, read_structure_observations, validate_residue_selection,
+    write_df_to_file,
 };
 use clap::Parser;
 use std::path::PathBuf;
@@ -72,30 +73,28 @@ pub(crate) struct Args {
 }
 
 pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
-    let input = args.input.canonicalize().map_err(|error| {
-        ArpeggiaError::Io(std::io::Error::new(
-            error.kind(),
-            format!("cannot resolve input {}: {error}", args.input.display()),
-        ))
-    })?;
-    if !input.is_dir() {
-        return Err(ArpeggiaError::InvalidArgument(
-            "cluster-structs CLI input must be a directory".into(),
-        ));
-    }
-    let observations = read_structure_observations(&input, "id", "path")?;
-    if observations.len() < 3 {
-        return Err(ArpeggiaError::InvalidArgument(
-            "structure clustering requires at least three structures".into(),
-        ));
-    }
-
     let cluster_options = ClusterOptions {
         method: args.method,
         num_clusters: args.num_clusters,
         max_clusters: args.max_clusters,
         max_iterations: args.max_iterations,
     };
+    cluster_options.validate_without_structure_count()?;
+    validate_residue_selection(&args.residues)?;
+
+    let metadata = args.input.metadata().map_err(|error| {
+        ArpeggiaError::Io(std::io::Error::new(
+            error.kind(),
+            format!("cannot inspect input {}: {error}", args.input.display()),
+        ))
+    })?;
+    if !metadata.is_dir() {
+        return Err(ArpeggiaError::InvalidArgument(
+            "cluster-structs CLI input must be a directory".into(),
+        ));
+    }
+    let observations = read_structure_observations(&args.input, "id", "path")?;
+
     cluster_options.validate(observations.len())?;
 
     let output_path = prepare_df_output_dir(&args.output, &args.filename, args.output_format)?;
@@ -115,31 +114,37 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         num_threads: args.num_threads,
         bypass_mem_check: args.bypass_mem_check,
     };
-    let matrix = if let Some(path) = pairwise_path.as_deref().filter(|path| path.exists()) {
-        let expected_ids = observations
-            .iter()
-            .map(|observation| observation.id().to_string())
-            .collect::<Vec<_>>();
-        let matrix = read_pairwise_matrix(path, &expected_ids).map_err(|error| {
-            ArpeggiaError::InvalidArgument(format!(
-                "invalid pairwise RMSD cache {}; remove it to recalculate: {error}",
-                path.display()
-            ))
-        })?;
-        debug!("Reusing pairwise RMSD cache {}", path.display());
-        matrix
-    } else {
-        let analysis = get_pairwise_rmsd_matrix(&observations, &pairwise_options)?;
-        for warning in analysis.warnings {
-            warn!("{warning}");
-        }
-        if let Some(path) = &pairwise_path {
-            let mut table = analysis.value.to_dataframe()?;
-            write_df_to_file(&mut table, path, args.output_format)?;
-            info!("Pairwise RMSD saved to {}", path.display());
-        }
-        analysis.value
-    };
+    let matrix =
+        if let Some(path) = pairwise_path.as_deref().filter(|path| path.exists()) {
+            let expected_ids = observations
+                .iter()
+                .map(|observation| observation.id().to_string())
+                .collect::<Vec<_>>();
+            let analysis = read_pairwise_matrix(path, &expected_ids, args.bypass_mem_check)
+                .map_err(|error| match error {
+                    ArpeggiaError::Calculation(_) => error,
+                    _ => ArpeggiaError::InvalidArgument(format!(
+                        "invalid pairwise RMSD cache {}; remove it to recalculate: {error}",
+                        path.display()
+                    )),
+                })?;
+            for warning in analysis.warnings {
+                warn!("{warning}");
+            }
+            debug!("Reusing pairwise RMSD cache {}", path.display());
+            analysis.value
+        } else {
+            let analysis = get_pairwise_rmsd_matrix(&observations, &pairwise_options)?;
+            for warning in analysis.warnings {
+                warn!("{warning}");
+            }
+            if let Some(path) = &pairwise_path {
+                let mut table = analysis.value.to_dataframe()?;
+                write_df_to_file(&mut table, path, args.output_format)?;
+                info!("Pairwise RMSD saved to {}", path.display());
+            }
+            analysis.value
+        };
 
     let analysis = cluster_pairwise_rmsd(&matrix, &cluster_options)?;
     for warning in analysis.warnings {

@@ -1,4 +1,4 @@
-use arpeggia::{ArpeggiaResult, AtomSubset, get_rmsd};
+use arpeggia::{ArpeggiaResult, AtomSubset, get_rmsd, validate_residue_selection};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -25,6 +25,7 @@ pub(crate) struct Args {
 }
 
 pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
+    validate_residue_selection(&args.residues)?;
     let reference = super::load_input(&args.reference)?;
     let mobile = super::load_input(&args.mobile)?;
     let analysis = get_rmsd(

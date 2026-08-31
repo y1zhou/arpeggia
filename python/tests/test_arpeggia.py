@@ -2,6 +2,7 @@
 
 # ruff: noqa: S101
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -75,6 +76,10 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
         "medoid_id": pl.String,
         "rmsd_to_medoid": pl.Float64,
     }
+    duplicate_clusters = arpeggia.cluster_structs(pairwise_rmsd=pairs, num_clusters=2)
+    assert set(duplicate_clusters["cluster_id"]) == {0, 1}
+    with pytest.raises(ValueError, match="max_clusters must be between 2 and 2"):
+        arpeggia.cluster_structs(pairwise_rmsd=pairs, max_clusters=3)
     with pytest.raises(ValueError, match="exactly one"):
         arpeggia.cluster_structs(
             input=str(structures), pairwise_rmsd=pairs, num_clusters=1
@@ -84,6 +89,18 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
     with pytest.raises(ValueError, match="requires column id_1"):
         arpeggia.cluster_structs(
             pairwise_rmsd=pl.DataFrame({"wrong": [1]}), num_clusters=1
+        )
+    with pytest.raises(ValueError, match="max_iterations must be positive"):
+        arpeggia.cluster_structs(
+            pairwise_rmsd=pl.DataFrame({"wrong": [1]}),
+            num_clusters=1,
+            max_iterations=0,
+        )
+    with pytest.raises(ValueError, match="atoms must be"):
+        arpeggia.rmsd(
+            "missing-reference.pdb",
+            "missing-mobile.pdb",
+            atoms=cast(Any, "invalid"),
         )
 
 
