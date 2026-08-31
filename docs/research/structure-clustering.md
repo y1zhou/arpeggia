@@ -128,8 +128,10 @@ Recommended edge behavior:
 - all pairwise RMSDs zero: one cluster, with a deterministic medoid;
 - otherwise default `k_min >= 2`, because the usual silhouette comparison
   needs another cluster;
-- reject `k_max > n` and non-finite or negative dissimilarities before calling
-  the crate, whose low-level functions document panics for invalid `k`.
+- reject `k_max >= n` because the all-singleton partition has a trivially
+  maximal medoid silhouette, and reject non-finite or negative dissimilarities
+  before calling the crate, whose low-level functions document panics for
+  invalid `k`.
 
 ## Algorithm comparison
 
@@ -235,11 +237,25 @@ doubles those figures before algorithm scratch space.
 Implementation implications:
 
 - Calculate each pair once and store it in canonical condensed order.
+- Use the smallest uniform distance divisor that keeps PAM aggregate losses
+  finite. This numerical normalization is not fitted data scaling and preserves
+  much wider relative distance ranges than division by the matrix maximum. Fail
+  explicitly if a positive distance vanishes relative to that maximum, because
+  PAM could no longer preserve its contribution to a summed objective; retain
+  the original matrix for Angstrom-valued outputs.
 - Do not build a Polars pairwise-results DataFrame unless the user requested
   that output. A long table has `n(n-1)/2` rows and substantial string/column
   overhead beyond the numeric matrix.
 - If pairwise output is requested, derive or stream `id_1`, `id_2`, and `rmsd`
-  from the matrix; do not recalculate RMSDs.
+  from the matrix without temporary pointer-sized ID vectors; do not recalculate
+  RMSDs. Move the packed numeric vector when no later matrix consumer exists.
+- Project only the required manifest or cache columns. Use Polars' lazy NDJSON
+  scan so projection reaches the parser; eager CSV and Parquet readers already
+  provide the required projection and row-count controls for this immediate
+  read-and-validate path. Polars 0.55 materializes ordinary JSON arrays before
+  applying projection, and does not provide a lazy ordinary-JSON scan.
+- Check cached Parquet row counts from metadata before decoding and cap cached
+  CSV, JSON, and NDJSON reads at one row beyond the expected pair count.
 - Write requested pairwise output successfully before starting k-medoids. On a
   later CLI run, reuse an existing table at the exact requested output path
   when its validated ID set matches the current inputs. This intentionally does
@@ -284,10 +300,14 @@ which that average is already defined. Use this stable core schema:
 For deterministic labels, sort directory and table inputs into a canonical
 order before RMSD calculation. Then sort final clusters by medoid input index
 (or, after deciding ID normalization, by `medoid_id`) and remap them to
-contiguous `UInt32` IDs. In a distance tie, choose the lowest canonical input
-index as medoid. The method's objective value, selected `k`, bounds, iteration
-limit, and convergence status belong in structured diagnostics or run
-metadata, not duplicated in every output row.
+contiguous `UInt32` IDs. For fixed `k`, choose the lowest canonical input index
+among equal PAM-loss medoids, stabilize canonical memberships, and resume
+FasterPAM after such a plateau move because it can expose another improving
+swap. DynMSC ties must preserve the
+medoid-silhouette objective and deterministic canonical input order rather than
+reuse the PAM-loss tie rule. The method's objective value, selected `k`, bounds,
+iteration limit, and convergence status belong in structured diagnostics or
+run metadata, not duplicated in every output row.
 
 ## Verification and benchmarks required before stabilizing the API
 

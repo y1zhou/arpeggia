@@ -37,8 +37,8 @@ Heavy-atom selection increased coordinate storage and atom-loop work:
 
 | selection | workers | median time (s) | median peak RSS (MiB) |
 | --- | ---: | ---: | ---: |
-| heavy | 1 | 1.10 | 148.8 |
-| heavy | 8 | 0.18 | 173.4 |
+| heavy | 1 | 1.07 | 35.5 |
+| heavy | 8 | 0.15 | 57.0 |
 
 Heavy-atom cluster outputs were byte-identical between worker counts. A
 three-C-alpha selection, used as a preparation-dominated proxy while retaining
@@ -57,7 +57,10 @@ so serialization was negligible in the first-run timing.
 The bounded eight-worker preparation path and parallel pair filling materially
 reduce runtime. Eight workers are the practical default for this dataset:
 automatic 32-worker pair calculation adds no speed but has similar memory to
-eight. Peak RSS substantially exceeds the documented packed-matrix plus
-coordinate estimate for heavy atoms because the guard intentionally excludes
-parser transients, identity keys, allocator overhead, DataFrames, and
-clustering scratch space.
+eight. Retaining atom identities only for the reference structure and releasing
+parser workers before pairwise calculation reduced the heavy-atom peak RSS
+from 148.8 to 35.5 MiB with one worker and from 173.4 to 57.0 MiB with eight
+workers, without changing either output. Peak RSS still
+exceeds the documented packed-matrix plus coordinate estimate because the
+guard intentionally excludes parser transients, the reference identity keys,
+allocator overhead, DataFrames, and clustering scratch space.

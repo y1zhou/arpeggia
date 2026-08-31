@@ -9,14 +9,17 @@ chain IDs, residue identities, and atom names must match exactly.
 
 The default selection is every coordinate-observed protein residue and its
 C-alpha atom. `atoms` accepts `ca`, `backbone` (`N`, `CA`, `C`, `O`, and
-`OXT`), `heavy`, or `all`. Heavy and all-atom selections retain ACE/NH2 caps
-but exclude solvent, ions, and ligands.
+`OXT`), `heavy`, or `all`. Heavy selection excludes hydrogen and deuterium,
+including digit-leading atom names when element metadata is absent. Heavy and
+all-atom selections retain ACE/NH2 caps but exclude solvent, ions, and ligands.
 
 Residue selection is a comma-separated union of chain and author-residue
 clauses. A bare chain selects all its residues. For example,
 `A:1-100,A:110-120,B,C:1,C:3,C:5,C:7,C:9-20` excludes A:101-109, includes all
 of B, and selects the listed parts of C. Negative numbering and insertion codes
 are valid, such as `A:-5--1` and `B:10A-20`.
+A bare upper bound includes every insertion code at that author residue, so
+`A:10A-10` selects insertion 10A through the final insertion at residue 10.
 
 ```bash
 arpeggia rmsd reference.cif mobile.cif \
@@ -40,7 +43,8 @@ JSON, or NDJSON manifest. Manifest columns default to `id` and `path` and can
 be changed with `id_col` and `path_col`; relative paths resolve against the
 manifest. Directory IDs are case-sensitive filename stems, while PDB/mmCIF
 extensions are case-insensitive. Duplicate IDs or canonical paths fail before
-RMSD calculation. The result has one unordered pair per row:
+RMSD calculation. Structure, manifest, and cache paths must be regular files.
+The result has one unordered pair per row:
 
 | column | type |
 | --- | --- |
@@ -53,8 +57,13 @@ RMSD calculation. The result has one unordered pair per row:
 Use either a fixed cluster count or an automatically selected count bounded by
 `max_clusters`. A fixed count uses deterministic PAM BUILD initialization and
 FasterPAM. Automatic selection uses DynMSC over 2 through `max_clusters`; an
-all-zero matrix becomes one deterministic cluster. If both bounds are supplied,
-the fixed count wins with a warning.
+ensemble whose pairwise RMSDs are all at most `1e-12` Angstrom becomes one
+deterministic cluster. `max_clusters` must be smaller than the number of
+structures because an all-singleton partition has a trivially maximal medoid
+silhouette. If both bounds are supplied, the fixed count wins with a warning.
+Fixed-count equal-loss medoid ties use canonical input order and are
+reoptimized after a tie move. Automatic clustering preserves DynMSC's
+medoid-silhouette objective and deterministic canonical input order.
 
 ```bash
 arpeggia cluster-structs \
@@ -91,7 +100,8 @@ pair table before clustering, preserving it if clustering fails. A later run
 reuses the exact requested pairwise path only when its schema, complete pair
 coverage, and ID set validate. Cache reuse checks IDs only—not file contents,
 selection, model, conformers, or Arpeggia version. Remove the pairwise file to
-force recalculation.
+force recalculation. Wrong-size caches are rejected with bounded reads before
+their complete tables are materialized.
 
 ## Memory and threads
 
@@ -109,8 +119,9 @@ space, so they are not a maximum-RAM guarantee.
 
 The first structure is prepared serially. Remaining structures use at most
 `min(num_threads, 8)` parser workers to avoid saturating storage; pairwise RMSD
-uses the full requested worker count. Each Kabsch solve and k-medoids clustering
-remain single-threaded. `num_threads=0` selects available processors.
+uses up to the smaller of the requested worker count and number of pairs. Each
+Kabsch solve and k-medoids clustering remains single-threaded. `num_threads=0`
+selects available processors.
 
 The implementation decision and local performance measurements are recorded in
 [ADR 0008](adr/0008-cluster-structures-with-kabsch-and-k-medoids.md) and the

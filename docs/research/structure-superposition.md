@@ -124,11 +124,13 @@ show that the scalar operation needs it.
 Structure preparation is a separate bounded parallel phase. Parse the first
 structure serially to establish the reference atom identities and selected atom
 count, perform the second memory check, then prepare the remaining structures
-with `min(num_threads, 8)` workers. Collect results in canonical input order so
-warnings and failures remain deterministic. Drop each full parsed structure
-after retaining only its centered selected coordinates. The eight-worker cap is
-an I/O-pressure heuristic and must be benchmarked rather than presented as a
-hardware guarantee.
+with `min(num_threads, 8)` workers. Collect successful results in canonical
+input order so warnings remain deterministic, while allowing a parsing error
+to cooperatively cancel remaining collection. Drop each full parsed structure
+after retaining only its normalized-centered selected coordinates and its one
+physical scale value. Normalizing before centering avoids overflow at the edge
+of finite `f64`. The eight-worker cap is an I/O-pressure heuristic and must be
+benchmarked rather than presented as a hardware guarantee.
 
 ## Numerical robustness
 
@@ -141,6 +143,25 @@ input coordinates are `float32`
 Kabsch has the advantage of relying on `nalgebra`'s maintained SVD. Its fallible
 `try_new` API permits an explicit convergence limit rather than an unbounded
 solve ([nalgebra SVD API](https://docs.rs/nalgebra/0.35.0/nalgebra/linalg/struct.SVD.html)).
+Regardless of solver termination policy, subtract an anchor before numerical
+scaling so large translations do not determine the scale or erase molecular
+geometry. Normalize those displacements; if subtraction would overflow, scale
+raw coordinates before subtracting the anchor. Cache their centroid,
+mean-center while forming covariance, and form residuals before subtracting the
+residual centroid so mixed-scale differences survive. Express both arrays
+against one shared physical magnitude, accumulate the residual with a scaled
+norm, then restore that magnitude. Treat the unrotated residual as a numerical
+upper bound when decomposition noise would make the fitted rotation worse, and
+project its first-order rotational component so an unresolved small rotation
+is not mislabeled as deformation.
+This preserves the rigid, no-scale-fit objective across large translations and
+finite extreme coordinates. Apply the same displacements to the
+non-collinearity check and cache each structure's preparation so all-pairs
+calculation does not rescan every atom for every pair.
+When fitted uncertainty or an unresolved first-order rotation is only
+solver-scale after normalization but converting it back to Angstroms would
+exceed a negligible tolerance, report the conditioning failure rather than a
+confidently wrong RMSD.
 QCP avoids a general decomposition, and the authors report rapid, stable
 Newton-Raphson convergence from the self-inner-product upper bound. The 2010
 paper reports roughly five iterations for relative precision `1e-6` and more
@@ -162,7 +183,7 @@ Required numerical tests for the production Kabsch solver:
 - noisy coordinates with a known transform;
 - mirrored coordinates, verifying `det(rotation) = +1`;
 - very large coordinate offsets, verifying that centering avoids loss of
-  precision;
+  precision, and very large finite magnitudes, verifying finite output;
 - repeated, collinear, and coplanar points, including the accepted degeneracy
   failures;
 - near-zero RMSD, where an algebraic residual can become slightly negative
