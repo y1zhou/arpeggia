@@ -18,6 +18,7 @@
 
 use crate::sasa::{calculate_prepared_sap_atom_sasa_records, validate_sasa_input};
 use crate::structure::prepare_structure;
+use crate::utils::string_values;
 use pdbtbx::*;
 use polars::prelude::*;
 use rstar::{RTree, primitives::GeomWithData};
@@ -367,14 +368,14 @@ fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisW
 
 fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
     df!(
-        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
-        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
-        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
-        "atomn" => records.iter().map(|r| r.atomn.clone()).collect::<Vec<String>>(),
-        "atomi" => records.iter().map(|r| r.atomi).collect::<Vec<u32>>(),
-        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
-        "sap_score" => records.iter().map(|r| r.sap_score).collect::<Vec<f32>>(),
+        "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
+        "resn" => string_values(records.iter().map(|record| record.resn.as_str())),
+        "resi" => records.iter().map(|record| record.resi).collect::<Vec<_>>(),
+        "insertion" => string_values(records.iter().map(|record| record.insertion.as_str())),
+        "atomn" => string_values(records.iter().map(|record| record.atomn.as_str())),
+        "atomi" => records.iter().map(|record| record.atomi).collect::<Vec<_>>(),
+        "sasa" => records.iter().map(|record| record.sasa).collect::<Vec<_>>(),
+        "sap_score" => records.iter().map(|record| record.sap_score).collect::<Vec<_>>(),
     )
     .unwrap()
     .sort(["atomi"], Default::default())
@@ -511,14 +512,14 @@ fn calculate_per_residue_sap_records(
 
 fn residue_sap_records_to_dataframe(records: &[ResidueSapRecord]) -> DataFrame {
     df!(
-        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
-        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
-        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
-        "sc_sasa" => records.iter().map(|r| r.sc_sasa).collect::<Vec<f32>>(),
-        "sap_score" => records.iter().map(|r| r.sap_score).collect::<Vec<f32>>(),
-        "max_sc_asa" => records.iter().map(|r| r.max_sc_asa).collect::<Vec<f32>>(),
-        "relative_sc_sasa" => records.iter().map(|r| r.relative_sc_sasa).collect::<Vec<f32>>(),
+        "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
+        "resn" => string_values(records.iter().map(|record| record.resn.as_str())),
+        "resi" => records.iter().map(|record| record.resi).collect::<Vec<_>>(),
+        "insertion" => string_values(records.iter().map(|record| record.insertion.as_str())),
+        "sc_sasa" => records.iter().map(|record| record.sc_sasa).collect::<Vec<_>>(),
+        "sap_score" => records.iter().map(|record| record.sap_score).collect::<Vec<_>>(),
+        "max_sc_asa" => records.iter().map(|record| record.max_sc_asa).collect::<Vec<_>>(),
+        "relative_sc_sasa" => records.iter().map(|record| record.relative_sc_sasa).collect::<Vec<_>>(),
     )
     .unwrap()
 }

@@ -6,22 +6,12 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace};
 
 /// Granularity level for SAP score calculation.
-#[derive(ValueEnum, Clone, Debug, Copy, Default)]
+#[derive(ValueEnum, Clone, Debug, Copy)]
 pub enum SapLevel {
     /// Calculate SAP score for each individual atom
     Atom,
     /// Aggregate SAP score by residue
-    #[default]
     Residue,
-}
-
-impl std::fmt::Display for SapLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SapLevel::Atom => write!(f, "atom"),
-            SapLevel::Residue => write!(f, "residue"),
-        }
-    }
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -64,7 +54,7 @@ pub(crate) struct Args {
     num_threads: usize,
 
     /// Granularity level for SAP calculation
-    #[arg(short = 'l', long = "level", default_value_t = SapLevel::Residue)]
+    #[arg(short = 'l', long = "level", default_value = "residue")]
     level: SapLevel,
 
     /// Comma-separated chain IDs to include (e.g., "H,L"). If empty, includes all chains.

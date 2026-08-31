@@ -6,6 +6,7 @@
 
 use crate::contacts::InteractingEntity;
 use crate::structure::{StructurePreparation, parse_groups, prepare_structure};
+use crate::utils::string_values;
 use pdbtbx::*;
 use polars::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -399,15 +400,15 @@ fn is_n_terminal(entity: &AtomConformerResidueChainModel) -> bool {
 
 pub(crate) fn atom_sasa_records_to_dataframe(records: &[AtomSasaRecord]) -> DataFrame {
     df!(
-        "atomi" => records.iter().map(|x| x.atomi).collect::<Vec<u32>>(),
-        "sasa" => records.iter().map(|x| x.sasa).collect::<Vec<f32>>(),
-        "polarity" => records.iter().map(|x| x.polarity.as_str()).collect::<Vec<&str>>(),
-        "chain" => records.iter().map(|x| x.chain.clone()).collect::<Vec<String>>(),
-        "resn" => records.iter().map(|x| x.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|x| x.resi).collect::<Vec<i32>>(),
-        "insertion" => records.iter().map(|x| x.insertion.clone()).collect::<Vec<String>>(),
-        "altloc" => records.iter().map(|x| x.altloc.clone()).collect::<Vec<String>>(),
-        "atomn" => records.iter().map(|x| x.atomn.clone()).collect::<Vec<String>>(),
+        "atomi" => records.iter().map(|record| record.atomi).collect::<Vec<_>>(),
+        "sasa" => records.iter().map(|record| record.sasa).collect::<Vec<_>>(),
+        "polarity" => string_values(records.iter().map(|record| record.polarity.as_str())),
+        "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
+        "resn" => string_values(records.iter().map(|record| record.resn.as_str())),
+        "resi" => records.iter().map(|record| record.resi).collect::<Vec<_>>(),
+        "insertion" => string_values(records.iter().map(|record| record.insertion.as_str())),
+        "altloc" => string_values(records.iter().map(|record| record.altloc.as_str())),
+        "atomn" => string_values(records.iter().map(|record| record.atomn.as_str())),
     )
     .unwrap()
     .sort(["atomi"], Default::default())
@@ -496,14 +497,14 @@ fn aggregate_residue_records(records: Vec<AtomSasaRecord>) -> Vec<ResidueSasaRec
 
 pub(crate) fn residue_sasa_records_to_dataframe(records: &[ResidueSasaRecord]) -> DataFrame {
     df!(
-        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
-        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
-        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
-        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
-        "polar_sasa" => records.iter().map(|r| r.polar_sasa).collect::<Vec<f32>>(),
-        "hydrophobic_sasa" => records.iter().map(|r| r.hydrophobic_sasa).collect::<Vec<f32>>(),
-        "unclassified_sasa" => records.iter().map(|r| r.unclassified_sasa).collect::<Vec<f32>>(),
+        "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
+        "resn" => string_values(records.iter().map(|record| record.resn.as_str())),
+        "resi" => records.iter().map(|record| record.resi).collect::<Vec<_>>(),
+        "insertion" => string_values(records.iter().map(|record| record.insertion.as_str())),
+        "sasa" => records.iter().map(|record| record.sasa).collect::<Vec<_>>(),
+        "polar_sasa" => records.iter().map(|record| record.polar_sasa).collect::<Vec<_>>(),
+        "hydrophobic_sasa" => records.iter().map(|record| record.hydrophobic_sasa).collect::<Vec<_>>(),
+        "unclassified_sasa" => records.iter().map(|record| record.unclassified_sasa).collect::<Vec<_>>(),
     )
     .unwrap()
     .sort(["chain", "resi", "insertion"], Default::default())
@@ -584,14 +585,12 @@ fn aggregate_chain_records(records: Vec<AtomSasaRecord>) -> Vec<ChainSasaRecord>
 
 pub(crate) fn chain_sasa_records_to_dataframe(records: &[ChainSasaRecord]) -> DataFrame {
     df!(
-        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
-        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
-        "polar_sasa" => records.iter().map(|r| r.polar_sasa).collect::<Vec<f32>>(),
-        "hydrophobic_sasa" => records.iter().map(|r| r.hydrophobic_sasa).collect::<Vec<f32>>(),
-        "unclassified_sasa" => records.iter().map(|r| r.unclassified_sasa).collect::<Vec<f32>>(),
+        "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
+        "sasa" => records.iter().map(|record| record.sasa).collect::<Vec<_>>(),
+        "polar_sasa" => records.iter().map(|record| record.polar_sasa).collect::<Vec<_>>(),
+        "hydrophobic_sasa" => records.iter().map(|record| record.hydrophobic_sasa).collect::<Vec<_>>(),
+        "unclassified_sasa" => records.iter().map(|record| record.unclassified_sasa).collect::<Vec<_>>(),
     )
-    .unwrap()
-    .sort(["chain"], Default::default())
     .unwrap()
 }
 
@@ -851,15 +850,15 @@ pub(crate) fn validate_sasa_input(
 
 fn relative_sasa_records_to_dataframe(records: &[RelativeSasaRecord]) -> DataFrame {
     df!(
-        "chain" => records.iter().map(|r| r.chain.clone()).collect::<Vec<String>>(),
-        "resn" => records.iter().map(|r| r.resn.clone()).collect::<Vec<String>>(),
-        "resi" => records.iter().map(|r| r.resi).collect::<Vec<i32>>(),
-        "insertion" => records.iter().map(|r| r.insertion.clone()).collect::<Vec<String>>(),
-        "sasa" => records.iter().map(|r| r.sasa).collect::<Vec<f32>>(),
-        "polar_sasa" => records.iter().map(|r| r.polar_sasa).collect::<Vec<f32>>(),
-        "hydrophobic_sasa" => records.iter().map(|r| r.hydrophobic_sasa).collect::<Vec<f32>>(),
-        "unclassified_sasa" => records.iter().map(|r| r.unclassified_sasa).collect::<Vec<f32>>(),
-        "relative_sasa" => records.iter().map(|r| r.relative_sasa).collect::<Vec<Option<f32>>>(),
+        "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
+        "resn" => string_values(records.iter().map(|record| record.resn.as_str())),
+        "resi" => records.iter().map(|record| record.resi).collect::<Vec<_>>(),
+        "insertion" => string_values(records.iter().map(|record| record.insertion.as_str())),
+        "sasa" => records.iter().map(|record| record.sasa).collect::<Vec<_>>(),
+        "polar_sasa" => records.iter().map(|record| record.polar_sasa).collect::<Vec<_>>(),
+        "hydrophobic_sasa" => records.iter().map(|record| record.hydrophobic_sasa).collect::<Vec<_>>(),
+        "unclassified_sasa" => records.iter().map(|record| record.unclassified_sasa).collect::<Vec<_>>(),
+        "relative_sasa" => records.iter().map(|record| record.relative_sasa).collect::<Vec<_>>(),
     )
     .unwrap()
 }

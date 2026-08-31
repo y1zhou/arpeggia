@@ -62,6 +62,38 @@ pub enum Interaction {
     HydrophobicContact,
 }
 
+impl Interaction {
+    pub(crate) const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Covalent => "Covalent",
+            Self::Disulfide => "Disulfide",
+            Self::StericClash => "StericClash",
+            Self::PotentialCovalent => "PotentialCovalent",
+            Self::PotentialDisulfide => "PotentialDisulfide",
+            Self::VanDerWaalsClash => "VanDerWaalsClash",
+            Self::VanDerWaalsContact => "VanDerWaalsContact",
+            Self::IonicBond => "IonicBond",
+            Self::PotentialIonicBond => "PotentialIonicBond",
+            Self::HydrogenBond => "HydrogenBond",
+            Self::WeakHydrogenBond => "WeakHydrogenBond",
+            Self::PolarContact => "PolarContact",
+            Self::WeakPolarContact => "WeakPolarContact",
+            Self::IonicRepulsion => "IonicRepulsion",
+            Self::PotentialIonicRepulsion => "PotentialIonicRepulsion",
+            Self::SaltBridge => "SaltBridge",
+            Self::PiDisplacedStacking => "PiDisplacedStacking",
+            Self::PiTStacking => "PiTStacking",
+            Self::PiSandwichStacking => "PiSandwichStacking",
+            Self::PiParallelInPlaneStacking => "PiParallelInPlaneStacking",
+            Self::PiTiltedStacking => "PiTiltedStacking",
+            Self::PiLStacking => "PiLStacking",
+            Self::CationPi => "CationPi",
+            Self::PotentialCationPi => "PotentialCationPi",
+            Self::HydrophobicContact => "HydrophobicContact",
+        }
+    }
+}
+
 /// Policy for interpreting histidine protonation in ionic contacts.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
 pub enum ProtonationMode {
@@ -174,8 +206,6 @@ impl fmt::Display for ResultEntry {
 
 impl fmt::Display for Interaction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
-        // or, alternatively:
-        // fmt::Debug::fmt(self, f)
+        f.write_str(self.as_str())
     }
 }
