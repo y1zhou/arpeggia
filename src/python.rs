@@ -73,7 +73,7 @@ fn rmsd(
     let reference = load_for_python(py, &reference)?;
     let mobile = load_for_python(py, &mobile)?;
     let analysis = py
-        .detach(|| crate::get_rmsd(&reference, &mobile, model_num, residues, atoms))
+        .detach(move || crate::get_rmsd(reference, mobile, model_num, residues, atoms))
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(analysis.value)

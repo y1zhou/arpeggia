@@ -1,7 +1,7 @@
 //! Rigid protein-structure superposition and atom correspondence.
 
 use crate::contacts::residues::ResidueExt;
-use crate::structure::selected_model;
+use crate::structure::{select_conformers, selected_model};
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use nalgebra as na;
 use pdbtbx::{ContainsAtomConformer, Element, PDB};
@@ -38,22 +38,26 @@ pub fn kabsch_rmsd(reference: &[[f64; 3]], mobile: &[[f64; 3]]) -> ArpeggiaResul
 }
 
 /// Calculate RMSD between two parsed structures under an exact atom selection.
+///
+/// The structures are consumed so alternate conformers can be selected without cloning.
 pub fn get_rmsd(
-    reference: &PDB,
-    mobile: &PDB,
+    mut reference: PDB,
+    mut mobile: PDB,
     model_num: usize,
     residues: &str,
     atoms: AtomSubset,
 ) -> ArpeggiaResult<Analysis<f64>> {
+    let mut warnings = select_conformers(&mut reference);
+    warnings.extend(select_conformers(&mut mobile));
     let selector = ResidueSelector::parse(residues)?;
-    let reference = select_coordinates(reference, model_num, &selector, atoms)?;
-    let mobile = select_coordinates(mobile, model_num, &selector, atoms)?;
+    let reference = select_coordinates(&reference, model_num, &selector, atoms)?;
+    let mobile = select_coordinates(&mobile, model_num, &selector, atoms)?;
 
     // TODO: Future correspondence may use sequence and/or structural alignment
     // before creating these equal-shaped coordinate arrays, similar to PyMOL.
     validate_correspondence(&reference.keys, &mobile.keys)?;
     let rmsd = kabsch_rmsd(&reference.coordinates, &mobile.coordinates)?;
-    let mut warnings = reference.warnings;
+    warnings.extend(reference.warnings);
     warnings.extend(mobile.warnings);
     Ok(Analysis::new(rmsd, warnings))
 }
@@ -94,6 +98,8 @@ pub(crate) fn select_coordinates(
                 continue;
             }
             let residue_name = residue.name().unwrap_or("");
+            // TODO: Add an exact-correspondence all-atom mode that retains arbitrary
+            // polymers, ligands, and modified residues when both inputs match.
             let is_protein = residue.resn().is_some();
             let is_cap = matches!(residue_name, "ACE" | "NH2");
             if !(is_protein || is_cap && matches!(atoms, AtomSubset::Heavy | AtomSubset::All)) {
@@ -988,7 +994,39 @@ mod tests {
     fn identical_structure_has_zero_rmsd() {
         let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
         let pdb = crate::load_model(&input).unwrap().value;
-        let analysis = get_rmsd(&pdb, &pdb, 0, "A:1-20", AtomSubset::Ca).unwrap();
+        let analysis = get_rmsd(pdb.clone(), pdb, 0, "A:1-20", AtomSubset::Ca).unwrap();
         assert!(analysis.value < 1e-12);
+    }
+
+    #[test]
+    fn public_rmsd_selects_conformers() {
+        let input = std::env::temp_dir().join(format!(
+            "arpeggia-rmsd-conformers-{}.pdb",
+            std::process::id()
+        ));
+        std::fs::write(
+            &input,
+            "ATOM      1  CA AALA A   1       0.000   0.000   0.000  0.60 20.00           C  \n\
+             ATOM      2  CA BALA A   1      10.000   0.000   0.000  0.40 20.00           C  \n\
+             ATOM      3  CA  ALA A   2       1.000   0.000   0.000  1.00 20.00           C  \n\
+             ATOM      4  CA  ALA A   3       0.000   1.000   0.000  1.00 20.00           C  \n\
+             END\n",
+        )
+        .unwrap();
+        let reference = pdbtbx::ReadOptions::default()
+            .read(input.to_str().unwrap())
+            .unwrap()
+            .0;
+        let mobile = reference.clone();
+        let analysis = get_rmsd(reference, mobile, 0, "", AtomSubset::Ca).unwrap();
+        assert_eq!(analysis.value, 0.0);
+        assert_eq!(
+            analysis
+                .warnings
+                .iter()
+                .filter(|warning| warning.code == WarningCode::ConformerSelected)
+                .count(),
+            2
+        );
     }
 }

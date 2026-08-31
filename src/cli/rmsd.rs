@@ -29,8 +29,8 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     let reference = super::load_input(&args.reference)?;
     let mobile = super::load_input(&args.mobile)?;
     let analysis = get_rmsd(
-        &reference,
-        &mobile,
+        reference,
+        mobile,
         args.model_num,
         &args.residues,
         args.atoms,
@@ -38,6 +38,6 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     for warning in analysis.warnings {
         tracing::warn!("{warning}");
     }
-    println!("{:.6}", analysis.value);
+    println!("{}", analysis.value);
     Ok(())
 }
