@@ -2,7 +2,7 @@ use arpeggia::{
     ArpeggiaError, ArpeggiaResult, AtomSubset, ClusterOptions, ClusteringMethod, DataFrameFileType,
     PairwiseRmsdOptions, cluster_pairwise_rmsd, get_pairwise_rmsd_matrix, prepare_df_output_dir,
     read_pairwise_matrix, read_structure_observations, validate_residue_selection,
-    write_df_to_file,
+    write_df_to_file, write_df_to_new_file,
 };
 use clap::Parser;
 use std::path::PathBuf;
@@ -140,7 +140,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
             }
             if let Some(path) = &pairwise_path {
                 let mut table = analysis.value.to_dataframe()?;
-                write_df_to_file(&mut table, path, args.output_format)?;
+                write_df_to_new_file(&mut table, path, args.output_format)?;
                 info!("Pairwise RMSD saved to {}", path.display());
             }
             analysis.value

@@ -77,25 +77,46 @@ pub fn write_df_to_file(
 ) -> ArpeggiaResult<()> {
     let file_suffix = file_type.to_string();
     let mut file = std::fs::File::create(file_path.with_extension(file_suffix))?;
+    write_df(df, &mut file, file_type)
+}
+
+/// Write a `DataFrame` only when the destination does not already exist.
+pub fn write_df_to_new_file(
+    df: &mut DataFrame,
+    file_path: &Path,
+    file_type: DataFrameFileType,
+) -> ArpeggiaResult<()> {
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(file_path.with_extension(file_type.to_string()))?;
+    write_df(df, &mut file, file_type)
+}
+
+fn write_df(
+    df: &mut DataFrame,
+    file: &mut std::fs::File,
+    file_type: DataFrameFileType,
+) -> ArpeggiaResult<()> {
     match file_type {
         DataFrameFileType::Csv => {
-            CsvWriter::new(&mut file)
+            CsvWriter::new(&mut *file)
                 .finish(df)
                 .map_err(|error| ArpeggiaError::Io(error.into()))?;
         }
         DataFrameFileType::Parquet => {
-            ParquetWriter::new(&mut file)
+            ParquetWriter::new(&mut *file)
                 .finish(df)
                 .map_err(|error| ArpeggiaError::Io(error.into()))?;
         }
         DataFrameFileType::Json => {
-            JsonWriter::new(&mut file)
+            JsonWriter::new(&mut *file)
                 .with_json_format(JsonFormat::Json)
                 .finish(df)
                 .map_err(|error| ArpeggiaError::Io(error.into()))?;
         }
         DataFrameFileType::NDJson => {
-            JsonWriter::new(&mut file)
+            JsonWriter::new(&mut *file)
                 .with_json_format(JsonFormat::JsonLines)
                 .finish(df)
                 .map_err(|error| ArpeggiaError::Io(error.into()))?;
@@ -119,6 +140,16 @@ mod tests {
                 .file_name(),
             Some(std::ffi::OsStr::new("contacts.csv"))
         );
+    }
+
+    #[test]
+    fn new_dataframe_output_does_not_overwrite() {
+        let path = std::env::temp_dir().join(format!("arpeggia-no-clobber-{}", std::process::id()));
+        let output = path.with_extension("csv");
+        std::fs::write(&output, "existing").unwrap();
+        let mut dataframe = df!("value" => [1]).unwrap();
+        assert!(write_df_to_new_file(&mut dataframe, &path, DataFrameFileType::Csv).is_err());
+        assert_eq!(std::fs::read_to_string(output).unwrap(), "existing");
     }
 }
 

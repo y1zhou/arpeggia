@@ -34,7 +34,10 @@ pub use diagnostics::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, 
 pub use metadata::{BondEndpoint, StructureMetadata, get_seqres, read_metadata};
 pub use rmsd::{AtomSubset, get_rmsd, kabsch_rmsd, validate_residue_selection};
 pub use structure::{load_model, parse_groups};
-pub use utils::{DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file};
+pub use utils::{
+    DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file,
+    write_df_to_new_file,
+};
 
 // Re-export public functions from modules
 pub use contacts::analyze_contacts;

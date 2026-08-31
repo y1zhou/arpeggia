@@ -14,7 +14,7 @@ use polars::prelude::*;
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
-use std::io::{Read, Seek};
+use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
 const FALLBACK_WARNING_BYTES: u64 = 8 * 1024 * 1024 * 1024;
@@ -476,6 +476,7 @@ pub fn get_pairwise_rmsd_matrix(
     observations: &[StructureObservation],
     options: &PairwiseRmsdOptions,
 ) -> ArpeggiaResult<Analysis<PairwiseRmsdMatrix>> {
+    let observations = validate_observations(observations.to_vec())?;
     if observations.len() < 2 {
         return Err(ArpeggiaError::InvalidArgument(
             "pairwise RMSD requires at least two structures".into(),
@@ -998,18 +999,25 @@ pub(crate) fn read_dataframe(
                 .map_err(polars_input_error)
         }
         "ndjson" => {
-            preflight_json_rows(&mut file, true, expected_rows)?;
-            LazyJsonLineReader::new(PlRefPath::try_from_path(path).map_err(polars_input_error)?)
-                .finish()
-                .map_err(polars_input_error)?
-                .select(
-                    columns
-                        .iter()
-                        .map(|column| col(*column))
-                        .collect::<Vec<_>>(),
-                )
-                .collect()
-                .map_err(polars_input_error)
+            if let Some(bytes) = preflight_json_rows(&mut file, true, expected_rows)? {
+                JsonReader::new(Cursor::new(bytes))
+                    .with_json_format(JsonFormat::JsonLines)
+                    .with_projection(Some(projection()))
+                    .finish()
+                    .map_err(polars_input_error)
+            } else {
+                LazyJsonLineReader::new(PlRefPath::try_from_path(path).map_err(polars_input_error)?)
+                    .finish()
+                    .map_err(polars_input_error)?
+                    .select(
+                        columns
+                            .iter()
+                            .map(|column| col(*column))
+                            .collect::<Vec<_>>(),
+                    )
+                    .collect()
+                    .map_err(polars_input_error)
+            }
         }
         _ => Err(ArpeggiaError::InvalidArgument(format!(
             "unsupported table format .{extension}; expected csv, parquet, json, or ndjson"
@@ -1021,20 +1029,30 @@ fn preflight_json_rows(
     file: &mut File,
     lines: bool,
     expected_rows: Option<usize>,
-) -> ArpeggiaResult<()> {
+) -> ArpeggiaResult<Option<Vec<u8>>> {
     if let Some(expected) = expected_rows {
-        let actual = bounded_json_row_count(file, lines, expected.saturating_add(1))?;
-        file.rewind()?;
+        let mut bytes = lines.then(Vec::new);
+        let actual =
+            bounded_json_row_count(file, lines, expected.saturating_add(1), bytes.as_mut())?;
         if actual != expected {
             return Err(ArpeggiaError::InvalidArgument(format!(
                 "pairwise table has {actual} rows; expected exactly {expected}"
             )));
         }
+        if !lines {
+            file.rewind()?;
+        }
+        return Ok(bytes);
     }
-    Ok(())
+    Ok(None)
 }
 
-fn bounded_json_row_count(file: &mut File, lines: bool, limit: usize) -> ArpeggiaResult<usize> {
+fn bounded_json_row_count(
+    file: &mut File,
+    lines: bool,
+    limit: usize,
+    mut snapshot: Option<&mut Vec<u8>>,
+) -> ArpeggiaResult<usize> {
     let mut buffer = [0_u8; 8192];
     let mut count = 0;
     let mut line_has_content = false;
@@ -1047,6 +1065,9 @@ fn bounded_json_row_count(file: &mut File, lines: bool, limit: usize) -> Arpeggi
         let bytes_read = file.read(&mut buffer)?;
         if bytes_read == 0 {
             break;
+        }
+        if let Some(snapshot) = snapshot.as_deref_mut() {
+            snapshot.extend_from_slice(&buffer[..bytes_read]);
         }
         for &byte in &buffer[..bytes_read] {
             if lines {
@@ -1207,10 +1228,11 @@ fn pair_at_index(index: usize, n: usize) -> (usize, usize) {
 }
 
 fn effective_thread_count(requested: usize) -> usize {
+    let available = std::thread::available_parallelism().map_or(1, usize::from);
     if requested == 0 {
-        std::thread::available_parallelism().map_or(1, usize::from)
+        available
     } else {
-        requested
+        requested.min(available)
     }
 }
 
@@ -1448,6 +1470,25 @@ mod tests {
     }
 
     #[test]
+    fn ndjson_cache_preflight_returns_an_immutable_snapshot() {
+        let path = std::env::temp_dir().join(format!(
+            "arpeggia-ndjson-snapshot-{}.ndjson",
+            std::process::id()
+        ));
+        std::fs::write(&path, "{\"id\":\"a\"}\n{\"id\":\"b\"}\n").unwrap();
+        let mut file = File::open(&path).unwrap();
+        let bytes = preflight_json_rows(&mut file, true, Some(2))
+            .unwrap()
+            .unwrap();
+        std::fs::write(&path, "{\"id\":\"replacement\"}\n").unwrap();
+        let dataframe = JsonReader::new(Cursor::new(bytes))
+            .with_json_format(JsonFormat::JsonLines)
+            .finish()
+            .unwrap();
+        assert_eq!(dataframe.height(), 2);
+    }
+
+    #[test]
     fn memory_guard_has_a_bypass_and_fallback_warning() {
         assert!(memory_warnings_or_error(90, Some(100), "test").is_err());
         assert!(check_memory(u64::MAX, true, "test").is_ok());
@@ -1626,7 +1667,8 @@ mod tests {
         for id in ["a", "b", "c", "d"] {
             std::fs::copy(&source, directory.join(format!("{id}.pdb"))).unwrap();
         }
-        let observations = read_structure_observations(&directory, "id", "path").unwrap();
+        let mut observations = read_structure_observations(&directory, "id", "path").unwrap();
+        observations.reverse();
         let options = PairwiseRmsdOptions {
             residues: "A:1-20".into(),
             num_threads: 1,
@@ -1639,13 +1681,24 @@ mod tests {
             &observations,
             &PairwiseRmsdOptions {
                 num_threads: 4,
-                ..options
+                ..options.clone()
             },
         )
         .unwrap()
         .value;
         assert_eq!(serial.ids, parallel.ids);
         assert_eq!(serial.data, parallel.data);
+        assert_eq!(serial.ids, ["a", "b", "c", "d"]);
+
+        observations.push(observations[0].clone());
+        assert!(get_pairwise_rmsd_matrix(&observations, &options).is_err());
+    }
+
+    #[test]
+    fn requested_threads_are_capped_to_available_processors() {
+        let available = std::thread::available_parallelism().map_or(1, usize::from);
+        assert_eq!(effective_thread_count(0), available);
+        assert_eq!(effective_thread_count(usize::MAX), available);
     }
 
     #[test]
