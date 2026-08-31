@@ -5,7 +5,6 @@ use crate::structure::selected_model;
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use nalgebra as na;
 use pdbtbx::{ContainsAtomConformer, Element, PDB};
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Atom population used for structural superposition.
@@ -26,10 +25,16 @@ pub enum AtomSubset {
 ///
 /// Coordinates are uniformly weighted. Reflection and scaling are forbidden.
 pub fn kabsch_rmsd(reference: &[[f64; 3]], mobile: &[[f64; 3]]) -> ArpeggiaResult<f64> {
-    validate_coordinate_arrays(reference, mobile)?;
-    let reference = center(reference);
-    let mobile = center(mobile);
-    kabsch_centered_rmsd(&reference, &mobile)
+    if reference.len() != mobile.len() {
+        return Err(ArpeggiaError::InvalidArgument(format!(
+            "coordinate arrays must have equal lengths, got {} and {}",
+            reference.len(),
+            mobile.len()
+        )));
+    }
+    let reference = prepare_coordinates(reference)?;
+    let mobile = prepare_coordinates(mobile)?;
+    kabsch_prepared_rmsd(&reference, &mobile)
 }
 
 /// Calculate RMSD between two parsed structures under an exact atom selection.
@@ -162,9 +167,20 @@ fn atom_in_subset(name: &str, element: Option<&Element>, subset: AtomSubset) -> 
     match subset {
         AtomSubset::Ca => name == "CA",
         AtomSubset::Backbone => matches!(name, "N" | "CA" | "C" | "O" | "OXT"),
-        AtomSubset::Heavy => element != Some(&Element::H),
+        AtomSubset::Heavy => {
+            element != Some(&Element::H) && (element.is_some() || !is_hydrogen_atom_name(name))
+        }
         AtomSubset::All => true,
     }
+}
+
+fn is_hydrogen_atom_name(name: &str) -> bool {
+    matches!(
+        name.trim_start_matches(|character: char| character.is_ascii_digit())
+            .as_bytes()
+            .first(),
+        Some(b'H' | b'D' | b'h' | b'd')
+    )
 }
 
 pub(crate) fn validate_correspondence(
@@ -191,90 +207,133 @@ pub(crate) fn validate_correspondence(
     Ok(())
 }
 
-fn validate_coordinate_arrays(reference: &[[f64; 3]], mobile: &[[f64; 3]]) -> ArpeggiaResult<()> {
-    if reference.len() != mobile.len() {
-        return Err(ArpeggiaError::InvalidArgument(format!(
-            "coordinate arrays must have equal lengths, got {} and {}",
-            reference.len(),
-            mobile.len()
-        )));
+pub(crate) struct PreparedCoordinates {
+    points: Vec<[f64; 3]>,
+    centroid: [f64; 3],
+    scale: f64,
+}
+
+impl PreparedCoordinates {
+    pub(crate) fn len(&self) -> usize {
+        self.points.len()
     }
-    if reference.len() < 3 {
+}
+
+pub(crate) fn prepare_coordinates(coordinates: &[[f64; 3]]) -> ArpeggiaResult<PreparedCoordinates> {
+    if coordinates.len() < 3 {
         return Err(ArpeggiaError::InvalidArgument(
             "RMSD requires at least three coordinate pairs".into(),
         ));
     }
-    if reference
-        .iter()
-        .chain(mobile)
-        .flatten()
-        .any(|value| !value.is_finite())
-    {
+    if coordinates.iter().flatten().any(|value| !value.is_finite()) {
         return Err(ArpeggiaError::InvalidArgument(
             "coordinates must be finite".into(),
         ));
     }
-    if !is_non_collinear(reference) || !is_non_collinear(mobile) {
+    let (points, scale) = normalized_displacements(coordinates)
+        .ok_or_else(|| ArpeggiaError::Calculation("coordinates have no finite scale".into()))?;
+    if !is_non_collinear(&points) {
         return Err(ArpeggiaError::InvalidArgument(
             "RMSD requires at least three non-collinear points in each structure".into(),
         ));
     }
-    Ok(())
-}
-
-fn is_non_collinear(points: &[[f64; 3]]) -> bool {
-    let origin = na::Vector3::from(points[0]);
-    let vectors = points[1..]
-        .iter()
-        .map(|point| na::Vector3::from(*point) - origin)
-        .collect::<Vec<_>>();
-    let scale = vectors.iter().map(na::Vector3::norm).fold(0.0, f64::max);
-    if scale == 0.0 {
-        return false;
-    }
-    let tolerance = scale * scale * f64::EPSILON * points.len() as f64 * 32.0;
-    vectors.iter().enumerate().any(|(index, left)| {
-        vectors[index + 1..]
-            .iter()
-            .any(|right| left.cross(right).norm() > tolerance)
-    })
-}
-
-pub(crate) fn prepare_centered_coordinates(
-    coordinates: Vec<[f64; 3]>,
-) -> ArpeggiaResult<Vec<[f64; 3]>> {
-    validate_coordinate_arrays(&coordinates, &coordinates)?;
-    Ok(center(&coordinates))
-}
-
-fn center(points: &[[f64; 3]]) -> Vec<[f64; 3]> {
-    let n = points.len() as f64;
+    let n = coordinates.len() as f64;
     let centroid = points.iter().fold([0.0; 3], |mut sum, point| {
         for axis in 0..3 {
-            sum[axis] += point[axis];
+            sum[axis] += point[axis] / n;
         }
         sum
     });
-    points
+    if centroid.iter().any(|value| !value.is_finite()) {
+        return Err(ArpeggiaError::Calculation(
+            "coordinate centering produced a non-finite value".into(),
+        ));
+    }
+    Ok(PreparedCoordinates {
+        points,
+        centroid,
+        scale,
+    })
+}
+
+fn is_non_collinear(displacements: &[[f64; 3]]) -> bool {
+    let (baseline, scale) = displacements[1..]
+        .iter()
+        .map(|point| {
+            let vector = na::Vector3::from(*point);
+            let norm = vector.norm();
+            (vector, norm)
+        })
+        .max_by(|left, right| left.1.total_cmp(&right.1))
+        .expect("coordinate arrays contain at least three points");
+    if scale == 0.0 {
+        return false;
+    }
+    let tolerance = scale * scale * f64::EPSILON * displacements.len() as f64 * 32.0;
+    displacements[1..]
+        .iter()
+        .any(|point| baseline.cross(&na::Vector3::from(*point)).norm() > tolerance)
+}
+
+fn normalized_displacements(points: &[[f64; 3]]) -> Option<(Vec<[f64; 3]>, f64)> {
+    let anchor = points[0];
+    let mut displacements = points
         .iter()
         .map(|point| {
             [
-                point[0] - centroid[0] / n,
-                point[1] - centroid[1] / n,
-                point[2] - centroid[2] / n,
+                point[0] - anchor[0],
+                point[1] - anchor[1],
+                point[2] - anchor[2],
             ]
         })
-        .collect()
+        .collect::<Vec<_>>();
+    let mut scale = displacements
+        .iter()
+        .flatten()
+        .map(|value| value.abs())
+        .max_by(f64::total_cmp)?;
+    if !scale.is_finite() {
+        scale = points
+            .iter()
+            .flatten()
+            .map(|value| value.abs())
+            .max_by(f64::total_cmp)?;
+        if scale == 0.0 {
+            return None;
+        }
+        for (displacement, point) in displacements.iter_mut().zip(points) {
+            for axis in 0..3 {
+                displacement[axis] = point[axis] / scale - anchor[axis] / scale;
+            }
+        }
+    } else if scale > 0.0 {
+        for displacement in &mut displacements {
+            for value in displacement {
+                *value /= scale;
+            }
+        }
+    } else {
+        return None;
+    }
+    Some((displacements, scale))
 }
 
-pub(crate) fn kabsch_centered_rmsd(
-    reference: &[[f64; 3]],
-    mobile: &[[f64; 3]],
+pub(crate) fn kabsch_prepared_rmsd(
+    reference: &PreparedCoordinates,
+    mobile: &PreparedCoordinates,
 ) -> ArpeggiaResult<f64> {
+    if reference.scale == mobile.scale && reference.points == mobile.points {
+        return Ok(0.0);
+    }
+    let scale = reference.scale.max(mobile.scale);
+    let reference_factor = reference.scale / scale;
+    let mobile_factor = mobile.scale / scale;
+    let reference_centroid = na::Vector3::from(reference.centroid) * reference_factor;
+    let mobile_centroid = na::Vector3::from(mobile.centroid) * mobile_factor;
     let mut covariance = na::Matrix3::zeros();
-    for (reference, mobile) in reference.iter().zip(mobile) {
-        let reference = na::Vector3::from(*reference);
-        let mobile = na::Vector3::from(*mobile);
+    for (reference, mobile) in reference.points.iter().zip(&mobile.points) {
+        let reference = na::Vector3::from(*reference) * reference_factor - reference_centroid;
+        let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
         covariance += mobile * reference.transpose();
     }
     let svd = covariance.svd(true, true);
@@ -289,18 +348,124 @@ pub(crate) fn kabsch_centered_rmsd(
     correction[(2, 2)] = (v * u.transpose()).determinant().signum();
     let rotation = v * correction * u.transpose();
 
-    let squared_error = reference
-        .iter()
-        .zip(mobile)
-        .map(|(reference, mobile)| {
-            let delta = na::Vector3::from(*reference) - rotation * na::Vector3::from(*mobile);
-            delta.norm_squared()
-        })
-        .sum::<f64>();
-    Ok((squared_error / reference.len() as f64).sqrt())
+    let fitted_residual = aligned_residual_norm(
+        reference,
+        reference_factor,
+        mobile,
+        mobile_factor,
+        &rotation,
+    );
+    let identity_residual = aligned_residual_norm(
+        reference,
+        reference_factor,
+        mobile,
+        mobile_factor,
+        &na::Matrix3::identity(),
+    );
+    let (residual_norm, fitted) = if fitted_residual < identity_residual {
+        (fitted_residual, true)
+    } else {
+        (identity_residual, false)
+    };
+    let rmsd = residual_norm * (scale / (reference.points.len() as f64).sqrt());
+    let solver_tolerance = f64::EPSILON * (reference.points.len() as f64).sqrt() * 64.0;
+    let unreliable_fitted_residual = fitted && residual_norm <= solver_tolerance;
+    let unreliable_identity_rotation =
+        !fitted && residual_norm <= solver_tolerance && rmsd > 1e-6 && {
+            let rotation = identity_rotational_residual_norm(
+                reference,
+                reference_factor,
+                mobile,
+                mobile_factor,
+            );
+            rotation <= solver_tolerance
+                && rotation * (scale / (reference.points.len() as f64).sqrt()) > 1e-6
+        };
+    if (unreliable_fitted_residual && rmsd > 1e-6) || unreliable_identity_rotation {
+        return Err(ArpeggiaError::Calculation(
+            "coordinate scale prevents a reliable Kabsch residual in Angstroms".into(),
+        ));
+    }
+    if rmsd.is_finite() {
+        Ok(rmsd)
+    } else {
+        Err(ArpeggiaError::Calculation(
+            "Kabsch RMSD produced a non-finite result".into(),
+        ))
+    }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+fn aligned_residual_norm(
+    reference: &PreparedCoordinates,
+    reference_factor: f64,
+    mobile: &PreparedCoordinates,
+    mobile_factor: f64,
+    rotation: &na::Matrix3<f64>,
+) -> f64 {
+    let n = reference.points.len() as f64;
+    let residual_centroid = reference.points.iter().zip(&mobile.points).fold(
+        na::Vector3::zeros(),
+        |sum, (reference, mobile)| {
+            let reference = na::Vector3::from(*reference) * reference_factor;
+            let mobile = na::Vector3::from(*mobile) * mobile_factor;
+            sum + (reference - rotation * mobile) / n
+        },
+    );
+    reference
+        .points
+        .iter()
+        .zip(&mobile.points)
+        .fold(0.0_f64, |norm, (reference, mobile)| {
+            let reference = na::Vector3::from(*reference) * reference_factor;
+            let mobile = na::Vector3::from(*mobile) * mobile_factor;
+            let delta = reference - rotation * mobile - residual_centroid;
+            delta.iter().fold(norm, |norm, value| norm.hypot(*value))
+        })
+}
+
+fn identity_rotational_residual_norm(
+    reference: &PreparedCoordinates,
+    reference_factor: f64,
+    mobile: &PreparedCoordinates,
+    mobile_factor: f64,
+) -> f64 {
+    let n = reference.points.len() as f64;
+    let residual_centroid = reference.points.iter().zip(&mobile.points).fold(
+        na::Vector3::zeros(),
+        |sum, (reference, mobile)| {
+            let reference = na::Vector3::from(*reference) * reference_factor;
+            let mobile = na::Vector3::from(*mobile) * mobile_factor;
+            sum + (reference - mobile) / n
+        },
+    );
+    let mobile_centroid = na::Vector3::from(mobile.centroid) * mobile_factor;
+    let (inertia, torque) = reference.points.iter().zip(&mobile.points).fold(
+        (na::Matrix3::zeros(), na::Vector3::zeros()),
+        |(inertia, torque), (reference, mobile)| {
+            let reference = na::Vector3::from(*reference) * reference_factor;
+            let mobile = na::Vector3::from(*mobile) * mobile_factor;
+            let centered_mobile = mobile - mobile_centroid;
+            let residual = reference - mobile - residual_centroid;
+            (
+                inertia + na::Matrix3::identity() * centered_mobile.norm_squared()
+                    - centered_mobile * centered_mobile.transpose(),
+                torque + centered_mobile.cross(&residual),
+            )
+        },
+    );
+    let Some(rotation) = inertia.lu().solve(&torque) else {
+        return 0.0;
+    };
+    mobile.points.iter().fold(0.0_f64, |norm, mobile| {
+        let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
+        rotation
+            .cross(&mobile)
+            .iter()
+            .fold(norm, |norm, value| norm.hypot(*value))
+    })
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct ResidueBound {
     number: isize,
     insertion: Option<String>,
@@ -336,16 +501,19 @@ impl ResidueBound {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum ResidueSpan {
-    One(ResidueBound),
-    Range(ResidueBound, ResidueBound),
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct ResidueSpan {
+    start: ResidueBound,
+    end: ResidueBound,
 }
 
 impl ResidueSpan {
     fn parse(value: &str) -> ArpeggiaResult<Self> {
         if let Some(bound) = ResidueBound::parse(value) {
-            return Ok(Self::One(bound));
+            return Ok(Self {
+                start: bound.clone(),
+                end: bound,
+            });
         }
         for (index, byte) in value.bytes().enumerate().skip(1) {
             if byte != b'-' {
@@ -357,12 +525,17 @@ impl ResidueSpan {
             let Some(end) = ResidueBound::parse(&value[index + 1..]) else {
                 continue;
             };
-            if compare_bounds(&start, &end) == Ordering::Greater {
+            if start.number > end.number
+                || (start.number == end.number
+                    && end.insertion.as_ref().is_some_and(|end| {
+                        start.insertion.as_ref().is_some_and(|start| start > end)
+                    }))
+            {
                 return Err(ArpeggiaError::InvalidArgument(format!(
                     "residue range starts after it ends: {value}"
                 )));
             }
-            return Ok(Self::Range(start, end));
+            return Ok(Self { start, end });
         }
         Err(ArpeggiaError::InvalidArgument(format!(
             "invalid residue selection: {value}"
@@ -370,26 +543,9 @@ impl ResidueSpan {
     }
 
     fn matches(&self, number: isize, insertion: Option<&str>) -> bool {
-        match self {
-            Self::One(bound) => {
-                number == bound.number
-                    && bound
-                        .insertion
-                        .as_deref()
-                        .is_none_or(|expected| insertion == Some(expected))
-            }
-            Self::Range(start, end) => {
-                lower_bound_matches(number, insertion, start)
-                    && upper_bound_matches(number, insertion, end)
-            }
-        }
+        lower_bound_matches(number, insertion, &self.start)
+            && upper_bound_matches(number, insertion, &self.end)
     }
-}
-
-fn compare_bounds(left: &ResidueBound, right: &ResidueBound) -> Ordering {
-    left.number
-        .cmp(&right.number)
-        .then_with(|| left.insertion.cmp(&right.insertion))
 }
 
 fn lower_bound_matches(number: isize, insertion: Option<&str>, bound: &ResidueBound) -> bool {
@@ -457,6 +613,26 @@ impl ResidueSelector {
                 }
             }
         }
+        for spans in chains.values_mut().flatten() {
+            spans.sort_unstable();
+            let mut merged = Vec::<ResidueSpan>::with_capacity(spans.len());
+            for span in std::mem::take(spans) {
+                if let Some(previous) = merged.last_mut()
+                    && upper_bound_matches(
+                        span.start.number,
+                        span.start.insertion.as_deref(),
+                        &previous.end,
+                    )
+                {
+                    if upper_bound_precedes(&previous.end, &span.end) {
+                        previous.end = span.end;
+                    }
+                } else {
+                    merged.push(span);
+                }
+            }
+            *spans = merged;
+        }
         Ok(Self { chains })
     }
 
@@ -466,7 +642,11 @@ impl ResidueSelector {
         }
         match self.chains.get(chain) {
             Some(None) => true,
-            Some(Some(spans)) => spans.iter().any(|span| span.matches(number, insertion)),
+            Some(Some(spans)) => {
+                let index = spans
+                    .partition_point(|span| lower_bound_matches(number, insertion, &span.start));
+                index > 0 && spans[index - 1].matches(number, insertion)
+            }
             None => false,
         }
     }
@@ -491,6 +671,21 @@ impl ResidueSelector {
             )))
         }
     }
+}
+
+/// Validate the chain and author-residue selection grammar without structure I/O.
+pub fn validate_residue_selection(value: &str) -> ArpeggiaResult<()> {
+    ResidueSelector::parse(value).map(|_| ())
+}
+
+fn upper_bound_precedes(left: &ResidueBound, right: &ResidueBound) -> bool {
+    left.number < right.number
+        || left.number == right.number
+            && match (&left.insertion, &right.insertion) {
+                (None, _) => false,
+                (Some(_), None) => true,
+                (Some(left), Some(right)) => left < right,
+            }
 }
 
 #[cfg(test)]
@@ -537,6 +732,44 @@ mod tests {
     }
 
     #[test]
+    fn kabsch_is_translation_invariant_at_large_offsets() {
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 0.0, 3.0],
+        ];
+        for translation in [1e6, 1e15] {
+            let mobile =
+                reference.map(|[x, y, z]| [-y + translation, x + translation, z + translation]);
+            assert!(kabsch_rmsd(&reference, &mobile).unwrap() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn kabsch_keeps_extreme_finite_coordinates_finite() {
+        for scale in [1e-200, 1e200] {
+            let reference = [[0.0, 0.0, 0.0], [scale, 0.0, 0.0], [0.0, scale, 0.0]];
+            let mobile = reference.map(|[x, y, z]| [-y, x, z]);
+            let rmsd = kabsch_rmsd(&reference, &mobile).unwrap();
+            assert!(rmsd.is_finite());
+            assert!(rmsd / scale < 1e-12);
+        }
+    }
+
+    #[test]
+    fn kabsch_centers_near_f64_max_without_overflow() {
+        let magnitude = 1.3e308;
+        let points = [
+            [-magnitude, 0.0, 0.0],
+            [magnitude, magnitude, 0.0],
+            [magnitude, -magnitude, 0.0],
+            [magnitude, 0.0, magnitude],
+        ];
+        assert_eq!(kabsch_rmsd(&points, &points).unwrap(), 0.0);
+    }
+
+    #[test]
     fn kabsch_noise_is_positive_and_symmetric() {
         let reference = [
             [0.0, 0.0, 0.0],
@@ -550,6 +783,65 @@ mod tests {
         let reverse = kabsch_rmsd(&noisy, &reference).unwrap();
         assert!(forward > 0.0);
         assert!((forward - reverse).abs() < 1e-12);
+    }
+
+    #[test]
+    fn kabsch_preserves_small_residuals_at_large_coordinate_scales() {
+        let magnitude = 1e200;
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [magnitude, 0.0, 0.0],
+            [0.0, magnitude, 0.0],
+            [0.0, 0.0, magnitude],
+        ];
+        let mut mobile = reference;
+        mobile[1][1] = 1.0;
+        mobile[1][2] = 1.0;
+        mobile[2][0] = 1.0;
+        mobile[2][2] = 1.0;
+        mobile[3][0] = 1.0;
+        mobile[3][1] = 1.0;
+        let expected = (3.0_f64 / 4.0).sqrt();
+        let forward = kabsch_rmsd(&reference, &mobile).unwrap();
+        let reverse = kabsch_rmsd(&mobile, &reference).unwrap();
+        assert!(
+            (forward - expected).abs() < 1e-12,
+            "{forward} != {expected}"
+        );
+        assert!(
+            (reverse - expected).abs() < 1e-12,
+            "{reverse} != {expected}"
+        );
+    }
+
+    #[test]
+    fn kabsch_rejects_unreliable_extreme_scale_rotation() {
+        let magnitude = 1e200;
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [magnitude, 0.0, 0.0],
+            [0.0, magnitude, 0.0],
+            [0.0, 0.0, magnitude],
+        ];
+        let rotated = reference.map(|[x, y, z]| [-y, x, z]);
+        let infinitesimally_rotated = [
+            [0.0, 0.0, 0.0],
+            [magnitude, 1.0, 0.0],
+            [-1.0, magnitude, 0.0],
+            [0.0, 0.0, magnitude],
+        ];
+        let mixed_strain_and_rotation = [
+            [0.0, 0.0, 0.0],
+            [magnitude, 1.0, 0.0],
+            [1.0, magnitude, 0.0],
+            [0.0, 0.0, magnitude],
+        ];
+        for mobile in [rotated, infinitesimally_rotated, mixed_strain_and_rotation] {
+            assert!(matches!(
+                kabsch_rmsd(&reference, &mobile),
+                Err(ArpeggiaError::Calculation(message)) if message.contains("reliable Kabsch residual")
+            ));
+        }
     }
 
     #[test]
@@ -588,6 +880,14 @@ mod tests {
     }
 
     #[test]
+    fn residue_selector_merges_overlapping_ranges() {
+        let selector = ResidueSelector::parse("A:1-100,A:20-40,A:50-120,A:1-100").unwrap();
+        assert_eq!(selector.chains["A"].as_ref().unwrap().len(), 1);
+        assert!(selector.matches("A", 110, None));
+        assert!(!selector.matches("A", 121, None));
+    }
+
+    #[test]
     fn residue_selector_supports_negative_numbers_and_insertions() {
         let selector = ResidueSelector::parse("A:-5--1,B:10A-20").unwrap();
         assert!(selector.matches("A", -3, None));
@@ -595,6 +895,15 @@ mod tests {
         assert!(!selector.matches("B", 10, None));
         assert!(selector.matches("B", 10, Some("A")));
         assert!(selector.matches("B", 20, Some("B")));
+    }
+
+    #[test]
+    fn residue_selector_treats_bare_upper_bound_as_last_insertion() {
+        let selector = ResidueSelector::parse("A:10A-10").unwrap();
+        assert!(!selector.matches("A", 10, None));
+        assert!(selector.matches("A", 10, Some("A")));
+        assert!(selector.matches("A", 10, Some("B")));
+        assert!(!selector.matches("A", 11, None));
     }
 
     #[test]
@@ -645,6 +954,19 @@ mod tests {
                 .len(),
             2
         );
+    }
+
+    #[test]
+    fn heavy_subset_infers_digit_leading_hydrogen_names() {
+        let hydrogen = pdbtbx::Atom::new(false, 1, "1HB", 0.0, 0.0, 0.0, 1.0, 20.0, "", 0).unwrap();
+        assert!(hydrogen.element().is_none());
+        assert!(!atom_in_subset(
+            hydrogen.name(),
+            hydrogen.element(),
+            AtomSubset::Heavy
+        ));
+        assert!(!atom_in_subset("D1", None, AtomSubset::Heavy));
+        assert!(atom_in_subset("CB", None, AtomSubset::Heavy));
     }
 
     #[test]

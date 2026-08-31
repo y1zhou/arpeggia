@@ -2,6 +2,18 @@ use crate::{ArpeggiaError, ArpeggiaResult};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
 
+pub(crate) fn string_values<'a>(values: impl Iterator<Item = &'a str>) -> StringChunked {
+    StringChunked::from_iter_values(PlSmallStr::EMPTY, values)
+}
+
+pub(crate) fn polars_calculation_error(error: PolarsError) -> ArpeggiaError {
+    ArpeggiaError::Calculation(error.to_string())
+}
+
+pub(crate) fn polars_input_error(error: PolarsError) -> ArpeggiaError {
+    ArpeggiaError::InvalidArgument(error.to_string())
+}
+
 /// Execute a parallel operation with the configured thread limit.
 /// Uses rayon's thread pool with the specified number of threads.
 pub fn run_with_threads<F, T>(num_threads: isize, f: F) -> T
