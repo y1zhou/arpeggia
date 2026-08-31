@@ -22,9 +22,9 @@ IDs, duplicate canonical paths, missing paths, unsupported formats, and invalid
 arguments. Inputs are sorted by exact case-sensitive ID for deterministic
 pair ordering and cluster labels.
 
-Structure Selection defaults to every coordinate-observed protein residue in
-every chain and C-alpha atoms. Atom presets are `ca`, `backbone`, `heavy`, and
-`all`; backbone means `N`, `CA`, `C`, `O`, and `OXT`. Heavy mode excludes
+Structure Selection defaults to every coordinate-observed amino acid recognized
+by Arpeggia in every chain and C-alpha atoms. Atom presets are `ca`, `backbone`,
+`heavy`, and `all`; backbone means `N`, `CA`, `C`, `O`, and `OXT`. Heavy mode excludes
 hydrogen and deuterium, including digit-leading atom names when element metadata
 is absent. Heavy and all-atom modes include selected ACE/NH2 terminal caps but
 exclude solvent, ions, and ligands.
@@ -166,9 +166,9 @@ retaining all raw identity tables. Remaining structures use
 eight. Successful results and diagnostics are restored to canonical input
 order; an error cooperatively stops collection of later parsing work.
 
-Pairwise matrix construction then uses up to the smaller of the requested
-Rayon worker count and the number of structure pairs. Workers
-own disjoint contiguous packed-matrix chunks and run the Kabsch atom loop and
+Pairwise matrix construction then uses up to the smallest of the requested
+Rayon worker count, available processors, and the number of structure pairs.
+Workers own disjoint contiguous packed-matrix chunks and run the Kabsch atom loop and
 3-by-3 SVD serially for each pair. This avoids locks, nested parallelism, and
 schedule-dependent floating-point reductions. The current `nalgebra` and
 `matrixmultiply` feature graph is single-threaded for this operation, so no
@@ -187,7 +187,8 @@ already calculated DataFrame.
 Cluster and optional pairwise tables support CSV, Parquet, JSON, and NDJSON.
 Cached Parquet row counts are checked from file metadata before columns are
 decoded; cached CSV, JSON, and NDJSON reads stop after one row beyond the
-expected count.
+expected count. Bounded NDJSON validation and decoding use the same in-memory
+snapshot.
 When pairwise output is requested, it must be written successfully before
 k-medoids begins, preserving useful work if clustering subsequently fails.
 
@@ -199,16 +200,19 @@ deliberately not checked. Documentation warns that cache validity is therefore
 the caller's responsibility, and a debug log names the reused file. Removing
 the file forces recalculation. A malformed, incomplete, or ID-mismatched file
 causes an error with removal instructions; it is never silently overwritten.
+New caches use no-clobber creation so a concurrently created path is preserved.
 
 ## Consequences
 
 This design favors a small deterministic scientific core and an existing
 specialized clustering crate. Its main limits are exact atom correspondence,
 quadratic time and matrix storage, heuristic rather than guaranteed memory
-protection, and caller-managed CLI cache provenance. Future sequence or
-structural alignment, alternate clustering algorithms, per-atom RMSD
-parallelism, parallel k-medoids, and public rigid transforms require separate
-evidence and decisions.
+protection, the recognized-amino-acid selection domain, and caller-managed CLI
+cache provenance. Future exact-correspondence all-atom selection may retain
+arbitrary polymers, ligands, and modified residues when both inputs match.
+Sequence or structural alignment, alternate clustering algorithms, per-atom
+RMSD parallelism, parallel k-medoids, and public rigid transforms require
+separate evidence and decisions.
 
 Research and source comparisons are recorded in
 [`structure-superposition.md`](../research/structure-superposition.md) and

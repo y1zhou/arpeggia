@@ -321,7 +321,8 @@ lean default.
 
 RMSD is uniformly weighted and requires at least three non-collinear selected
 atoms in each of its two structures. The default selection is every
-coordinate-observed protein residue in every chain, using C-alpha atoms.
+coordinate-observed amino acid recognized by Arpeggia in every chain, using
+C-alpha atoms.
 Alternate conformers and models follow Arpeggia's existing preparation and
 diagnostic policies; selected atom identities must match exactly. The rigid
 transform and Kabsch solver remain implementation details.

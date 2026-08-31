@@ -7,11 +7,13 @@ chain IDs, residue identities, and atom names must match exactly.
 
 ## RMSD
 
-The default selection is every coordinate-observed protein residue and its
-C-alpha atom. `atoms` accepts `ca`, `backbone` (`N`, `CA`, `C`, `O`, and
-`OXT`), `heavy`, or `all`. Heavy selection excludes hydrogen and deuterium,
+The default selection is every coordinate-observed amino acid recognized by
+Arpeggia and its C-alpha atom. `atoms` accepts `ca`, `backbone` (`N`, `CA`, `C`,
+`O`, and `OXT`), `heavy`, or `all`. Heavy selection excludes hydrogen and deuterium,
 including digit-leading atom names when element metadata is absent. Heavy and
 all-atom selections retain ACE/NH2 caps but exclude solvent, ions, and ligands.
+Arbitrary polymers, ligands, and modified residues are not yet retained even in
+`all` mode.
 
 Residue selection is a comma-separated union of chain and author-residue
 clauses. A bare chain selects all its residues. For example,
@@ -119,7 +121,8 @@ space, so they are not a maximum-RAM guarantee.
 
 The first structure is prepared serially. Remaining structures use at most
 `min(num_threads, 8)` parser workers to avoid saturating storage; pairwise RMSD
-uses up to the smaller of the requested worker count and number of pairs. Each
+uses up to the smallest of the requested worker count, available processors,
+and number of pairs. Each
 Kabsch solve and k-medoids clustering remains single-threaded. `num_threads=0`
 selects available processors.
 

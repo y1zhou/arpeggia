@@ -33,6 +33,8 @@ selection, table I/O, Python, and CLI concerns.
       overlaps, and malformed clauses.
 - [x] Implement `ca`, `backbone`, `heavy`, and `all` presets with the approved
       protein/cap/exclusion rules and C-alpha default.
+- [x] Defer arbitrary polymers, ligands, and modified residues to a future
+      exact-correspondence `all` mode.
 - [x] Apply existing model/conformer selection and diagnostics, construct one
       canonical atom-identity order, reject mismatches against it, and discard
       non-reference identity tables after validation.

@@ -193,13 +193,13 @@ object to an RMSD comparison or structure clustering calculation.
 _Avoid_: Input file, ensemble
 
 **Structure Selection**:
-The protein atoms retained from a Structure Observation by its chain-residue
-ranges and atom subset.
+The recognized amino-acid atoms retained from a Structure Observation by its
+chain-residue ranges and atom subset.
 _Avoid_: Atom filter, alignment
 
 **Exact Atom Correspondence**:
-A one-to-one pairing in which two Structure Selections contain the same protein
-atom identities. It is the required correspondence for the current RMSD method.
+A one-to-one pairing in which two Structure Selections contain the same atom
+identities. It is the required correspondence for the current RMSD method.
 _Avoid_: Common atoms, atom intersection
 
 **Medoid Structure**:
