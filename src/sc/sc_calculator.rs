@@ -17,12 +17,12 @@ const DOT_PRODUCT_CLAMP_MIN: f64 = -0.999;
 const DOT_PRODUCT_CLAMP_MAX: f64 = 0.999;
 
 #[derive(Default)]
-pub struct ScCalculator {
-    pub base: SurfaceGenerator,
+pub(super) struct ScCalculator {
+    base: SurfaceGenerator,
 }
 
 impl ScCalculator {
-    pub fn add_atoms(
+    pub(super) fn add_atoms(
         &mut self,
         pdb: &PDB,
         group1_chains: &HashSet<String>,
@@ -148,7 +148,7 @@ impl ScCalculator {
         Ok(())
     }
 
-    pub fn calc(&mut self) -> Result<Results, SurfaceCalculatorError> {
+    pub(super) fn calc(&mut self) -> Result<Results, SurfaceCalculatorError> {
         if self.base.run.atoms.is_empty() {
             return Err(SurfaceCalculatorError::NoAtoms);
         }

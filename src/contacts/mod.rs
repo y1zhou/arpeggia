@@ -2,22 +2,20 @@
 //!
 //! This module provides functions for analyzing atomic and ring contacts
 //! in PDB and mmCIF structures.
-pub mod aromatic;
-pub mod complex;
-pub mod hbond;
-pub mod hydrophobic;
-pub mod ionic;
-pub mod residues;
-pub mod structs;
-pub mod vdw;
+mod aromatic;
+mod complex;
+mod hbond;
+mod hydrophobic;
+mod ionic;
+pub(crate) mod residues;
+mod structs;
+mod vdw;
 
-// Re-exports
-pub use aromatic::{find_cation_pi, find_pi_pi};
-pub use complex::*;
-pub use hydrophobic::find_hydrophobic_contact;
-pub use ionic::{find_ionic_bond_with_protonation, find_ionic_repulsion_with_protonation};
-pub use structs::*;
-pub use vdw::find_vdw_contact;
+use complex::{InteractionComplex, SidechainStat};
+pub(crate) use ionic::{HistidinePreparationIssue, histidine_preparation_issue, is_histidine};
+pub(crate) use residues::one_letter_code;
+pub use structs::ProtonationMode;
+use structs::ResultEntry;
 
 use pdbtbx::*;
 use polars::prelude::*;
@@ -198,7 +196,7 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> crate::ArpeggiaRe
 }
 
 /// Convert a slice of `ResultEntry` into a Polars `DataFrame`.
-pub(crate) fn results_to_df(res: &[ResultEntry]) -> crate::ArpeggiaResult<DataFrame> {
+fn results_to_df(res: &[ResultEntry]) -> crate::ArpeggiaResult<DataFrame> {
     df!(
         "model" => res.iter().map(|x| compact_model_id(x.model)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "interaction" => string_values(res.iter().map(|x| x.interaction.as_str())),
@@ -222,7 +220,7 @@ pub(crate) fn results_to_df(res: &[ResultEntry]) -> crate::ArpeggiaResult<DataFr
 }
 
 /// Convert sidechain statistics into a Polars `DataFrame`.
-pub(crate) fn sc_results_to_df(res: &[SidechainStat<'_>]) -> crate::ArpeggiaResult<DataFrame> {
+fn sc_results_to_df(res: &[SidechainStat<'_>]) -> crate::ArpeggiaResult<DataFrame> {
     df!(
         "model" => res.iter().map(|(key, _)| compact_model_id(key.0.model)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
         "from_chain" => string_values(res.iter().map(|(key, _)| key.0.chain)),

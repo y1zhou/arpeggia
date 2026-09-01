@@ -1,9 +1,11 @@
 use super::{
-    InteractingEntity, Interaction, ProtonationMode, ResultEntry, find_cation_pi,
-    find_hydrophobic_contact, find_ionic_bond_with_protonation,
-    find_ionic_repulsion_with_protonation, find_pi_pi, find_vdw_contact,
+    aromatic::{find_cation_pi, find_pi_pi},
     hbond::{find_hydrogen_bond, find_weak_hydrogen_bond},
+    hydrophobic::find_hydrophobic_contact,
+    ionic::{find_ionic_bond_with_protonation, find_ionic_repulsion_with_protonation},
     residues::{Plane, ResidueExt, ResidueId},
+    structs::{InteractingEntity, Interaction, ProtonationMode, ResultEntry},
+    vdw::find_vdw_contact,
 };
 use crate::{
     StructureMetadata,
@@ -19,7 +21,7 @@ const MAX_PEPTIDE_C_N_DISTANCE: f64 = 1.8;
 const GROUP1: u8 = 0b01;
 const GROUP2: u8 = 0b10;
 
-pub(crate) type SidechainStat<'a> = ((ResidueId<'a>, ResidueId<'a>), (f64, f64, f64));
+pub(super) type SidechainStat<'a> = ((ResidueId<'a>, ResidueId<'a>), (f64, f64, f64));
 
 struct IndexedAtom<'a> {
     entity: AtomConformerResidueChainModel<'a>,
@@ -35,7 +37,7 @@ struct IndexedRing<'a> {
 }
 
 /// The workhorse struct for identifying interactions in the model
-pub struct InteractionComplex<'a> {
+pub(super) struct InteractionComplex<'a> {
     /// All ligand chains
     pub ligand: HashSet<String>,
     /// All receptor chains
@@ -61,7 +63,7 @@ pub struct InteractionComplex<'a> {
 impl<'a> InteractionComplex<'a> {
     /// Construct a contact complex with all scientific policies explicit.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_options(
+    pub(super) fn new_with_options(
         model: &'a PDB,
         metadata: Option<&'a StructureMetadata>,
         groups: &'a str,
@@ -125,7 +127,7 @@ impl<'a> InteractionComplex<'a> {
         self.resolved_bonds.kind_entities(first, second)
     }
 
-    pub(crate) fn resolved_bonds(&self) -> &ResolvedBonds {
+    pub(super) fn resolved_bonds(&self) -> &ResolvedBonds {
         &self.resolved_bonds
     }
 
@@ -201,7 +203,7 @@ impl<'a> InteractionComplex<'a> {
         }
     }
 
-    pub(crate) fn collect_sc_stats<'b>(
+    pub(super) fn collect_sc_stats<'b>(
         &self,
         atomic_contacts: &'b [ResultEntry],
         ring_contacts: &'b [ResultEntry],
@@ -246,19 +248,8 @@ impl<'a> InteractionComplex<'a> {
     }
 }
 
-/// Trait for calculating PPIs.
-pub trait Interactions {
-    /// Get all atomic interactions between the ligand and receptor.
-    fn get_atomic_contacts(&self) -> Vec<ResultEntry>;
-
-    /// Get all ring-atom interactions between the ligand and receptor.
-    fn get_ring_atom_contacts(&self) -> Vec<ResultEntry>;
-    /// Get all ring-ring interactions between the ligand and receptor.
-    fn get_ring_ring_contacts(&self) -> Vec<ResultEntry>;
-}
-
-impl Interactions for InteractionComplex<'_> {
-    fn get_atomic_contacts(&self) -> Vec<ResultEntry> {
+impl InteractionComplex<'_> {
+    pub(super) fn get_atomic_contacts(&self) -> Vec<ResultEntry> {
         let max_radius_squared = self.interacting_threshold * self.interacting_threshold;
 
         // Find all atoms within the radius of the ligand atoms
@@ -360,7 +351,7 @@ impl Interactions for InteractionComplex<'_> {
             .collect::<Vec<ResultEntry>>()
     }
 
-    fn get_ring_atom_contacts(&self) -> Vec<ResultEntry> {
+    pub(super) fn get_ring_atom_contacts(&self) -> Vec<ResultEntry> {
         let max_radius_squared = self.interacting_threshold * self.interacting_threshold;
 
         // Find ring - atom contacts
@@ -432,7 +423,7 @@ impl Interactions for InteractionComplex<'_> {
             .collect::<Vec<ResultEntry>>()
     }
 
-    fn get_ring_ring_contacts(&self) -> Vec<ResultEntry> {
+    pub(super) fn get_ring_ring_contacts(&self) -> Vec<ResultEntry> {
         // Find ring - ring contacts
         let ring_ring_neighbors = self
             .rings

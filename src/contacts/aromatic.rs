@@ -12,7 +12,7 @@ const PI_PI_DIST_THRESHOLD: f64 = 6.0;
 const PI_T_DIST_THREHOLD: f64 = 5.0;
 
 /// Identify cation-pi interactions.
-pub fn find_cation_pi(
+pub(super) fn find_cation_pi(
     ring: &Plane,
     entity: &AtomConformerResidueChainModel,
     protonation: ProtonationMode,
@@ -36,7 +36,7 @@ pub fn find_cation_pi(
 
 /// Identify pi-pi interactions using the classification by [Chakrabarti and Bhattacharyya (2007)](https://doi.org/10.1016/j.pbiomolbio.2007.03.016), Fig. 11.
 /// For T-shaped Pi-stacking, the distance threshold is set to 5.0 Å according to [getcontacts](https://getcontacts.github.io/interactions.html).
-pub fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
+pub(super) fn find_pi_pi(ring1: &Plane, ring2: &Plane) -> Option<Interaction> {
     let angle_vec = ring1.center - ring2.center;
     let dist = (angle_vec).norm();
     if dist <= PI_PI_DIST_THRESHOLD {

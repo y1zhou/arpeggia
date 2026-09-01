@@ -1,6 +1,6 @@
 //! Shared structure loading and preparation for calculations.
 
-use crate::contacts::residues::ResidueExt;
+use crate::contacts::one_letter_code;
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use pdbtbx::*;
 use std::collections::HashSet;
@@ -49,7 +49,7 @@ pub fn load_model(input_file: &str) -> ArpeggiaResult<Analysis<PDB>> {
 
     pdb.remove_residues_by(|residue| {
         let name = residue.name().unwrap_or("");
-        residue.resn().is_none()
+        one_letter_code(name).is_none()
             && !TERMINAL_CAPS
                 .iter()
                 .any(|cap| name.eq_ignore_ascii_case(cap))
@@ -138,7 +138,7 @@ fn conformer_tie_rank(name: &str) -> (bool, &str) {
 /// Exactly one `/` is required. If one side is unspecified, all remaining
 /// chains from `all_chains` are used. Invalid or empty selections return a
 /// typed argument error.
-pub fn parse_groups(
+pub(crate) fn parse_groups(
     all_chains: &HashSet<String>,
     groups: &str,
 ) -> ArpeggiaResult<(HashSet<String>, HashSet<String>)> {
@@ -219,7 +219,7 @@ impl StructurePreparation {
         self
     }
 
-    pub(crate) fn chain_csv(mut self, chains: &str) -> Self {
+    fn chain_csv(mut self, chains: &str) -> Self {
         self.chains = parse_chain_string(chains);
         self
     }
@@ -276,7 +276,7 @@ pub(crate) fn prepare_structure(
 }
 
 /// Filter a PDB structure to keep only the specified model.
-pub(crate) fn filter_pdb_by_model(pdb: &PDB, model_num: usize) -> PDB {
+fn filter_pdb_by_model(pdb: &PDB, model_num: usize) -> PDB {
     let all_model_nums: Vec<usize> = pdb.models().map(|m| m.serial_number()).collect();
     let picked_model_num = if model_num == 0 {
         *all_model_nums

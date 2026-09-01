@@ -3,7 +3,7 @@ use pdbtbx::*;
 
 /// Interaction types.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Interaction {
+pub(super) enum Interaction {
     /// A non-disulfide bond explicitly declared by the input structure.
     Covalent,
     /// A disulfide explicitly declared by the input structure.
@@ -63,7 +63,7 @@ pub enum Interaction {
 }
 
 impl Interaction {
-    pub(crate) const fn as_str(&self) -> &'static str {
+    pub(super) const fn as_str(&self) -> &'static str {
         match self {
             Self::Covalent => "Covalent",
             Self::Disulfide => "Disulfide",
@@ -108,41 +108,41 @@ pub enum ProtonationMode {
 
 /// Entity interacting with another.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct InteractingEntity {
+pub(super) struct InteractingEntity {
     /// Chain identifier
-    pub chain: String,
+    pub(super) chain: String,
     /// Residue name
-    pub resn: String,
+    pub(super) resn: String,
     /// Residue index
-    pub resi: isize,
+    pub(super) resi: isize,
     /// residue insertion code
-    pub insertion: String,
+    pub(super) insertion: String,
     /// Alternate location identifier
-    pub altloc: String,
+    pub(super) altloc: String,
     /// Atom name
-    pub atomn: String,
+    pub(super) atomn: String,
     /// Atom index
-    pub atomi: usize,
+    pub(super) atomi: usize,
 }
 
 /// Entry passed to the results.
 #[derive(Debug, Clone)]
-pub struct ResultEntry {
+pub(super) struct ResultEntry {
     /// Model identifier
-    pub model: usize,
+    pub(super) model: usize,
     /// Interaction type
-    pub interaction: Interaction,
+    pub(super) interaction: Interaction,
     /// Ligand residue and atom
-    pub ligand: InteractingEntity,
+    pub(super) ligand: InteractingEntity,
     /// Receptor residue and atom
-    pub receptor: InteractingEntity,
+    pub(super) receptor: InteractingEntity,
     /// Distance between ligand and receptor atoms
-    pub distance: f64,
+    pub(super) distance: f64,
 }
 
 impl InteractingEntity {
     /// Create a new interacting entity
-    pub fn new(
+    pub(super) fn new(
         chain: &str,
         resi: isize,
         insertion: &str,
@@ -162,7 +162,7 @@ impl InteractingEntity {
         }
     }
     /// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a human-readable format
-    pub fn from_hier(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
+    pub(super) fn from_hier(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
         Self::new(
             hierarchy.chain().id(),
             hierarchy.residue().serial_number(),

@@ -1,13 +1,12 @@
-use arpeggia::{
-    ArpeggiaResult, DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file,
-};
+use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file};
+use arpeggia::{ArpeggiaResult, run_with_threads};
 use clap::{Parser, ValueEnum};
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace};
 
 /// Granularity level for SAP score calculation.
 #[derive(ValueEnum, Clone, Debug, Copy)]
-pub enum SapLevel {
+enum SapLevel {
     /// Calculate SAP score for each individual atom
     Atom,
     /// Aggregate SAP score by residue

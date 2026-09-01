@@ -9,7 +9,7 @@ const IONIC_BOND_DIST: f64 = 4.0;
 /// Check if the distance between a positive and a negative ionizable atom
 /// is within [`IONIC_BOND_DIST`].
 /// Search for ionic bonds under an explicit histidine-protonation policy.
-pub fn find_ionic_bond_with_protonation(
+pub(super) fn find_ionic_bond_with_protonation(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     mode: ProtonationMode,
@@ -28,7 +28,7 @@ pub fn find_ionic_bond_with_protonation(
 
 /// Search for like charges that repel each other.
 /// Search for like-charge contacts under a histidine-protonation policy.
-pub fn find_ionic_repulsion_with_protonation(
+pub(super) fn find_ionic_repulsion_with_protonation(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     mode: ProtonationMode,
@@ -109,7 +109,7 @@ fn is_same_charge_pair<'a>(
 }
 
 /// Check if the entity contains ionizable groups that are positively charged at pH 7.0.
-pub fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
+fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
     matches!(
         (res_name, atom_name),
         ("ARG", "NE" | "CZ" | "NH1" | "NH2")
@@ -122,7 +122,7 @@ pub fn is_pos_ionizable(res_name: &str, atom_name: &str) -> bool {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum PositiveCharge {
+pub(super) enum PositiveCharge {
     Definite,
     Potential,
 }
@@ -133,7 +133,7 @@ pub(crate) enum HistidinePreparationIssue {
     Inconsistent,
 }
 
-pub(crate) fn positive_charge(
+pub(super) fn positive_charge(
     entity: &AtomConformerResidueChainModel,
     mode: ProtonationMode,
     ph: f64,
@@ -170,7 +170,7 @@ pub(crate) fn is_histidine(name: &str) -> bool {
     matches!(name, "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP")
 }
 
-pub(crate) fn explicit_histidine_charge(residue: &Residue) -> Option<bool> {
+fn explicit_histidine_charge(residue: &Residue) -> Option<bool> {
     if residue.atoms().map(Atom::charge).sum::<isize>() > 0 {
         return Some(true);
     }

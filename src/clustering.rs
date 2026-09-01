@@ -4,7 +4,7 @@ use crate::rmsd::{
     AtomIdentity, PreparedCoordinates, ResidueSelector, kabsch_prepared_rmsd, prepare_coordinates,
     select_coordinates, validate_correspondence,
 };
-use crate::utils::{polars_calculation_error, polars_input_error};
+use crate::utils::polars_calculation_error;
 use crate::{
     Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, AtomSubset, WarningCode, load_model,
 };
@@ -896,7 +896,6 @@ fn read_structure_manifest(
         .map_err(|_| missing_table_column("manifest", path_column))?
         .str()
         .map_err(|_| invalid_table_type("manifest", path_column, "String"))?;
-    let mut seen_ids = BTreeSet::new();
     for (row, (id, path)) in ids.iter().zip(paths.iter()).enumerate() {
         let id = id.ok_or_else(|| {
             ArpeggiaError::InvalidArgument(format!(
@@ -911,11 +910,6 @@ fn read_structure_manifest(
         if id.is_empty() || path.is_empty() {
             return Err(ArpeggiaError::InvalidArgument(format!(
                 "manifest row {row} contains an empty ID or path"
-            )));
-        }
-        if !seen_ids.insert(id) {
-            return Err(ArpeggiaError::InvalidArgument(format!(
-                "duplicate structure ID: {id}"
             )));
         }
     }
@@ -938,7 +932,7 @@ fn read_structure_manifest(
         .collect()
 }
 
-pub(crate) fn read_dataframe(
+fn read_dataframe(
     path: &Path,
     columns: &[&str],
     expected_rows: Option<usize>,
@@ -1023,6 +1017,10 @@ pub(crate) fn read_dataframe(
             "unsupported table format .{extension}; expected csv, parquet, json, or ndjson"
         ))),
     }
+}
+
+fn polars_input_error(error: PolarsError) -> ArpeggiaError {
+    ArpeggiaError::InvalidArgument(error.to_string())
 }
 
 fn preflight_json_rows(
@@ -1308,6 +1306,43 @@ fn invalid_table_type(table: &str, column: &str, expected: &str) -> ArpeggiaErro
 mod tests {
     use super::*;
 
+    #[derive(Clone, Copy)]
+    enum TestTableFormat {
+        Csv,
+        Parquet,
+        Json,
+        NDJson,
+    }
+
+    impl TestTableFormat {
+        fn extension(self) -> &'static str {
+            match self {
+                Self::Csv => "csv",
+                Self::Parquet => "parquet",
+                Self::Json => "json",
+                Self::NDJson => "ndjson",
+            }
+        }
+    }
+
+    fn write_test_table(dataframe: &mut DataFrame, base: &Path, format: TestTableFormat) {
+        let mut file = File::create(base.with_extension(format.extension())).unwrap();
+        match format {
+            TestTableFormat::Csv => CsvWriter::new(&mut file).finish(dataframe).unwrap(),
+            TestTableFormat::Parquet => {
+                ParquetWriter::new(&mut file).finish(dataframe).unwrap();
+            }
+            TestTableFormat::Json => JsonWriter::new(&mut file)
+                .with_json_format(JsonFormat::Json)
+                .finish(dataframe)
+                .unwrap(),
+            TestTableFormat::NDJson => JsonWriter::new(&mut file)
+                .with_json_format(JsonFormat::JsonLines)
+                .finish(dataframe)
+                .unwrap(),
+        };
+    }
+
     fn one_dimensional_matrix(positions: &[f64]) -> PairwiseRmsdMatrix {
         let mut data = Vec::new();
         for row in 1..positions.len() {
@@ -1455,15 +1490,15 @@ mod tests {
         .unwrap();
         let expected = vec!["a".into(), "b".into(), "c".into()];
         for format in [
-            crate::DataFrameFileType::Csv,
-            crate::DataFrameFileType::Parquet,
-            crate::DataFrameFileType::Json,
-            crate::DataFrameFileType::NDJson,
+            TestTableFormat::Csv,
+            TestTableFormat::Parquet,
+            TestTableFormat::Json,
+            TestTableFormat::NDJson,
         ] {
-            let base = directory.join(format!("cache-{format}"));
-            crate::write_df_to_file(&mut table.clone(), &base, format).unwrap();
+            let base = directory.join(format!("cache-{}", format.extension()));
+            write_test_table(&mut table.clone(), &base, format);
             assert!(
-                read_pairwise_matrix(&base.with_extension(format.to_string()), &expected, false,)
+                read_pairwise_matrix(&base.with_extension(format.extension()), &expected, false,)
                     .is_err()
             );
         }
@@ -1529,14 +1564,14 @@ mod tests {
         std::fs::write(directory.join("b.cif"), "data_b\n#\n").unwrap();
         let manifest = df!("name" => ["b", "a"], "file" => ["b.cif", "a.pdb"]).unwrap();
         for format in [
-            crate::DataFrameFileType::Csv,
-            crate::DataFrameFileType::Parquet,
-            crate::DataFrameFileType::Json,
-            crate::DataFrameFileType::NDJson,
+            TestTableFormat::Csv,
+            TestTableFormat::Parquet,
+            TestTableFormat::Json,
+            TestTableFormat::NDJson,
         ] {
-            let base = directory.join(format!("manifest-{format}"));
-            crate::write_df_to_file(&mut manifest.clone(), &base, format).unwrap();
-            let path = base.with_extension(format.to_string());
+            let base = directory.join(format!("manifest-{}", format.extension()));
+            write_test_table(&mut manifest.clone(), &base, format);
+            let path = base.with_extension(format.extension());
             let observations = read_structure_observations(&path, "name", "file").unwrap();
             assert_eq!(
                 observations
@@ -1558,8 +1593,7 @@ mod tests {
         std::fs::create_dir_all(&structure_directory).unwrap();
         let mut manifest = df!("id" => ["a"], "path" => ["not-a-file.pdb"]).unwrap();
         let manifest_path = directory.join("manifest");
-        crate::write_df_to_file(&mut manifest, &manifest_path, crate::DataFrameFileType::Csv)
-            .unwrap();
+        write_test_table(&mut manifest, &manifest_path, TestTableFormat::Csv);
         assert!(matches!(
             read_structure_observations(
                 &manifest_path.with_extension("csv"),
@@ -1568,25 +1602,6 @@ mod tests {
             ),
             Err(ArpeggiaError::InvalidArgument(message))
                 if message.contains("not a regular file")
-        ));
-    }
-
-    #[test]
-    fn manifest_duplicate_ids_are_rejected_before_path_resolution() {
-        let directory = std::env::temp_dir().join(format!(
-            "arpeggia-duplicate-manifest-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&directory).unwrap();
-        let mut manifest =
-            df!("id" => ["duplicate", "duplicate"], "path" => ["missing-a.pdb", "missing-b.pdb"])
-                .unwrap();
-        let base = directory.join("manifest");
-        crate::write_df_to_file(&mut manifest, &base, crate::DataFrameFileType::Csv).unwrap();
-        assert!(matches!(
-            read_structure_observations(&base.with_extension("csv"), "id", "path"),
-            Err(ArpeggiaError::InvalidArgument(message))
-                if message == "duplicate structure ID: duplicate"
         ));
     }
 

@@ -5,11 +5,11 @@
 //!
 //! Based on <https://github.com/cytokineking/sc-rs>
 
-pub mod atomic_radii;
-pub mod sc_calculator;
-pub mod surface_generator;
-pub mod types;
-pub mod vector3;
+mod atomic_radii;
+mod sc_calculator;
+mod surface_generator;
+mod types;
+mod vector3;
 
 use crate::structure::{StructurePreparation, parse_groups};
 use pdbtbx::PDB;
@@ -22,7 +22,7 @@ const PERIPHERAL_BAND: f64 = 1.5;
 const SEPARATION_CUTOFF: f64 = 8.0;
 const GAUSSIAN_WEIGHT: f64 = 0.5;
 
-pub use surface_generator::SurfaceCalculatorError;
+use surface_generator::SurfaceCalculatorError;
 
 impl From<SurfaceCalculatorError> for crate::ArpeggiaError {
     fn from(error: SurfaceCalculatorError) -> Self {

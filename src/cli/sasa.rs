@@ -1,7 +1,5 @@
-use arpeggia::{
-    ArpeggiaError, ArpeggiaResult, DataFrameFileType, prepare_df_output_dir, run_with_threads,
-    write_df_to_file,
-};
+use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file};
+use arpeggia::{ArpeggiaError, ArpeggiaResult, run_with_threads};
 use clap::{Parser, ValueEnum};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
@@ -9,7 +7,7 @@ use tracing::{debug, error, info, trace};
 
 /// Granularity level for SASA calculation.
 #[derive(ValueEnum, Clone, Debug, Copy)]
-pub enum SasaLevel {
+enum SasaLevel {
     /// Calculate SASA for each individual atom
     Atom,
     /// Aggregate SASA by residue

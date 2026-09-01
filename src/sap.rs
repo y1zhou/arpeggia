@@ -340,9 +340,9 @@ fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisW
     let mut unresolved = 0;
     let mut inconsistent = 0;
     for residue in selected_chains.iter().flat_map(|chain| chain.residues()) {
-        match crate::contacts::ionic::histidine_preparation_issue(residue) {
-            Some(crate::contacts::ionic::HistidinePreparationIssue::Unresolved) => unresolved += 1,
-            Some(crate::contacts::ionic::HistidinePreparationIssue::Inconsistent) => {
+        match crate::contacts::histidine_preparation_issue(residue) {
+            Some(crate::contacts::HistidinePreparationIssue::Unresolved) => unresolved += 1,
+            Some(crate::contacts::HistidinePreparationIssue::Inconsistent) => {
                 inconsistent += 1;
             }
             None => {}

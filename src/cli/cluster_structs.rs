@@ -1,8 +1,8 @@
+use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file, write_df_to_new_file};
 use arpeggia::{
-    ArpeggiaError, ArpeggiaResult, AtomSubset, ClusterOptions, ClusteringMethod, DataFrameFileType,
-    PairwiseRmsdOptions, cluster_pairwise_rmsd, get_pairwise_rmsd_matrix, prepare_df_output_dir,
-    read_pairwise_matrix, read_structure_observations, validate_residue_selection,
-    write_df_to_file, write_df_to_new_file,
+    ArpeggiaError, ArpeggiaResult, AtomSubset, ClusterOptions, ClusteringMethod,
+    PairwiseRmsdOptions, cluster_pairwise_rmsd, get_pairwise_rmsd_matrix, read_pairwise_matrix,
+    read_structure_observations, validate_residue_selection,
 };
 use clap::Parser;
 use std::path::PathBuf;

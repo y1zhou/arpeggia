@@ -17,7 +17,7 @@ use pdbtbx::*;
 /// connectivity, which in turn takes precedence over geometry inference.
 /// Nonbonded atoms inside their unmodified Van de Waals envelope clash; atoms only
 /// inside the compensated outer envelope are Van de Waals contacts.
-pub fn find_vdw_contact(
+pub(super) fn find_vdw_contact(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     vdw_comp_factor: f64,

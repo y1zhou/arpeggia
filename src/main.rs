@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![warn(unreachable_pub)]
 #![doc = include_str!("../README.md")]
 
 mod cli;

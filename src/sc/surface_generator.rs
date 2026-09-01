@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 /// Error type for surface calculation operations.
 #[derive(Debug)]
-pub enum SurfaceCalculatorError {
+pub(super) enum SurfaceCalculatorError {
     /// No atoms defined
     NoAtoms,
     /// A selected chain group contains no usable atoms.
@@ -50,22 +50,22 @@ impl fmt::Display for SurfaceCalculatorError {
 impl std::error::Error for SurfaceCalculatorError {}
 
 #[derive(Default)]
-pub struct SurfaceGenerator {
-    pub(crate) run: RunState,
+pub(super) struct SurfaceGenerator {
+    pub(super) run: RunState,
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct RunState {
-    pub atoms: Vec<ScAtom>,
-    pub probes: Vec<Probe>,
-    pub dots: [Vec<Dot>; 2],
-    pub trimmed_dots: [Vec<usize>; 2],
-    pub results: Results,
+pub(super) struct RunState {
+    pub(super) atoms: Vec<ScAtom>,
+    pub(super) probes: Vec<Probe>,
+    pub(super) dots: [Vec<Dot>; 2],
+    pub(super) trimmed_dots: [Vec<usize>; 2],
+    pub(super) results: Results,
 }
 
 impl SurfaceGenerator {
-    pub fn get_atom_radius(resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
-        let resn = if crate::contacts::ionic::is_histidine(resn) {
+    pub(super) fn get_atom_radius(resn: &str, atomn: &str) -> Result<f64, SurfaceCalculatorError> {
+        let resn = if crate::contacts::is_histidine(resn) {
             "HIS"
         } else {
             resn
@@ -85,7 +85,7 @@ impl SurfaceGenerator {
         )))
     }
 
-    pub(crate) fn generate_molecular_surfaces(&mut self) -> Result<(), SurfaceCalculatorError> {
+    pub(super) fn generate_molecular_surfaces(&mut self) -> Result<(), SurfaceCalculatorError> {
         if self.run.atoms.is_empty() {
             return Err(SurfaceCalculatorError::NoAtoms);
         }

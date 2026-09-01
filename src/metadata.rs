@@ -649,15 +649,13 @@ fn metadata_with_sequences(
         .map(|(chain, monomers)| {
             let sequence = monomers
                 .iter()
-                .map(
-                    |name| match crate::contacts::residues::one_letter_code(name) {
-                        Some(letter) => letter.chars().next().unwrap(),
-                        None => {
-                            unsupported.insert(name.trim().to_ascii_uppercase());
-                            'X'
-                        }
-                    },
-                )
+                .map(|name| match crate::contacts::one_letter_code(name) {
+                    Some(letter) => letter.chars().next().unwrap(),
+                    None => {
+                        unsupported.insert(name.trim().to_ascii_uppercase());
+                        'X'
+                    }
+                })
                 .collect();
             (chain, sequence)
         })

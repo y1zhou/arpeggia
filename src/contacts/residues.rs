@@ -4,45 +4,45 @@ use rayon::prelude::*;
 
 /// The struct for a residue identifier
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct ResidueId<'a> {
+pub(super) struct ResidueId<'a> {
     /// Model identifier
-    pub model: usize,
+    pub(super) model: usize,
     /// Chain identifier
-    pub chain: &'a str,
+    pub(super) chain: &'a str,
     /// Residue index
-    pub resi: isize,
+    pub(super) resi: isize,
     /// Residue insertion code
-    pub insertion: &'a str,
+    pub(super) insertion: &'a str,
     /// Alternate location identifier
-    pub altloc: &'a str,
+    pub(super) altloc: &'a str,
     /// Residue name
-    pub resn: &'a str,
+    pub(super) resn: &'a str,
 }
 
 /// The struct for a plane in 3D space
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Plane {
+pub(crate) struct Plane {
     /// The center of the plane
-    pub center: na::Vector3<f64>,
+    pub(super) center: na::Vector3<f64>,
     /// The normal vector of the plane
-    pub normal: na::Vector3<f64>,
+    pub(super) normal: na::Vector3<f64>,
 }
 
 impl Plane {
     /// Calculate the distance from a point to the plane center
-    pub fn point_vec_dist(&self, point: &na::Vector3<f64>) -> f64 {
+    pub(super) fn point_vec_dist(&self, point: &na::Vector3<f64>) -> f64 {
         (point - self.center).norm()
     }
 
     /// Calculate the distance from a point (tuple) to the plane center
-    pub fn point_dist(&self, point: &(f64, f64, f64)) -> f64 {
+    pub(super) fn point_dist(&self, point: &(f64, f64, f64)) -> f64 {
         let atom_point = na::Vector3::new(point.0, point.1, point.2);
         self.point_vec_dist(&atom_point)
     }
 
     /// Calculate the angle between the plane normal and the vector pointing from
     /// the plane center to the point.
-    pub fn point_vec_angle(&self, point: &na::Vector3<f64>) -> f64 {
+    pub(super) fn point_vec_angle(&self, point: &na::Vector3<f64>) -> f64 {
         let v = point - self.center;
         let mut rad = (self.normal.dot(&v) / (self.normal.norm() * v.norm())).acos();
 
@@ -54,7 +54,7 @@ impl Plane {
     }
 
     /// Calculate the angle between two planes
-    pub fn dihedral(&self, plane: &Plane) -> f64 {
+    pub(super) fn dihedral(&self, plane: &Plane) -> f64 {
         let mut rad =
             (self.normal.dot(&plane.normal) / (self.normal.norm() * plane.normal.norm())).acos();
 
@@ -68,7 +68,7 @@ impl Plane {
 
 impl<'a> ResidueId<'a> {
     /// Create ID that uniquely identifies a residue
-    pub fn new(
+    pub(super) fn new(
         model: usize,
         chain: &'a str,
         resi: isize,
@@ -87,7 +87,7 @@ impl<'a> ResidueId<'a> {
     }
 
     /// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a residue identifier
-    pub fn from_hier(hier: &'a AtomConformerResidueChainModel) -> Self {
+    pub(super) fn from_hier(hier: &'a AtomConformerResidueChainModel) -> Self {
         let (resi, insertion) = hier.residue().id();
         let altloc = hier.conformer().alternative_location();
         Self::new(
@@ -102,8 +102,8 @@ impl<'a> ResidueId<'a> {
 }
 
 /// Trait for residue extensions
-pub trait ResidueExt {
-    /// The residue one-letter code, or `None` if it's not an amino acid.
+pub(crate) trait ResidueExt {
+    /// The residue one-letter code, or `None` if it is not an amino acid.
     fn resn(&self) -> Option<&str>;
 
     /// Return the atoms in the aromatic ring of the residue.
@@ -335,12 +335,15 @@ mod tests {
 
         // First Met has no rings
         let residue = pdb.residues().next().unwrap();
-        assert_eq!(residue.resn(), Some("M"));
+        assert_eq!(residue.name().and_then(one_letter_code), Some("M"));
         assert_eq!(residue.ring_atoms().len(), 0);
         assert_eq!(residue.sc_plane_atoms().len(), 3);
 
         // Phe 4 has a ring
-        let res_f4 = pdb.residues().find(|res| res.resn() == Some("F")).unwrap();
+        let res_f4 = pdb
+            .residues()
+            .find(|residue| residue.name().and_then(one_letter_code) == Some("F"))
+            .unwrap();
         assert_eq!(res_f4.serial_number(), 4);
         let ring_atoms = res_f4.ring_atoms();
         assert_eq!(ring_atoms.len(), 6);

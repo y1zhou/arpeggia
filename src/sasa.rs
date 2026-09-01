@@ -4,7 +4,6 @@
 //! of granularity (atom, residue, chain) and related metrics like dSASA
 //! (buried surface area) and relative SASA.
 
-use crate::contacts::InteractingEntity;
 use crate::structure::{StructurePreparation, parse_groups, prepare_structure};
 use crate::utils::string_values;
 use pdbtbx::*;
@@ -244,17 +243,22 @@ fn calculate_prepared_atom_sasa_records(
         .iter()
         .zip(atom_sasa)
         .map(|(hier, sasa)| {
-            let entity = InteractingEntity::from_hier(hier);
+            let atom = hier.atom();
+            let residue = hier.residue();
             Ok(AtomSasaRecord {
-                chain: entity.chain,
-                resn: entity.resn,
-                resi: i32::try_from(entity.resi).map_err(|_| {
+                chain: hier.chain().id().to_string(),
+                resn: residue.name().unwrap_or("").to_string(),
+                resi: i32::try_from(residue.serial_number()).map_err(|_| {
                     crate::ArpeggiaError::Calculation("residue identifier exceeds Int32".into())
                 })?,
-                insertion: entity.insertion,
-                altloc: entity.altloc,
-                atomn: entity.atomn,
-                atomi: u32::try_from(entity.atomi).map_err(|_| {
+                insertion: residue.insertion_code().unwrap_or("").to_string(),
+                altloc: hier
+                    .conformer()
+                    .alternative_location()
+                    .unwrap_or("")
+                    .to_string(),
+                atomn: atom.name().to_string(),
+                atomi: u32::try_from(atom.serial_number()).map_err(|_| {
                     crate::ArpeggiaError::Calculation("atom identifier exceeds UInt32".into())
                 })?,
                 sasa,
@@ -398,7 +402,7 @@ fn is_n_terminal(entity: &AtomConformerResidueChainModel) -> bool {
     })
 }
 
-pub(crate) fn atom_sasa_records_to_dataframe(records: &[AtomSasaRecord]) -> DataFrame {
+fn atom_sasa_records_to_dataframe(records: &[AtomSasaRecord]) -> DataFrame {
     df!(
         "atomi" => records.iter().map(|record| record.atomi).collect::<Vec<_>>(),
         "sasa" => records.iter().map(|record| record.sasa).collect::<Vec<_>>(),
@@ -495,7 +499,7 @@ fn aggregate_residue_records(records: Vec<AtomSasaRecord>) -> Vec<ResidueSasaRec
         .collect()
 }
 
-pub(crate) fn residue_sasa_records_to_dataframe(records: &[ResidueSasaRecord]) -> DataFrame {
+fn residue_sasa_records_to_dataframe(records: &[ResidueSasaRecord]) -> DataFrame {
     df!(
         "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
         "resn" => string_values(records.iter().map(|record| record.resn.as_str())),
@@ -583,7 +587,7 @@ fn aggregate_chain_records(records: Vec<AtomSasaRecord>) -> Vec<ChainSasaRecord>
         .collect()
 }
 
-pub(crate) fn chain_sasa_records_to_dataframe(records: &[ChainSasaRecord]) -> DataFrame {
+fn chain_sasa_records_to_dataframe(records: &[ChainSasaRecord]) -> DataFrame {
     df!(
         "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
         "sasa" => records.iter().map(|record| record.sasa).collect::<Vec<_>>(),

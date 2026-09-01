@@ -1,7 +1,5 @@
-use arpeggia::{
-    ArpeggiaResult, DataFrameFileType, ProtonationMode, prepare_df_output_dir, run_with_threads,
-    write_df_to_file,
-};
+use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file};
+use arpeggia::{ArpeggiaResult, ProtonationMode, run_with_threads};
 use clap::Parser;
 use pdbtbx::*;
 use polars::prelude::*;

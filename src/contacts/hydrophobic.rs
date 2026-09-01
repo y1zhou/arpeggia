@@ -7,7 +7,7 @@ const HYDROPHOBIC_CONTACT_DIST: f64 = 4.5;
 /// Search for hydrophobic contacts.
 ///
 /// Check if the distance between two hydrophobics is within [`HYDROPHOBIC_CONTACT_DIST`].
-pub fn find_hydrophobic_contact(
+pub(super) fn find_hydrophobic_contact(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
 ) -> Option<Interaction> {
