@@ -8,8 +8,8 @@ carry a `TODO:` identifying that future correspondence boundary.
 
 ## Inputs and selection
 
-An ensemble comes from a non-recursive directory or a CSV, Parquet, JSON, or
-NDJSON manifest. Directory extensions are matched case-insensitively for PDB
+An ensemble comes from a non-recursive directory or a CSV, Parquet, or NDJSON
+manifest. Directory extensions are matched case-insensitively for PDB
 and mmCIF files; filename stems remain case-sensitive IDs. Manifests use `id`
 and `path` by default, allow caller-selected column names, resolve relative
 paths against the manifest directory, and ignore unrelated columns. XLSX is
@@ -184,11 +184,10 @@ already calculated DataFrame.
 
 ## Output ordering and cache reuse
 
-Cluster and optional pairwise tables support CSV, Parquet, JSON, and NDJSON.
+Cluster and optional pairwise tables support CSV, Parquet, and NDJSON.
 Cached Parquet row counts are checked from file metadata before columns are
-decoded; cached CSV, JSON, and NDJSON reads stop after one row beyond the
-expected count. Bounded NDJSON validation and decoding use the same in-memory
-snapshot.
+decoded; cached CSV and NDJSON reads request at most one row beyond the expected
+count. NDJSON projection and row limiting happen in one lazy Polars collection.
 When pairwise output is requested, it must be written successfully before
 k-medoids begins, preserving useful work if clustering subsequently fails.
 

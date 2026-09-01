@@ -120,7 +120,7 @@ arpeggia cluster-structs \
 
 ### Output Formats
 
-Supported formats: `csv`, `parquet`, `json`, `ndjson`
+Supported formats: `csv`, `parquet`, `ndjson`
 
 ```bash
 arpeggia contacts -i input.pdb -o output/ -t parquet

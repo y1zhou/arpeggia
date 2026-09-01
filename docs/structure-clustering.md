@@ -41,7 +41,7 @@ pairs = arpeggia.pairwise_rmsd(
 ```
 
 `pairwise_rmsd` accepts a non-recursive structure directory or a CSV, Parquet,
-JSON, or NDJSON manifest. Manifest columns default to `id` and `path` and can
+or NDJSON manifest. Manifest columns default to `id` and `path` and can
 be changed with `id_col` and `path_col`; relative paths resolve against the
 manifest. Directory IDs are case-sensitive filename stems, while PDB/mmCIF
 extensions are case-insensitive. Duplicate IDs or canonical paths fail before
@@ -97,7 +97,7 @@ The cluster table contains:
 | `medoid_id` | String | observed representative structure |
 | `rmsd_to_medoid` | Float64 | RMSD to that representative |
 
-CLI tables can be CSV, Parquet, JSON, or NDJSON. `--pairwise-rmsd` writes the
+CLI tables can be CSV, Parquet, or NDJSON. `--pairwise-rmsd` writes the
 pair table before clustering, preserving it if clustering fails. A later run
 reuses the exact requested pairwise path only when its schema, complete pair
 coverage, and ID set validate. Cache reuse checks IDs only—not file contents,

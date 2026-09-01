@@ -252,10 +252,9 @@ Implementation implications:
 - Project only the required manifest or cache columns. Use Polars' lazy NDJSON
   scan so projection reaches the parser; eager CSV and Parquet readers already
   provide the required projection and row-count controls for this immediate
-  read-and-validate path. Polars 0.55 materializes ordinary JSON arrays before
-  applying projection, and does not provide a lazy ordinary-JSON scan.
+  read-and-validate path.
 - Check cached Parquet row counts from metadata before decoding and cap cached
-  CSV, JSON, and NDJSON reads at one row beyond the expected pair count.
+  CSV and NDJSON reads at one row beyond the expected pair count.
 - Write requested pairwise output successfully before starting k-medoids. On a
   later CLI run, reuse an existing table at the exact requested output path
   when its validated ID set matches the current inputs. This intentionally does
@@ -265,10 +264,9 @@ Implementation implications:
 - Use that same three-column long form when a caller supplies a previously
   calculated matrix to the Python clustering API. A downstream pivot can
   construct a square representation when needed.
-- Keep accepted tabular formats to CSV, Parquet, JSON, and NDJSON. Polars'
-  existing `json` feature provides both JSON variants, so NDJSON requires no
-  additional dependency or feature. XLSX would require another dependency and
-  is deliberately outside the feature.
+- Keep accepted tabular formats to CSV, Parquet, and NDJSON. Polars' `json`
+  feature remains required for NDJSON. XLSX would require another dependency
+  and is deliberately outside the feature.
 - Keep the clustering dependency behind an internal adapter so the RMSD
   engine, Python API, and CLI do not expose crate-specific types.
 - Validate finite, symmetric, non-negative results and an exact zero diagonal

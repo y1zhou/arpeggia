@@ -12,8 +12,6 @@ use kmedoids::ArrayAdapter;
 use polars::prelude::*;
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
-use std::fs::File;
-use std::io::{Cursor, Read, Seek};
 use std::path::{Path, PathBuf};
 
 const FALLBACK_WARNING_BYTES: u64 = 8 * 1024 * 1024 * 1024;
@@ -575,7 +573,6 @@ fn read_dataframe(
                 path.display()
             ))
         })?;
-    let mut file = File::open(path)?;
     let projection = || {
         columns
             .iter()
@@ -586,11 +583,11 @@ fn read_dataframe(
         "csv" => CsvReadOptions::default()
             .with_n_rows(expected_rows.map(|rows| rows.saturating_add(1)))
             .with_columns(Some(projection().into()))
-            .into_reader_with_file_handle(file)
+            .into_reader_with_file_handle(std::fs::File::open(path)?)
             .finish()
             .map_err(polars_input_error),
         "parquet" => {
-            let mut reader = ParquetReader::new(file);
+            let mut reader = ParquetReader::new(std::fs::File::open(path)?);
             if let Some(expected) = expected_rows {
                 let actual = reader.num_rows().map_err(polars_input_error)?;
                 if actual != expected {
@@ -606,160 +603,28 @@ fn read_dataframe(
                 .finish()
                 .map_err(polars_input_error)
         }
-        "json" => {
-            preflight_json_rows(&mut file, false, expected_rows)?;
-            JsonReader::new(file)
-                .with_json_format(JsonFormat::Json)
-                .with_projection(Some(projection()))
+        "ndjson" => {
+            LazyJsonLineReader::new(PlRefPath::try_from_path(path).map_err(polars_input_error)?)
+                .with_n_rows(expected_rows.map(|rows| rows.saturating_add(1)))
                 .finish()
+                .map_err(polars_input_error)?
+                .select(
+                    columns
+                        .iter()
+                        .map(|column| col(*column))
+                        .collect::<Vec<_>>(),
+                )
+                .collect()
                 .map_err(polars_input_error)
         }
-        "ndjson" => {
-            if let Some(bytes) = preflight_json_rows(&mut file, true, expected_rows)? {
-                JsonReader::new(Cursor::new(bytes))
-                    .with_json_format(JsonFormat::JsonLines)
-                    .with_projection(Some(projection()))
-                    .finish()
-                    .map_err(polars_input_error)
-            } else {
-                LazyJsonLineReader::new(PlRefPath::try_from_path(path).map_err(polars_input_error)?)
-                    .finish()
-                    .map_err(polars_input_error)?
-                    .select(
-                        columns
-                            .iter()
-                            .map(|column| col(*column))
-                            .collect::<Vec<_>>(),
-                    )
-                    .collect()
-                    .map_err(polars_input_error)
-            }
-        }
         _ => Err(ArpeggiaError::InvalidArgument(format!(
-            "unsupported table format .{extension}; expected csv, parquet, json, or ndjson"
+            "unsupported table format .{extension}; expected csv, parquet, or ndjson"
         ))),
     }
 }
 
 fn polars_input_error(error: PolarsError) -> ArpeggiaError {
     ArpeggiaError::InvalidArgument(error.to_string())
-}
-
-fn preflight_json_rows(
-    file: &mut File,
-    lines: bool,
-    expected_rows: Option<usize>,
-) -> ArpeggiaResult<Option<Vec<u8>>> {
-    if let Some(expected) = expected_rows {
-        let mut bytes = lines.then(Vec::new);
-        let actual =
-            bounded_json_row_count(file, lines, expected.saturating_add(1), bytes.as_mut())?;
-        if actual != expected {
-            return Err(ArpeggiaError::InvalidArgument(format!(
-                "pairwise table has {actual} rows; expected exactly {expected}"
-            )));
-        }
-        if !lines {
-            file.rewind()?;
-        }
-        return Ok(bytes);
-    }
-    Ok(None)
-}
-
-fn bounded_json_row_count(
-    file: &mut File,
-    lines: bool,
-    limit: usize,
-    mut snapshot: Option<&mut Vec<u8>>,
-) -> ArpeggiaResult<usize> {
-    let mut buffer = [0_u8; 8192];
-    let mut count = 0;
-    let mut line_has_content = false;
-    let mut array_started = false;
-    let mut depth = 0_usize;
-    let mut element_started = false;
-    let mut in_string = false;
-    let mut escaped = false;
-    loop {
-        let bytes_read = file.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
-        if let Some(snapshot) = snapshot.as_deref_mut() {
-            snapshot.extend_from_slice(&buffer[..bytes_read]);
-        }
-        for &byte in &buffer[..bytes_read] {
-            if lines {
-                if byte == b'\n' {
-                    if line_has_content {
-                        count += 1;
-                        if count >= limit {
-                            return Ok(count);
-                        }
-                    }
-                    line_has_content = false;
-                } else if !byte.is_ascii_whitespace() {
-                    line_has_content = true;
-                }
-                continue;
-            }
-            if !array_started {
-                if byte.is_ascii_whitespace() {
-                    continue;
-                }
-                if byte != b'[' {
-                    return Ok(0);
-                }
-                array_started = true;
-                depth = 1;
-                continue;
-            }
-            if in_string {
-                if escaped {
-                    escaped = false;
-                } else if byte == b'\\' {
-                    escaped = true;
-                } else if byte == b'"' {
-                    in_string = false;
-                }
-                continue;
-            }
-            match byte {
-                b'"' => {
-                    element_started |= depth == 1;
-                    in_string = true;
-                }
-                b'{' | b'[' => {
-                    element_started |= depth == 1;
-                    depth += 1;
-                }
-                b'}' if depth > 1 => depth -= 1,
-                b']' if depth == 1 => {
-                    if element_started {
-                        count += 1;
-                    }
-                    return Ok(count);
-                }
-                b']' if depth > 1 => depth -= 1,
-                b',' if depth == 1 => {
-                    if element_started {
-                        count += 1;
-                        if count >= limit {
-                            return Ok(count);
-                        }
-                    }
-                    element_started = false;
-                }
-                byte if depth == 1 && !byte.is_ascii_whitespace() => element_started = true,
-                _ => {}
-            }
-        }
-    }
-    if lines && line_has_content {
-        count += 1;
-    }
-    Ok(count)
 }
 
 fn validate_observations(
@@ -933,7 +798,6 @@ mod tests {
     enum TestTableFormat {
         Csv,
         Parquet,
-        Json,
         NDJson,
     }
 
@@ -942,23 +806,18 @@ mod tests {
             match self {
                 Self::Csv => "csv",
                 Self::Parquet => "parquet",
-                Self::Json => "json",
                 Self::NDJson => "ndjson",
             }
         }
     }
 
     fn write_test_table(dataframe: &mut DataFrame, base: &Path, format: TestTableFormat) {
-        let mut file = File::create(base.with_extension(format.extension())).unwrap();
+        let mut file = std::fs::File::create(base.with_extension(format.extension())).unwrap();
         match format {
             TestTableFormat::Csv => CsvWriter::new(&mut file).finish(dataframe).unwrap(),
             TestTableFormat::Parquet => {
                 ParquetWriter::new(&mut file).finish(dataframe).unwrap();
             }
-            TestTableFormat::Json => JsonWriter::new(&mut file)
-                .with_json_format(JsonFormat::Json)
-                .finish(dataframe)
-                .unwrap(),
             TestTableFormat::NDJson => JsonWriter::new(&mut file)
                 .with_json_format(JsonFormat::JsonLines)
                 .finish(dataframe)
@@ -1084,7 +943,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_table_readers_preflight_wrong_height() {
+    fn cached_table_readers_reject_wrong_height() {
         let directory =
             std::env::temp_dir().join(format!("arpeggia-cache-height-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
@@ -1098,7 +957,6 @@ mod tests {
         for format in [
             TestTableFormat::Csv,
             TestTableFormat::Parquet,
-            TestTableFormat::Json,
             TestTableFormat::NDJson,
         ] {
             let base = directory.join(format!("cache-{}", format.extension()));
@@ -1108,25 +966,6 @@ mod tests {
                     .is_err()
             );
         }
-    }
-
-    #[test]
-    fn ndjson_cache_preflight_returns_an_immutable_snapshot() {
-        let path = std::env::temp_dir().join(format!(
-            "arpeggia-ndjson-snapshot-{}.ndjson",
-            std::process::id()
-        ));
-        std::fs::write(&path, "{\"id\":\"a\"}\n{\"id\":\"b\"}\n").unwrap();
-        let mut file = File::open(&path).unwrap();
-        let bytes = preflight_json_rows(&mut file, true, Some(2))
-            .unwrap()
-            .unwrap();
-        std::fs::write(&path, "{\"id\":\"replacement\"}\n").unwrap();
-        let dataframe = JsonReader::new(Cursor::new(bytes))
-            .with_json_format(JsonFormat::JsonLines)
-            .finish()
-            .unwrap();
-        assert_eq!(dataframe.height(), 2);
     }
 
     #[test]
@@ -1172,7 +1011,6 @@ mod tests {
         for format in [
             TestTableFormat::Csv,
             TestTableFormat::Parquet,
-            TestTableFormat::Json,
             TestTableFormat::NDJson,
         ] {
             let base = directory.join(format!("manifest-{}", format.extension()));

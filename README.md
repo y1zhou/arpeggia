@@ -29,7 +29,7 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 - [x] Calculate Shape Complementarity (SC) scores at protein-protein interfaces
 - [x] Superpose structures with Kabsch RMSD and cluster conformations with k-medoids
 - [x] Filter calculations to specific chains
-- [x] Output results in various formats (e.g., JSON, CSV, Parquet)
+- [x] Output results in CSV, Parquet, or NDJSON
 - [x] Python bindings via PyO3
 - [x] Returns Polars DataFrames for efficient data manipulation
 

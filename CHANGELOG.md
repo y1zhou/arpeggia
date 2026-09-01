@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   structure clustering, packed parallel pairwise RMSD, heuristic memory guards,
   Polars outputs, and ID-only CLI pair-table reuse.
 
+### Changed
+
+- Simplified tabular IO to CSV, Parquet, and NDJSON. NDJSON reads use Polars'
+  bounded lazy scanner with projection pushdown; ordinary JSON tables are no
+  longer accepted or produced.
+
 ## [0.9.0] - 2026-08-27
 
 ### Scientific corrections

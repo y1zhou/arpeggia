@@ -48,9 +48,9 @@ selection, table I/O, Python, and CLI concerns.
 
 - [x] Discover case-insensitive PDB/mmCIF extensions non-recursively and derive
       case-sensitive IDs from filename stems.
-- [x] Read CSV, Parquet, JSON, and NDJSON manifests with configurable ID/path
-      columns, eager CSV/Parquet projection, lazy NDJSON projection pushdown,
-      ordinary-JSON projection after parsing, and manifest-relative paths.
+- [x] Read CSV, Parquet, and NDJSON manifests with configurable ID/path columns,
+      eager CSV/Parquet projection, lazy NDJSON projection pushdown, and
+      manifest-relative paths.
 - [x] Validate supported extensions, path existence, minimum counts, empty or
       duplicate IDs, and duplicate canonical paths before calculations.
 - [x] Sort observations by exact ID and test all input formats, duplicate and
@@ -113,12 +113,12 @@ selection, table I/O, Python, and CLI concerns.
 - [x] Validate count-independent cluster bounds and residue syntax before CLI
       directory discovery or Python structure loading.
 - [x] Write optional `id_1`, `id_2`, `rmsd` output before clustering in CSV,
-      Parquet, JSON, or NDJSON, then release any transient output DataFrame.
+      Parquet, or NDJSON, then release any transient output DataFrame.
 - [x] Check only the exact requested pairwise path and reuse a complete table
       with the exact current ID set; emit a debug log on reuse.
 - [x] Reject wrong-size cached Parquet tables from row-count metadata before
-      decoding and bound cached CSV, JSON, and NDJSON reads to one row beyond
-      the expected count.
+      decoding and bound cached CSV and NDJSON reads to one row beyond the
+      expected count.
 - [x] Fail without overwriting when an existing cache is malformed, incomplete,
       or ID-mismatched, and instruct the caller to remove it.
 - [x] Test successful recovery/reuse, stale-selection reuse as the documented

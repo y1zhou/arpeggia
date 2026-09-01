@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 pub(super) enum DataFrameFileType {
     Csv,
     Parquet,
-    Json,
     #[value(name = "ndjson")]
     NDJson,
 }
@@ -17,7 +16,6 @@ impl std::fmt::Display for DataFrameFileType {
         f.write_str(match self {
             Self::Csv => "csv",
             Self::Parquet => "parquet",
-            Self::Json => "json",
             Self::NDJson => "ndjson",
         })
     }
@@ -73,13 +71,6 @@ fn write_df(
         DataFrameFileType::Csv => CsvWriter::new(file),
         DataFrameFileType::Parquet => {
             ParquetWriter::new(file)
-                .finish(dataframe)
-                .map_err(|error| ArpeggiaError::Io(error.into()))?;
-            return Ok(());
-        }
-        DataFrameFileType::Json => {
-            JsonWriter::new(file)
-                .with_json_format(JsonFormat::Json)
                 .finish(dataframe)
                 .map_err(|error| ArpeggiaError::Io(error.into()))?;
             return Ok(());
