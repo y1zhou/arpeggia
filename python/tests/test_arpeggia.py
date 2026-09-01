@@ -52,10 +52,25 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
         arpeggia.rmsd(
             test_pdb_file,
             test_pdb_file,
-            residues="A:1-20",
+            superpose_residues="A:1-20",
+            rmsd_residues="A:1-20",
         )
         < 1e-12
     )
+    assert (
+        arpeggia.rmsd(
+            test_pdb_file,
+            test_pdb_file,
+            superpose_residues="A:1-20",
+        )
+        < 1e-12
+    )
+    with pytest.raises(ValueError, match="RMSD Selection"):
+        arpeggia.rmsd(
+            "missing-reference.pdb",
+            "missing-mobile.pdb",
+            rmsd_residues="A:",
+        )
 
     structures = tmp_path / "structures"
     structures.mkdir()
@@ -63,7 +78,12 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
         (structures / f"{structure_id}.pdb").write_bytes(
             Path(test_pdb_file).read_bytes()
         )
-    pairs = arpeggia.pairwise_rmsd(str(structures), residues="A:1-20", num_threads=2)
+    pairs = arpeggia.pairwise_rmsd(
+        str(structures),
+        superpose_residues="A:1-20",
+        rmsd_residues="A:1-20",
+        num_threads=2,
+    )
     assert tuple(pairs.columns) == _contract.PAIRWISE_RMSD_COLUMNS
     assert pairs.height == 3
     assert pairs["rmsd"].max() == pytest.approx(0.0, abs=1e-12)

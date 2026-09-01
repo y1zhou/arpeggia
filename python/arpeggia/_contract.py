@@ -21,12 +21,18 @@ ATOM_SUBSETS = ("ca", "backbone", "heavy", "all")
 CLUSTERING_METHODS = ("k-medoids",)
 
 DEFAULTS = {
-    "rmsd": {"model_num": 0, "residues": "", "atoms": "ca"},
+    "rmsd": {
+        "model_num": 0,
+        "superpose_residues": "",
+        "rmsd_residues": "",
+        "atoms": "ca",
+    },
     "pairwise_rmsd": {
         "id_col": "id",
         "path_col": "path",
         "model_num": 0,
-        "residues": "",
+        "superpose_residues": "",
+        "rmsd_residues": "",
         "atoms": "ca",
         "num_threads": 0,
         "bypass_mem_check": False,
@@ -35,7 +41,8 @@ DEFAULTS = {
         "method": "k-medoids",
         "max_iterations": 100,
         "model_num": 0,
-        "residues": "",
+        "superpose_residues": "",
+        "rmsd_residues": "",
         "atoms": "ca",
         "num_threads": 0,
         "bypass_mem_check": False,

@@ -7,7 +7,7 @@ mod complex;
 mod hbond;
 mod hydrophobic;
 mod ionic;
-pub(crate) mod residues;
+mod residues;
 mod structs;
 mod vdw;
 

@@ -59,21 +59,31 @@ fn clustering_method(value: &str) -> PyResult<crate::ClusteringMethod> {
 
 /// Superpose two structures and return RMSD in Angstroms.
 #[pyfunction]
-#[pyo3(signature = (reference, mobile, model_num=0, residues="", atoms="ca"))]
+#[pyo3(signature = (reference, mobile, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca"))]
 fn rmsd(
     py: Python<'_>,
     reference: String,
     mobile: String,
     model_num: usize,
-    residues: &str,
+    superpose_residues: &str,
+    rmsd_residues: &str,
     atoms: &str,
 ) -> PyResult<f64> {
     let atoms = atom_subset(atoms)?;
-    crate::validate_residue_selection(residues).map_err(python_error)?;
+    crate::validate_rmsd_selections(superpose_residues, rmsd_residues).map_err(python_error)?;
     let reference = load_for_python(py, &reference)?;
     let mobile = load_for_python(py, &mobile)?;
     let analysis = py
-        .detach(move || crate::get_rmsd(reference, mobile, model_num, residues, atoms))
+        .detach(move || {
+            crate::get_rmsd(
+                reference,
+                mobile,
+                model_num,
+                superpose_residues,
+                rmsd_residues,
+                atoms,
+            )
+        })
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(analysis.value)
@@ -81,7 +91,7 @@ fn rmsd(
 
 /// Calculate every unordered RMSD pair in a structure ensemble.
 #[pyfunction]
-#[pyo3(signature = (input, id_col="id", path_col="path", model_num=0, residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
+#[pyo3(signature = (input, id_col="id", path_col="path", model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
 #[allow(clippy::too_many_arguments)]
 fn pairwise_rmsd(
     py: Python<'_>,
@@ -89,15 +99,17 @@ fn pairwise_rmsd(
     id_col: &str,
     path_col: &str,
     model_num: usize,
-    residues: &str,
+    superpose_residues: &str,
+    rmsd_residues: &str,
     atoms: &str,
     num_threads: usize,
     bypass_mem_check: bool,
 ) -> PyResult<PyDataFrame> {
-    crate::validate_residue_selection(residues).map_err(python_error)?;
+    crate::validate_rmsd_selections(superpose_residues, rmsd_residues).map_err(python_error)?;
     let options = crate::PairwiseRmsdOptions {
         model_num,
-        residues: residues.to_string(),
+        superpose_residues: superpose_residues.to_string(),
+        rmsd_residues: rmsd_residues.to_string(),
         atoms: atom_subset(atoms)?,
         num_threads,
         bypass_mem_check,
@@ -113,7 +125,7 @@ fn pairwise_rmsd(
 
 /// Cluster structures from an ensemble input or a complete pairwise RMSD table.
 #[pyfunction]
-#[pyo3(signature = (input=None, pairwise_rmsd=None, id_col="id", path_col="path", method="k-medoids", num_clusters=None, max_clusters=None, max_iterations=100, model_num=0, residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
+#[pyo3(signature = (input=None, pairwise_rmsd=None, id_col="id", path_col="path", method="k-medoids", num_clusters=None, max_clusters=None, max_iterations=100, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
 #[allow(clippy::too_many_arguments)]
 fn cluster_structs(
     py: Python<'_>,
@@ -126,7 +138,8 @@ fn cluster_structs(
     max_clusters: Option<usize>,
     max_iterations: usize,
     model_num: usize,
-    residues: &str,
+    superpose_residues: &str,
+    rmsd_residues: &str,
     atoms: &str,
     num_threads: usize,
     bypass_mem_check: bool,
@@ -148,7 +161,8 @@ fn cluster_structs(
     let matrix = match (input, pairwise_rmsd) {
         (Some(input), None) => {
             let atoms = atom_subset(atoms)?;
-            crate::validate_residue_selection(residues).map_err(python_error)?;
+            crate::validate_rmsd_selections(superpose_residues, rmsd_residues)
+                .map_err(python_error)?;
             let observations = py
                 .detach(|| {
                     crate::read_structure_observations(
@@ -163,7 +177,8 @@ fn cluster_structs(
                 .map_err(python_error)?;
             let options = crate::PairwiseRmsdOptions {
                 model_num,
-                residues: residues.to_string(),
+                superpose_residues: superpose_residues.to_string(),
+                rmsd_residues: rmsd_residues.to_string(),
                 atoms,
                 num_threads,
                 bypass_mem_check,

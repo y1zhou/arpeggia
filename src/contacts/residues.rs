@@ -21,7 +21,7 @@ pub(super) struct ResidueId<'a> {
 
 /// The struct for a plane in 3D space
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub(crate) struct Plane {
+pub(super) struct Plane {
     /// The center of the plane
     pub(super) center: na::Vector3<f64>,
     /// The normal vector of the plane
@@ -102,10 +102,7 @@ impl<'a> ResidueId<'a> {
 }
 
 /// Trait for residue extensions
-pub(crate) trait ResidueExt {
-    /// The residue one-letter code, or `None` if it is not an amino acid.
-    fn resn(&self) -> Option<&str>;
-
+pub(super) trait ResidueExt {
     /// Return the atoms in the aromatic ring of the residue.
     fn ring_atoms(&self) -> Vec<&Atom>;
 
@@ -148,10 +145,6 @@ pub(crate) fn one_letter_code(name: &str) -> Option<&'static str> {
 }
 
 impl ResidueExt for Residue {
-    fn resn(&self) -> Option<&str> {
-        one_letter_code(self.name()?)
-    }
-
     fn ring_atoms(&self) -> Vec<&Atom> {
         let res_name = self.name().unwrap_or(""); // Some conformers have different names
 

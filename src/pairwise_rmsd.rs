@@ -1,8 +1,9 @@
 //! Ensemble structure input and pairwise RMSD calculation.
 
 use crate::rmsd::{
-    AtomIdentity, PreparedCoordinates, ResidueSelector, kabsch_prepared_rmsd, prepare_coordinates,
-    select_coordinates, validate_correspondence,
+    AtomIdentity, PreparedCoordinates, ResidueSelector, kabsch_prepared_rmsd,
+    kabsch_prepared_selected_rmsd, prepare_coordinate_union, select_coordinate_union,
+    validate_rmsd_selections, validate_selection_keys,
 };
 use crate::utils::polars_calculation_error;
 use crate::{
@@ -41,9 +42,11 @@ impl StructureObservation {
 pub struct PairwiseRmsdOptions {
     /// Coordinate model number, with zero selecting the first model.
     pub model_num: usize,
-    /// Chain and author-residue selection grammar.
-    pub residues: String,
-    /// Atom population used for the fit and RMSD.
+    /// Residues used to determine the rigid-body transform.
+    pub superpose_residues: String,
+    /// Residues evaluated after applying the rigid-body transform.
+    pub rmsd_residues: String,
+    /// Atom population shared by superposition and RMSD evaluation.
     pub atoms: AtomSubset,
     /// Worker count, with zero selecting all available processors.
     pub num_threads: usize,
@@ -78,7 +81,7 @@ pub fn get_pairwise_rmsd(
     path_column: &str,
     options: &PairwiseRmsdOptions,
 ) -> ArpeggiaResult<Analysis<DataFrame>> {
-    ResidueSelector::parse(&options.residues)?;
+    validate_rmsd_selections(&options.superpose_residues, &options.rmsd_residues)?;
     let observations = read_structure_observations(input, id_column, path_column)?;
     get_pairwise_rmsd_matrix(&observations, options).and_then(|analysis| {
         analysis
@@ -329,7 +332,8 @@ pub fn get_pairwise_rmsd_matrix(
     observations: &[StructureObservation],
     options: &PairwiseRmsdOptions,
 ) -> ArpeggiaResult<Analysis<PairwiseRmsdMatrix>> {
-    let selector = ResidueSelector::parse(&options.residues)?;
+    let superpose_selector = ResidueSelector::parse(&options.superpose_residues)?;
+    let rmsd_selector = ResidueSelector::parse(&options.rmsd_residues)?;
     let observations = validate_observations(observations.to_vec())?;
     if observations.len() < 2 {
         return Err(ArpeggiaError::InvalidArgument(
@@ -342,10 +346,22 @@ pub fn get_pairwise_rmsd_matrix(
         ArpeggiaError::InvalidArgument("pairwise matrix size overflows usize".into())
     })? as u64;
 
-    let first_loaded = load_observation(&observations[0], options, &selector, None)?;
+    let equal_selections = superpose_selector == rmsd_selector;
+    let first_loaded = load_observation(
+        &observations[0],
+        options,
+        &superpose_selector,
+        &rmsd_selector,
+        None,
+    )?;
     let reference_keys = first_loaded
         .keys
         .expect("the first Structure Observation retains its atom keys");
+    let reference_selection = (
+        reference_keys.as_slice(),
+        first_loaded.superpose_end,
+        first_loaded.rmsd_start,
+    );
     let atom_count = first_loaded.coordinates.len();
     let coordinate_bytes = observations
         .len()
@@ -374,7 +390,13 @@ pub fn get_pairwise_rmsd_matrix(
             observations[1..]
                 .par_iter()
                 .map(|observation| {
-                    load_observation(observation, options, &selector, Some(&reference_keys))
+                    load_observation(
+                        observation,
+                        options,
+                        &superpose_selector,
+                        &rmsd_selector,
+                        Some(reference_selection),
+                    )
                 })
                 .collect::<ArpeggiaResult<Vec<_>>>()
         })
@@ -401,7 +423,11 @@ pub fn get_pairwise_rmsd_matrix(
                 let start = chunk_index * chunk_size;
                 let (mut row, mut column) = pair_at_index(start, observations.len());
                 for value in output {
-                    *value = kabsch_prepared_rmsd(&coordinates[column], &coordinates[row])?;
+                    *value = if equal_selections {
+                        kabsch_prepared_rmsd(&coordinates[column], &coordinates[row])?
+                    } else {
+                        kabsch_prepared_selected_rmsd(&coordinates[column], &coordinates[row])?
+                    };
                     column += 1;
                     if column == row {
                         row += 1;
@@ -427,14 +453,17 @@ pub fn get_pairwise_rmsd_matrix(
 struct PreparedObservation {
     keys: Option<Vec<AtomIdentity>>,
     coordinates: PreparedCoordinates,
+    superpose_end: usize,
+    rmsd_start: usize,
     warnings: Vec<AnalysisWarning>,
 }
 
 fn load_observation(
     observation: &StructureObservation,
     options: &PairwiseRmsdOptions,
-    selector: &ResidueSelector,
-    reference_keys: Option<&[AtomIdentity]>,
+    superpose_selector: &ResidueSelector,
+    rmsd_selector: &ResidueSelector,
+    reference: Option<(&[AtomIdentity], usize, usize)>,
 ) -> ArpeggiaResult<PreparedObservation> {
     let path = observation.path.to_str().ok_or_else(|| {
         ArpeggiaError::InvalidArgument(format!(
@@ -443,19 +472,39 @@ fn load_observation(
         ))
     })?;
     let loaded = load_model(path)?;
-    let selected = select_coordinates(&loaded.value, options.model_num, selector, options.atoms)?;
-    let keys = if let Some(reference_keys) = reference_keys {
-        validate_correspondence(reference_keys, &selected.keys)?;
-        None
-    } else {
-        Some(selected.keys)
-    };
-    let coordinates = prepare_coordinates(&selected.coordinates)?;
+    let selected = select_coordinate_union(
+        &loaded.value,
+        options.model_num,
+        superpose_selector,
+        rmsd_selector,
+        options.atoms,
+    )?;
+    let keys =
+        if let Some((reference_keys, reference_superpose_end, reference_rmsd_start)) = reference {
+            validate_selection_keys(
+                reference_keys,
+                reference_superpose_end,
+                reference_rmsd_start,
+                &selected.keys,
+                selected.superpose_end,
+                selected.rmsd_start,
+            )?;
+            None
+        } else {
+            Some(selected.keys)
+        };
+    let coordinates = prepare_coordinate_union(
+        &selected.coordinates,
+        selected.superpose_end,
+        selected.rmsd_start,
+    )?;
     let mut warnings = loaded.warnings;
     warnings.extend(selected.warnings);
     Ok(PreparedObservation {
         keys,
         coordinates,
+        superpose_end: selected.superpose_end,
+        rmsd_start: selected.rmsd_start,
         warnings,
     })
 }
@@ -1051,18 +1100,31 @@ mod tests {
             std::fs::copy(&source, directory.join(format!("{id}.pdb"))).unwrap();
         }
         let options = PairwiseRmsdOptions {
-            residues: "A:1-20".into(),
+            superpose_residues: "A:1-20".into(),
+            rmsd_residues: "A:1-30".into(),
             num_threads: 2,
             ..PairwiseRmsdOptions::default()
         };
         let observations = read_structure_observations(&directory, "id", "path").unwrap();
-        let selector = ResidueSelector::parse(&options.residues).unwrap();
-        let reference = load_observation(&observations[0], &options, &selector, None).unwrap();
+        let superpose_selector = ResidueSelector::parse(&options.superpose_residues).unwrap();
+        let rmsd_selector = ResidueSelector::parse(&options.rmsd_residues).unwrap();
+        let reference = load_observation(
+            &observations[0],
+            &options,
+            &superpose_selector,
+            &rmsd_selector,
+            None,
+        )
+        .unwrap();
         let other = load_observation(
             &observations[1],
             &options,
-            &selector,
-            reference.keys.as_deref(),
+            &superpose_selector,
+            &rmsd_selector,
+            reference
+                .keys
+                .as_deref()
+                .map(|keys| (keys, reference.superpose_end, reference.rmsd_start)),
         )
         .unwrap();
         assert!(other.keys.is_none());
@@ -1110,7 +1172,7 @@ mod tests {
     #[test]
     fn residue_selection_is_validated_before_structure_io() {
         let options = PairwiseRmsdOptions {
-            residues: "::".into(),
+            superpose_residues: "::".into(),
             ..PairwiseRmsdOptions::default()
         };
         let missing = std::env::temp_dir().join("arpeggia-missing-pairwise-input");
@@ -1141,7 +1203,8 @@ mod tests {
         let mut observations = read_structure_observations(&directory, "id", "path").unwrap();
         observations.reverse();
         let options = PairwiseRmsdOptions {
-            residues: "A:1-20".into(),
+            superpose_residues: "A:1-20".into(),
+            rmsd_residues: "A:1-20".into(),
             num_threads: 1,
             ..PairwiseRmsdOptions::default()
         };

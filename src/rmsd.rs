@@ -1,6 +1,6 @@
 //! Rigid protein-structure superposition and atom correspondence.
 
-use crate::contacts::residues::ResidueExt;
+use crate::contacts::one_letter_code;
 use crate::structure::{select_conformers, selected_model};
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use nalgebra as na;
@@ -37,26 +37,51 @@ pub fn kabsch_rmsd(reference: &[[f64; 3]], mobile: &[[f64; 3]]) -> ArpeggiaResul
     kabsch_prepared_rmsd(&reference, &mobile)
 }
 
-/// Calculate RMSD between two parsed structures under an exact atom selection.
+/// Superpose and calculate RMSD between two structures under exact correspondence.
 ///
 /// The structures are consumed so alternate conformers can be selected without cloning.
 pub fn get_rmsd(
     mut reference: PDB,
     mut mobile: PDB,
     model_num: usize,
-    residues: &str,
+    superpose_residues: &str,
+    rmsd_residues: &str,
     atoms: AtomSubset,
 ) -> ArpeggiaResult<Analysis<f64>> {
     let mut warnings = select_conformers(&mut reference);
     warnings.extend(select_conformers(&mut mobile));
-    let selector = ResidueSelector::parse(residues)?;
-    let reference = select_coordinates(&reference, model_num, &selector, atoms)?;
-    let mobile = select_coordinates(&mobile, model_num, &selector, atoms)?;
+    let superpose_selector = ResidueSelector::parse(superpose_residues)?;
+    let rmsd_selector = ResidueSelector::parse(rmsd_residues)?;
+    let reference = select_coordinate_union(
+        &reference,
+        model_num,
+        &superpose_selector,
+        &rmsd_selector,
+        atoms,
+    )?;
+    let mobile = select_coordinate_union(
+        &mobile,
+        model_num,
+        &superpose_selector,
+        &rmsd_selector,
+        atoms,
+    )?;
 
     // TODO: Future correspondence may use sequence and/or structural alignment
     // before creating these equal-shaped coordinate arrays, similar to PyMOL.
-    validate_correspondence(&reference.keys, &mobile.keys)?;
-    let rmsd = kabsch_rmsd(&reference.coordinates, &mobile.coordinates)?;
+    validate_selection_correspondence(&reference, &mobile)?;
+    let reference_coordinates = prepare_coordinate_union(
+        &reference.coordinates,
+        reference.superpose_end,
+        reference.rmsd_start,
+    )?;
+    let mobile_coordinates =
+        prepare_coordinate_union(&mobile.coordinates, mobile.superpose_end, mobile.rmsd_start)?;
+    let rmsd = if superpose_selector == rmsd_selector {
+        kabsch_prepared_rmsd(&reference_coordinates, &mobile_coordinates)?
+    } else {
+        kabsch_prepared_selected_rmsd(&reference_coordinates, &mobile_coordinates)?
+    };
     warnings.extend(reference.warnings);
     warnings.extend(mobile.warnings);
     Ok(Analysis::new(rmsd, warnings))
@@ -72,35 +97,59 @@ pub(crate) struct AtomIdentity {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct SelectedCoordinates {
+pub(crate) struct SelectedCoordinateUnion {
     pub(crate) keys: Vec<AtomIdentity>,
     pub(crate) coordinates: Vec<[f64; 3]>,
+    pub(crate) superpose_end: usize,
+    pub(crate) rmsd_start: usize,
     pub(crate) warnings: Vec<AnalysisWarning>,
 }
 
-pub(crate) fn select_coordinates(
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum SelectionMembership {
+    SuperposeOnly,
+    Both,
+    RmsdOnly,
+}
+
+pub(crate) fn select_coordinate_union(
     pdb: &PDB,
     model_num: usize,
-    selector: &ResidueSelector,
+    superpose_selector: &ResidueSelector,
+    rmsd_selector: &ResidueSelector,
     atoms: AtomSubset,
-) -> ArpeggiaResult<SelectedCoordinates> {
+) -> ArpeggiaResult<SelectedCoordinateUnion> {
     let model = selected_model(pdb, model_num)?;
-    selector.validate_chains(model.chains().map(|chain| chain.id()))?;
+    superpose_selector
+        .validate_chains(model.chains().map(|chain| chain.id()))
+        .map_err(|error| selection_error("Superposition Selection", error))?;
+    rmsd_selector
+        .validate_chains(model.chains().map(|chain| chain.id()))
+        .map_err(|error| selection_error("RMSD Selection", error))?;
 
     let mut selected = Vec::new();
     for chain in model.chains() {
         for residue in chain.residues() {
-            if !selector.matches(
+            let superpose = superpose_selector.matches(
                 chain.id(),
                 residue.serial_number(),
                 residue.insertion_code(),
-            ) {
-                continue;
-            }
+            );
+            let rmsd = rmsd_selector.matches(
+                chain.id(),
+                residue.serial_number(),
+                residue.insertion_code(),
+            );
+            let membership = match (superpose, rmsd) {
+                (true, true) => SelectionMembership::Both,
+                (true, false) => SelectionMembership::SuperposeOnly,
+                (false, true) => SelectionMembership::RmsdOnly,
+                (false, false) => continue,
+            };
             let residue_name = residue.name().unwrap_or("");
             // TODO: Add an exact-correspondence all-atom mode that retains arbitrary
             // polymers, ligands, and modified residues when both inputs match.
-            let is_protein = residue.resn().is_some();
+            let is_protein = residue.name().and_then(one_letter_code).is_some();
             let is_cap = matches!(residue_name, "ACE" | "NH2");
             if !(is_protein || is_cap && matches!(atoms, AtomSubset::Heavy | AtomSubset::All)) {
                 continue;
@@ -122,6 +171,7 @@ pub(crate) fn select_coordinates(
                     )));
                 }
                 selected.push((
+                    membership,
                     AtomIdentity {
                         chain: chain.id().to_string(),
                         residue_number: residue.serial_number(),
@@ -134,19 +184,28 @@ pub(crate) fn select_coordinates(
             }
         }
     }
-    selected.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+    selected.sort_unstable_by(|left, right| (&left.0, &left.1).cmp(&(&right.0, &right.1)));
     if let Some(duplicate) = selected
         .windows(2)
-        .find(|pair| pair[0].0 == pair[1].0)
-        .map(|pair| &pair[0].0)
+        .find(|pair| pair[0].1 == pair[1].1)
+        .map(|pair| &pair[0].1)
     {
         return Err(ArpeggiaError::Calculation(format!(
             "selected atom identity occurs more than once: {duplicate:?}"
         )));
     }
-    if selected.is_empty() {
+    let superpose_end =
+        selected.partition_point(|(membership, _, _)| *membership != SelectionMembership::RmsdOnly);
+    let rmsd_start = selected
+        .partition_point(|(membership, _, _)| *membership == SelectionMembership::SuperposeOnly);
+    if superpose_end == 0 {
         return Err(ArpeggiaError::InvalidArgument(
-            "structure selection contains no atoms".into(),
+            "Superposition Selection contains no atoms".into(),
+        ));
+    }
+    if rmsd_start == selected.len() {
+        return Err(ArpeggiaError::InvalidArgument(
+            "RMSD Selection contains no atoms".into(),
         ));
     }
 
@@ -161,12 +220,26 @@ pub(crate) fn select_coordinates(
             ),
         ));
     }
-    let (keys, coordinates) = selected.into_iter().unzip();
-    Ok(SelectedCoordinates {
+    let (keys, coordinates) = selected
+        .into_iter()
+        .map(|(_, identity, coordinate)| (identity, coordinate))
+        .unzip();
+    Ok(SelectedCoordinateUnion {
         keys,
         coordinates,
+        superpose_end,
+        rmsd_start,
         warnings,
     })
+}
+
+fn selection_error(selection: &str, error: ArpeggiaError) -> ArpeggiaError {
+    match error {
+        ArpeggiaError::InvalidArgument(message) => {
+            ArpeggiaError::InvalidArgument(format!("{selection}: {message}"))
+        }
+        error => error,
+    }
 }
 
 fn atom_in_subset(name: &str, element: Option<&Element>, subset: AtomSubset) -> bool {
@@ -213,10 +286,46 @@ pub(crate) fn validate_correspondence(
     Ok(())
 }
 
+pub(crate) fn validate_selection_correspondence(
+    reference: &SelectedCoordinateUnion,
+    mobile: &SelectedCoordinateUnion,
+) -> ArpeggiaResult<()> {
+    validate_selection_keys(
+        &reference.keys,
+        reference.superpose_end,
+        reference.rmsd_start,
+        &mobile.keys,
+        mobile.superpose_end,
+        mobile.rmsd_start,
+    )
+}
+
+pub(crate) fn validate_selection_keys(
+    reference: &[AtomIdentity],
+    reference_superpose_end: usize,
+    reference_rmsd_start: usize,
+    mobile: &[AtomIdentity],
+    mobile_superpose_end: usize,
+    mobile_rmsd_start: usize,
+) -> ArpeggiaResult<()> {
+    validate_correspondence(
+        &reference[..reference_superpose_end],
+        &mobile[..mobile_superpose_end],
+    )
+    .map_err(|error| selection_error("Superposition Selection", error))?;
+    validate_correspondence(
+        &reference[reference_rmsd_start..],
+        &mobile[mobile_rmsd_start..],
+    )
+    .map_err(|error| selection_error("RMSD Selection", error))
+}
+
 pub(crate) struct PreparedCoordinates {
     points: Vec<[f64; 3]>,
     centroid: [f64; 3],
     scale: f64,
+    superpose_end: usize,
+    rmsd_start: usize,
 }
 
 impl PreparedCoordinates {
@@ -226,9 +335,27 @@ impl PreparedCoordinates {
 }
 
 pub(crate) fn prepare_coordinates(coordinates: &[[f64; 3]]) -> ArpeggiaResult<PreparedCoordinates> {
-    if coordinates.len() < 3 {
+    prepare_coordinate_union(coordinates, coordinates.len(), 0)
+}
+
+pub(crate) fn prepare_coordinate_union(
+    coordinates: &[[f64; 3]],
+    superpose_end: usize,
+    rmsd_start: usize,
+) -> ArpeggiaResult<PreparedCoordinates> {
+    if superpose_end > coordinates.len() || rmsd_start > superpose_end {
+        return Err(ArpeggiaError::Calculation(
+            "invalid coordinate-selection boundaries".into(),
+        ));
+    }
+    if superpose_end < 3 {
         return Err(ArpeggiaError::InvalidArgument(
-            "RMSD requires at least three coordinate pairs".into(),
+            "Superposition Selection requires at least three coordinate pairs".into(),
+        ));
+    }
+    if rmsd_start == coordinates.len() {
+        return Err(ArpeggiaError::InvalidArgument(
+            "RMSD Selection requires at least one coordinate pair".into(),
         ));
     }
     if coordinates.iter().flatten().any(|value| !value.is_finite()) {
@@ -236,20 +363,29 @@ pub(crate) fn prepare_coordinates(coordinates: &[[f64; 3]]) -> ArpeggiaResult<Pr
             "coordinates must be finite".into(),
         ));
     }
-    let (points, scale) = normalized_displacements(coordinates)
+    let (points, scale) = normalized_displacements(coordinates, superpose_end)
         .ok_or_else(|| ArpeggiaError::Calculation("coordinates have no finite scale".into()))?;
-    if !is_non_collinear(&points) {
-        return Err(ArpeggiaError::InvalidArgument(
-            "RMSD requires at least three non-collinear points in each structure".into(),
+    if points.iter().flatten().any(|value| !value.is_finite()) {
+        return Err(ArpeggiaError::Calculation(
+            "RMSD Selection cannot be represented in the Superposition Selection coordinate frame"
+                .into(),
         ));
     }
-    let n = coordinates.len() as f64;
-    let centroid = points.iter().fold([0.0; 3], |mut sum, point| {
-        for axis in 0..3 {
-            sum[axis] += point[axis] / n;
-        }
-        sum
-    });
+    if !is_non_collinear(&points[..superpose_end]) {
+        return Err(ArpeggiaError::InvalidArgument(
+            "Superposition Selection requires at least three non-collinear points in each structure"
+                .into(),
+        ));
+    }
+    let n = superpose_end as f64;
+    let centroid = points[..superpose_end]
+        .iter()
+        .fold([0.0; 3], |mut sum, point| {
+            for axis in 0..3 {
+                sum[axis] += point[axis] / n;
+            }
+            sum
+        });
     if centroid.iter().any(|value| !value.is_finite()) {
         return Err(ArpeggiaError::Calculation(
             "coordinate centering produced a non-finite value".into(),
@@ -259,6 +395,8 @@ pub(crate) fn prepare_coordinates(coordinates: &[[f64; 3]]) -> ArpeggiaResult<Pr
         points,
         centroid,
         scale,
+        superpose_end,
+        rmsd_start,
     })
 }
 
@@ -281,7 +419,10 @@ fn is_non_collinear(displacements: &[[f64; 3]]) -> bool {
         .any(|point| baseline.cross(&na::Vector3::from(*point)).norm() > tolerance)
 }
 
-fn normalized_displacements(points: &[[f64; 3]]) -> Option<(Vec<[f64; 3]>, f64)> {
+fn normalized_displacements(
+    points: &[[f64; 3]],
+    superpose_end: usize,
+) -> Option<(Vec<[f64; 3]>, f64)> {
     let anchor = points[0];
     let mut displacements = points
         .iter()
@@ -293,13 +434,17 @@ fn normalized_displacements(points: &[[f64; 3]]) -> Option<(Vec<[f64; 3]>, f64)>
             ]
         })
         .collect::<Vec<_>>();
-    let mut scale = displacements
+    let mut scale = displacements[..superpose_end]
         .iter()
         .flatten()
         .map(|value| value.abs())
         .max_by(f64::total_cmp)?;
-    if !scale.is_finite() {
-        scale = points
+    if displacements
+        .iter()
+        .flatten()
+        .any(|value| !value.is_finite())
+    {
+        scale = points[..superpose_end]
             .iter()
             .flatten()
             .map(|value| value.abs())
@@ -331,13 +476,86 @@ pub(crate) fn kabsch_prepared_rmsd(
     if reference.scale == mobile.scale && reference.points == mobile.points {
         return Ok(0.0);
     }
+    let transform = fit_prepared_transform(reference, mobile)?;
+    finish_rmsd(
+        transform.fit_residual_norm,
+        transform.scale,
+        reference.superpose_end,
+    )
+}
+
+pub(crate) fn kabsch_prepared_selected_rmsd(
+    reference: &PreparedCoordinates,
+    mobile: &PreparedCoordinates,
+) -> ArpeggiaResult<f64> {
+    if reference.scale == mobile.scale && reference.points == mobile.points {
+        return Ok(0.0);
+    }
+    let transform = fit_prepared_transform(reference, mobile)?;
+    let reference_rmsd = &reference.points[reference.rmsd_start..];
+    let mobile_rmsd = &mobile.points[mobile.rmsd_start..];
+    if reference_rmsd.len() != mobile_rmsd.len() {
+        return Err(ArpeggiaError::Calculation(format!(
+            "RMSD Selection coordinate mismatch: reference has {} atoms but mobile has {}",
+            reference_rmsd.len(),
+            mobile_rmsd.len()
+        )));
+    }
+    let residual_norm = fixed_transform_residual_norm(
+        reference_rmsd,
+        transform.reference_factor,
+        mobile_rmsd,
+        transform.mobile_factor,
+        &transform.rotation,
+        &transform.residual_centroid,
+    );
+    if transform.angular_uncertainty.is_some_and(|uncertainty| {
+        uncertainty
+            * rms_radius(
+                mobile_rmsd,
+                transform.mobile_factor,
+                na::Vector3::from(mobile.centroid) * transform.mobile_factor,
+            )
+            * transform.scale
+            > 1e-6
+    }) {
+        return Err(ArpeggiaError::Calculation(
+            "coordinate scale prevents a reliable Kabsch residual in Angstroms".into(),
+        ));
+    }
+    finish_rmsd(residual_norm, transform.scale, reference_rmsd.len())
+}
+
+struct PreparedTransform {
+    rotation: na::Matrix3<f64>,
+    residual_centroid: na::Vector3<f64>,
+    reference_factor: f64,
+    mobile_factor: f64,
+    scale: f64,
+    fit_residual_norm: f64,
+    angular_uncertainty: Option<f64>,
+}
+
+fn fit_prepared_transform(
+    reference: &PreparedCoordinates,
+    mobile: &PreparedCoordinates,
+) -> ArpeggiaResult<PreparedTransform> {
+    let reference_points = &reference.points[..reference.superpose_end];
+    let mobile_points = &mobile.points[..mobile.superpose_end];
+    if reference_points.len() != mobile_points.len() {
+        return Err(ArpeggiaError::Calculation(format!(
+            "Superposition Selection coordinate mismatch: reference has {} atoms but mobile has {}",
+            reference_points.len(),
+            mobile_points.len()
+        )));
+    }
     let scale = reference.scale.max(mobile.scale);
     let reference_factor = reference.scale / scale;
     let mobile_factor = mobile.scale / scale;
     let reference_centroid = na::Vector3::from(reference.centroid) * reference_factor;
     let mobile_centroid = na::Vector3::from(mobile.centroid) * mobile_factor;
     let mut covariance = na::Matrix3::zeros();
-    for (reference, mobile) in reference.points.iter().zip(&mobile.points) {
+    for (reference, mobile) in reference_points.iter().zip(mobile_points) {
         let reference = na::Vector3::from(*reference) * reference_factor - reference_centroid;
         let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
         covariance += mobile * reference.transpose();
@@ -351,49 +569,80 @@ pub(crate) fn kabsch_prepared_rmsd(
     let v_t = svd.v_t.ok_or_else(|| {
         ArpeggiaError::Calculation("Kabsch SVD did not return right singular vectors".into())
     })?;
+    // [WARNING] Reflection-corrected fits need signed singular-value stiffness
+    // before this bound can diagnose an ambiguous proper rotation.
+    let minimum_rotational_inertia = svd.singular_values.sum() - svd.singular_values.max();
     let v = v_t.transpose();
     let mut correction = na::Matrix3::identity();
     correction[(2, 2)] = (v * u.transpose()).determinant().signum();
     let rotation = v * correction * u.transpose();
 
-    let fitted_residual = aligned_residual_norm(
-        reference,
+    let (fitted_residual, fitted_centroid) = aligned_residual_norm(
+        reference_points,
         reference_factor,
-        mobile,
+        mobile_points,
         mobile_factor,
         &rotation,
     );
-    let identity_residual = aligned_residual_norm(
-        reference,
+    let identity = na::Matrix3::identity();
+    let (identity_residual, identity_centroid) = aligned_residual_norm(
+        reference_points,
         reference_factor,
-        mobile,
+        mobile_points,
         mobile_factor,
-        &na::Matrix3::identity(),
+        &identity,
     );
-    let (residual_norm, fitted) = if fitted_residual < identity_residual {
-        (fitted_residual, true)
-    } else {
-        (identity_residual, false)
-    };
-    let rmsd = residual_norm * (scale / (reference.points.len() as f64).sqrt());
-    let solver_tolerance = f64::EPSILON * (reference.points.len() as f64).sqrt() * 64.0;
+    let (residual_norm, fitted, rotation, residual_centroid) =
+        if fitted_residual < identity_residual {
+            (fitted_residual, true, rotation, fitted_centroid)
+        } else {
+            (identity_residual, false, identity, identity_centroid)
+        };
+    let rmsd = residual_norm * (scale / (reference_points.len() as f64).sqrt());
+    let solver_tolerance = f64::EPSILON * (reference_points.len() as f64).sqrt() * 64.0;
     let unreliable_fitted_residual = fitted && residual_norm <= solver_tolerance;
+    // [WARNING] Identity-fallback uncertainty is not yet propagated to a
+    // separate RMSD Selection; revisit this with future correspondence work.
+    let angular_uncertainty = unreliable_fitted_residual
+        .then(|| solver_tolerance / minimum_rotational_inertia.max(0.0).sqrt());
     let unreliable_identity_rotation =
         !fitted && residual_norm <= solver_tolerance && rmsd > 1e-6 && {
             let rotation = identity_rotational_residual_norm(
-                reference,
+                reference_points,
                 reference_factor,
-                mobile,
+                mobile_points,
+                mobile.centroid,
                 mobile_factor,
             );
             rotation <= solver_tolerance
-                && rotation * (scale / (reference.points.len() as f64).sqrt()) > 1e-6
+                && rotation * (scale / (reference_points.len() as f64).sqrt()) > 1e-6
         };
     if (unreliable_fitted_residual && rmsd > 1e-6) || unreliable_identity_rotation {
         return Err(ArpeggiaError::Calculation(
             "coordinate scale prevents a reliable Kabsch residual in Angstroms".into(),
         ));
     }
+    Ok(PreparedTransform {
+        rotation,
+        residual_centroid,
+        reference_factor,
+        mobile_factor,
+        scale,
+        fit_residual_norm: residual_norm,
+        angular_uncertainty,
+    })
+}
+
+fn rms_radius(points: &[[f64; 3]], factor: f64, centroid: na::Vector3<f64>) -> f64 {
+    points.iter().fold(0.0_f64, |norm, point| {
+        (na::Vector3::from(*point) * factor - centroid)
+            .iter()
+            .fold(norm, |norm, value| norm.hypot(*value))
+    }) / (points.len() as f64).sqrt()
+}
+
+fn finish_rmsd(residual_norm: f64, scale: f64, count: usize) -> ArpeggiaResult<f64> {
+    let rmsd = residual_norm * (scale / (count as f64).sqrt());
     if rmsd.is_finite() {
         Ok(rmsd)
     } else {
@@ -404,25 +653,44 @@ pub(crate) fn kabsch_prepared_rmsd(
 }
 
 fn aligned_residual_norm(
-    reference: &PreparedCoordinates,
+    reference: &[[f64; 3]],
     reference_factor: f64,
-    mobile: &PreparedCoordinates,
+    mobile: &[[f64; 3]],
     mobile_factor: f64,
     rotation: &na::Matrix3<f64>,
-) -> f64 {
-    let n = reference.points.len() as f64;
-    let residual_centroid = reference.points.iter().zip(&mobile.points).fold(
-        na::Vector3::zeros(),
-        |sum, (reference, mobile)| {
-            let reference = na::Vector3::from(*reference) * reference_factor;
-            let mobile = na::Vector3::from(*mobile) * mobile_factor;
-            sum + (reference - rotation * mobile) / n
-        },
+) -> (f64, na::Vector3<f64>) {
+    let n = reference.len() as f64;
+    let residual_centroid =
+        reference
+            .iter()
+            .zip(mobile)
+            .fold(na::Vector3::zeros(), |sum, (reference, mobile)| {
+                let reference = na::Vector3::from(*reference) * reference_factor;
+                let mobile = na::Vector3::from(*mobile) * mobile_factor;
+                sum + (reference - rotation * mobile) / n
+            });
+    let norm = fixed_transform_residual_norm(
+        reference,
+        reference_factor,
+        mobile,
+        mobile_factor,
+        rotation,
+        &residual_centroid,
     );
+    (norm, residual_centroid)
+}
+
+fn fixed_transform_residual_norm(
+    reference: &[[f64; 3]],
+    reference_factor: f64,
+    mobile: &[[f64; 3]],
+    mobile_factor: f64,
+    rotation: &na::Matrix3<f64>,
+    residual_centroid: &na::Vector3<f64>,
+) -> f64 {
     reference
-        .points
         .iter()
-        .zip(&mobile.points)
+        .zip(mobile)
         .fold(0.0_f64, |norm, (reference, mobile)| {
             let reference = na::Vector3::from(*reference) * reference_factor;
             let mobile = na::Vector3::from(*mobile) * mobile_factor;
@@ -432,22 +700,24 @@ fn aligned_residual_norm(
 }
 
 fn identity_rotational_residual_norm(
-    reference: &PreparedCoordinates,
+    reference: &[[f64; 3]],
     reference_factor: f64,
-    mobile: &PreparedCoordinates,
+    mobile: &[[f64; 3]],
+    mobile_centroid: [f64; 3],
     mobile_factor: f64,
 ) -> f64 {
-    let n = reference.points.len() as f64;
-    let residual_centroid = reference.points.iter().zip(&mobile.points).fold(
-        na::Vector3::zeros(),
-        |sum, (reference, mobile)| {
-            let reference = na::Vector3::from(*reference) * reference_factor;
-            let mobile = na::Vector3::from(*mobile) * mobile_factor;
-            sum + (reference - mobile) / n
-        },
-    );
-    let mobile_centroid = na::Vector3::from(mobile.centroid) * mobile_factor;
-    let (inertia, torque) = reference.points.iter().zip(&mobile.points).fold(
+    let n = reference.len() as f64;
+    let residual_centroid =
+        reference
+            .iter()
+            .zip(mobile)
+            .fold(na::Vector3::zeros(), |sum, (reference, mobile)| {
+                let reference = na::Vector3::from(*reference) * reference_factor;
+                let mobile = na::Vector3::from(*mobile) * mobile_factor;
+                sum + (reference - mobile) / n
+            });
+    let mobile_centroid = na::Vector3::from(mobile_centroid) * mobile_factor;
+    let (inertia, torque) = reference.iter().zip(mobile).fold(
         (na::Matrix3::zeros(), na::Vector3::zeros()),
         |(inertia, torque), (reference, mobile)| {
             let reference = na::Vector3::from(*reference) * reference_factor;
@@ -464,7 +734,7 @@ fn identity_rotational_residual_norm(
     let Some(rotation) = inertia.lu().solve(&torque) else {
         return 0.0;
     };
-    mobile.points.iter().fold(0.0_f64, |norm, mobile| {
+    mobile.iter().fold(0.0_f64, |norm, mobile| {
         let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
         rotation
             .cross(&mobile)
@@ -626,11 +896,13 @@ impl ResidueSelector {
             let mut merged = Vec::<ResidueSpan>::with_capacity(spans.len());
             for span in std::mem::take(spans) {
                 if let Some(previous) = merged.last_mut()
-                    && upper_bound_matches(
+                    && (upper_bound_matches(
                         span.start.number,
                         span.start.insertion.as_deref(),
                         &previous.end,
-                    )
+                    ) || previous.end.insertion.is_none()
+                        && span.start.insertion.is_none()
+                        && previous.end.number.checked_add(1) == Some(span.start.number))
                 {
                     if upper_bound_precedes(&previous.end, &span.end) {
                         previous.end = span.end;
@@ -681,9 +953,16 @@ impl ResidueSelector {
     }
 }
 
-/// Validate the chain and author-residue selection grammar without structure I/O.
-pub fn validate_residue_selection(value: &str) -> ArpeggiaResult<()> {
-    ResidueSelector::parse(value).map(|_| ())
+/// Validate both RMSD residue-selection grammars without structure I/O.
+pub fn validate_rmsd_selections(
+    superpose_residues: &str,
+    rmsd_residues: &str,
+) -> ArpeggiaResult<()> {
+    ResidueSelector::parse(superpose_residues)
+        .map_err(|error| selection_error("Superposition Selection", error))?;
+    ResidueSelector::parse(rmsd_residues)
+        .map_err(|error| selection_error("RMSD Selection", error))?;
+    Ok(())
 }
 
 fn upper_bound_precedes(left: &ResidueBound, right: &ResidueBound) -> bool {
@@ -713,6 +992,100 @@ mod tests {
         let reverse = kabsch_rmsd(&mobile, &reference).unwrap();
         assert!(forward < 1e-12);
         assert!((forward - reverse).abs() < 1e-12);
+    }
+
+    #[test]
+    fn generalized_equal_selection_matches_prepared_kabsch_bit_for_bit() {
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 0.0, 3.0],
+        ];
+        let mut mobile = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
+        mobile[3][0] += 0.125;
+        let reference = prepare_coordinates(&reference).unwrap();
+        let mobile = prepare_coordinates(&mobile).unwrap();
+        assert_eq!(
+            kabsch_prepared_selected_rmsd(&reference, &mobile)
+                .unwrap()
+                .to_bits(),
+            kabsch_prepared_rmsd(&reference, &mobile).unwrap().to_bits()
+        );
+    }
+
+    #[test]
+    fn fixed_superposition_transform_scores_a_disjoint_single_atom() {
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+        let mobile = [
+            [10.0, -4.0, 2.0],
+            [10.0, -3.0, 2.0],
+            [9.0, -4.0, 2.0],
+            [10.0, -4.0, 5.0],
+        ];
+        let reference = prepare_coordinate_union(&reference, 3, 3).unwrap();
+        let mobile = prepare_coordinate_union(&mobile, 3, 3).unwrap();
+        let rmsd = kabsch_prepared_selected_rmsd(&reference, &mobile).unwrap();
+        let reverse = kabsch_prepared_selected_rmsd(&mobile, &reference).unwrap();
+        assert!((rmsd - 2.0).abs() < 1e-12);
+        assert!((rmsd - reverse).abs() < 1e-12);
+    }
+
+    #[test]
+    fn distant_rmsd_atoms_must_not_amplify_solver_scale_rotation_error() {
+        let distance = 1e12;
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 0.0, 3.0],
+            [distance, 0.3 * distance, -0.2 * distance],
+        ];
+        let mobile = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
+        let reference = prepare_coordinate_union(&reference, 4, 4).unwrap();
+        let mobile = prepare_coordinate_union(&mobile, 4, 4).unwrap();
+        assert!(matches!(
+            kabsch_prepared_selected_rmsd(&reference, &mobile),
+            Err(ArpeggiaError::Calculation(message))
+                if message.contains("reliable Kabsch residual")
+        ));
+    }
+
+    #[test]
+    fn rmsd_only_coordinates_must_fit_the_superposition_frame() {
+        let coordinates = [
+            [0.0, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [0.0, 0.5, 0.0],
+            [f64::MAX, 0.0, 0.0],
+        ];
+        assert!(matches!(
+            prepare_coordinate_union(&coordinates, 3, 3),
+            Err(ArpeggiaError::Calculation(message))
+                if message.contains("RMSD Selection")
+        ));
+    }
+
+    #[test]
+    fn rmsd_only_subtraction_overflow_uses_the_superposition_scale() {
+        let magnitude = 1.3e308;
+        let coordinates = [
+            [magnitude, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [magnitude, magnitude, 0.0],
+            [magnitude, 0.0, magnitude],
+            [-magnitude, 0.0, 0.0],
+        ];
+        let prepared = prepare_coordinate_union(&coordinates, 4, 4).unwrap();
+        assert_eq!(
+            kabsch_prepared_selected_rmsd(&prepared, &prepared).unwrap(),
+            0.0
+        );
     }
 
     #[test]
@@ -896,6 +1269,15 @@ mod tests {
     }
 
     #[test]
+    fn residue_selector_merges_only_truly_adjacent_ranges() {
+        let adjacent = ResidueSelector::parse("A:1-5,A:6-10").unwrap();
+        assert_eq!(adjacent, ResidueSelector::parse("A:1-10").unwrap());
+
+        let insertion_gap = ResidueSelector::parse("A:1-5A,A:6-10").unwrap();
+        assert_eq!(insertion_gap.chains["A"].as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
     fn residue_selector_supports_negative_numbers_and_insertions() {
         let selector = ResidueSelector::parse("A:-5--1,B:10A-20").unwrap();
         assert!(selector.matches("A", -3, None));
@@ -942,26 +1324,72 @@ mod tests {
         let pdb = crate::load_model(input.to_str().unwrap()).unwrap().value;
         let selector = ResidueSelector::default();
         assert_eq!(
-            select_coordinates(&pdb, 0, &selector, AtomSubset::Heavy)
+            select_coordinate_union(&pdb, 0, &selector, &selector, AtomSubset::Heavy)
                 .unwrap()
                 .keys
                 .len(),
             3
         );
         assert_eq!(
-            select_coordinates(&pdb, 0, &selector, AtomSubset::All)
+            select_coordinate_union(&pdb, 0, &selector, &selector, AtomSubset::All)
                 .unwrap()
                 .keys
                 .len(),
             4
         );
         assert_eq!(
-            select_coordinates(&pdb, 0, &selector, AtomSubset::Backbone)
+            select_coordinate_union(&pdb, 0, &selector, &selector, AtomSubset::Backbone)
                 .unwrap()
                 .keys
                 .len(),
             2
         );
+    }
+
+    #[test]
+    fn coordinate_union_uses_three_contiguous_membership_blocks() {
+        let input = std::env::temp_dir().join(format!(
+            "arpeggia-rmsd-selection-union-{}.pdb",
+            std::process::id()
+        ));
+        std::fs::write(
+            &input,
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+             ATOM      2  CA  ALA B   1       1.000   0.000   0.000  1.00 20.00           C  \n\
+             ATOM      3  CA  ALA C   1       0.000   1.000   0.000  1.00 20.00           C  \n\
+             END\n",
+        )
+        .unwrap();
+        let pdb = crate::load_model(input.to_str().unwrap()).unwrap().value;
+        let superpose = ResidueSelector::parse("A,B").unwrap();
+        let rmsd = ResidueSelector::parse("B,C").unwrap();
+        let selected = select_coordinate_union(&pdb, 0, &superpose, &rmsd, AtomSubset::Ca).unwrap();
+        assert_eq!(selected.superpose_end, 2);
+        assert_eq!(selected.rmsd_start, 1);
+        assert_eq!(
+            selected.coordinates.len() * std::mem::size_of::<[f64; 3]>(),
+            72
+        );
+        assert_eq!(
+            selected
+                .keys
+                .iter()
+                .map(|identity| identity.chain.as_str())
+                .collect::<Vec<_>>(),
+            ["A", "B", "C"]
+        );
+
+        let missing = ResidueSelector::parse("missing").unwrap();
+        assert!(matches!(
+            select_coordinate_union(&pdb, 0, &missing, &rmsd, AtomSubset::Ca),
+            Err(ArpeggiaError::InvalidArgument(message))
+                if message.starts_with("Superposition Selection:")
+        ));
+        assert!(matches!(
+            select_coordinate_union(&pdb, 0, &superpose, &missing, AtomSubset::Ca),
+            Err(ArpeggiaError::InvalidArgument(message))
+                if message.starts_with("RMSD Selection:")
+        ));
     }
 
     #[test]
@@ -996,8 +1424,61 @@ mod tests {
     fn identical_structure_has_zero_rmsd() {
         let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
         let pdb = crate::load_model(&input).unwrap().value;
-        let analysis = get_rmsd(pdb.clone(), pdb, 0, "A:1-20", AtomSubset::Ca).unwrap();
+        let analysis = get_rmsd(pdb.clone(), pdb, 0, "A:1-20", "A:1-20", AtomSubset::Ca).unwrap();
         assert!(analysis.value < 1e-12);
+    }
+
+    #[test]
+    fn public_rmsd_superposes_one_chain_and_scores_others() {
+        let directory = std::env::temp_dir().join(format!(
+            "arpeggia-relative-domain-rmsd-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let reference_path = directory.join("reference.pdb");
+        let mobile_path = directory.join("mobile.pdb");
+        std::fs::write(
+            &reference_path,
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
+             ATOM      2  CA  ALA A   2       1.000   0.000   0.000  1.00 20.00           C  \n\
+             ATOM      3  CA  ALA A   3       0.000   1.000   0.000  1.00 20.00           C  \n\
+             ATOM      4  CA  ALA B   1       0.000   0.000   1.000  1.00 20.00           C  \n\
+             ATOM      5  CA  ALA C   1       0.000   0.000   2.000  1.00 20.00           C  \n\
+             END\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &mobile_path,
+            "ATOM      1  CA  ALA A   1      10.000  -4.000   2.000  1.00 20.00           C  \n\
+             ATOM      2  CA  ALA A   2      10.000  -3.000   2.000  1.00 20.00           C  \n\
+             ATOM      3  CA  ALA A   3       9.000  -4.000   2.000  1.00 20.00           C  \n\
+             ATOM      4  CA  ALA B   1      10.000  -4.000   5.000  1.00 20.00           C  \n\
+             ATOM      5  CA  ALA C   1      10.000  -4.000   6.000  1.00 20.00           C  \n\
+             END\n",
+        )
+        .unwrap();
+        let reference = crate::load_model(reference_path.to_str().unwrap())
+            .unwrap()
+            .value;
+        let mobile = crate::load_model(mobile_path.to_str().unwrap())
+            .unwrap()
+            .value;
+        let selected = get_rmsd(
+            reference.clone(),
+            mobile.clone(),
+            0,
+            "A",
+            "B,C",
+            AtomSubset::Ca,
+        )
+        .unwrap()
+        .value;
+        assert!((selected - 2.0).abs() < 1e-12);
+
+        let default_all = get_rmsd(reference, mobile, 0, "A", "", AtomSubset::Ca)
+            .unwrap()
+            .value;
+        assert!((default_all - (8.0_f64 / 5.0).sqrt()).abs() < 1e-12);
     }
 
     #[test]
@@ -1020,7 +1501,7 @@ mod tests {
             .unwrap()
             .0;
         let mobile = reference.clone();
-        let analysis = get_rmsd(reference, mobile, 0, "", AtomSubset::Ca).unwrap();
+        let analysis = get_rmsd(reference, mobile, 0, "", "", AtomSubset::Ca).unwrap();
         assert_eq!(analysis.value, 0.0);
         assert_eq!(
             analysis

@@ -21,13 +21,28 @@ fn rmsd_rejects_selection_before_structure_io() {
             "rmsd",
             "missing-reference.pdb",
             "missing-mobile.pdb",
-            "--residues",
+            "--superpose-residues",
             "A:",
         ])
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("empty residue selection"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Superposition Selection"));
+    assert!(stderr.contains("empty residue selection"));
+
+    let output = arpeggia()
+        .args([
+            "rmsd",
+            "missing-reference.pdb",
+            "missing-mobile.pdb",
+            "--rmsd-residues",
+            "A:",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("RMSD Selection"));
 }
 
 #[test]
@@ -197,7 +212,15 @@ fn sc_calculation_failure_exits_without_a_score() {
 fn rmsd_prints_one_scalar() {
     let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
     let output = arpeggia()
-        .args(["rmsd", &input, &input, "--residues", "A:1-20"])
+        .args([
+            "rmsd",
+            &input,
+            &input,
+            "--superpose-residues",
+            "A:1-20",
+            "--rmsd-residues",
+            "A:1-20",
+        ])
         .output()
         .unwrap();
     assert!(
@@ -232,7 +255,9 @@ fn cluster_structs_saves_and_reuses_pairwise_rmsd() {
         "--num-clusters",
         "1",
         "--pairwise-rmsd",
-        "--residues",
+        "--superpose-residues",
+        "A:1-20",
+        "--rmsd-residues",
         "A:1-20",
         "--num-threads",
         "2",
@@ -257,7 +282,9 @@ fn cluster_structs_saves_and_reuses_pairwise_rmsd() {
             "--num-clusters",
             "1",
             "--pairwise-rmsd",
-            "--residues",
+            "--superpose-residues",
+            "A:1-10",
+            "--rmsd-residues",
             "A:1-10",
         ])
         .output()
@@ -321,7 +348,9 @@ fn cluster_structs_preserves_pairwise_work_and_rejects_bad_cache() {
             "--num-clusters",
             "1",
             "--pairwise-rmsd",
-            "--residues",
+            "--superpose-residues",
+            "A:1-20",
+            "--rmsd-residues",
             "A:1-20",
         ])
         .output()

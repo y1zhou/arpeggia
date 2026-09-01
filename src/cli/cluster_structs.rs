@@ -2,7 +2,7 @@ use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file, write_df
 use arpeggia::{
     ArpeggiaError, ArpeggiaResult, AtomSubset, ClusterOptions, ClusteringMethod,
     PairwiseRmsdOptions, cluster_pairwise_rmsd, get_pairwise_rmsd_matrix, read_pairwise_matrix,
-    read_structure_observations, validate_residue_selection,
+    read_structure_observations, validate_rmsd_selections,
 };
 use clap::Parser;
 use std::path::{Path, PathBuf};
@@ -55,9 +55,13 @@ pub(crate) struct Args {
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Comma-separated chain and author-residue ranges
+    /// Residues used to determine the rigid-body transform
+    #[arg(short = 's', long, default_value_t = String::new())]
+    superpose_residues: String,
+
+    /// Residues evaluated after applying the rigid-body transform
     #[arg(short = 'r', long, default_value_t = String::new())]
-    residues: String,
+    rmsd_residues: String,
 
     /// Atom population used for fitting and RMSD
     #[arg(short = 'a', long, default_value = "ca")]
@@ -80,7 +84,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         max_iterations: args.max_iterations,
     };
     cluster_options.validate_without_structure_count()?;
-    validate_residue_selection(&args.residues)?;
+    validate_rmsd_selections(&args.superpose_residues, &args.rmsd_residues)?;
 
     let metadata = args.input.metadata().map_err(|error| {
         ArpeggiaError::Io(std::io::Error::new(
@@ -107,7 +111,8 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     }
     let pairwise_options = PairwiseRmsdOptions {
         model_num: args.model_num,
-        residues: args.residues.clone(),
+        superpose_residues: args.superpose_residues.clone(),
+        rmsd_residues: args.rmsd_residues.clone(),
         atoms: args.atoms,
         num_threads: args.num_threads,
         bypass_mem_check: args.bypass_mem_check,

@@ -33,7 +33,7 @@ pub use pairwise_rmsd::{
     PairwiseRmsdMatrix, PairwiseRmsdOptions, StructureObservation, get_pairwise_rmsd,
     get_pairwise_rmsd_matrix, read_pairwise_matrix, read_structure_observations,
 };
-pub use rmsd::{AtomSubset, get_rmsd, kabsch_rmsd, validate_residue_selection};
+pub use rmsd::{AtomSubset, get_rmsd, kabsch_rmsd, validate_rmsd_selections};
 pub use structure::load_model;
 pub use utils::run_with_threads;
 
