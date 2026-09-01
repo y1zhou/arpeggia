@@ -7,9 +7,14 @@ chain IDs, residue identities, and atom names must match exactly.
 
 ## RMSD
 
-The default selection is every coordinate-observed amino acid recognized by
-Arpeggia and its C-alpha atom. `atoms` accepts `ca`, `backbone` (`N`, `CA`, `C`,
-`O`, and `OXT`), `heavy`, or `all`. Heavy selection excludes hydrogen and deuterium,
+The Superposition Selection determines the Kabsch transform. The RMSD Selection
+is evaluated after applying that fixed transform and does not influence the fit.
+Both independently default to every coordinate-observed amino acid recognized by
+Arpeggia, so callers pass the same subset to both arguments when they want the
+traditional fit-and-score-the-same-atoms calculation.
+
+One shared `atoms` argument accepts `ca`, `backbone` (`N`, `CA`, `C`, `O`, and
+`OXT`), `heavy`, or `all`. Heavy selection excludes hydrogen and deuterium,
 including digit-leading atom names when element metadata is absent. Heavy and
 all-atom selections retain ACE/NH2 caps but exclude solvent, ions, and ligands.
 Arbitrary polymers, ligands, and modified residues are not yet retained even in
@@ -25,18 +30,33 @@ A bare upper bound includes every insertion code at that author residue, so
 
 ```bash
 arpeggia rmsd reference.cif mobile.cif \
-  --residues "A:1-120,B" --atoms backbone
+  --superpose-residues "A" \
+  --rmsd-residues "B,C" \
+  --atoms backbone
 ```
 
-The CLI prints one RMSD in Ångströms. Python provides the scalar operation and
-the complete unordered pair table:
+This example establishes the coordinate frame from chain A and reports the
+motion of chains B and C relative to it. Superposition requires at least three
+non-collinear atom pairs; RMSD evaluation requires at least one atom pair. The
+CLI prints one RMSD in Ångströms. Python provides the scalar operation and the
+complete unordered pair table:
 
 ```python
 import arpeggia
 
-value = arpeggia.rmsd("reference.cif", "mobile.cif", atoms="ca")
+value = arpeggia.rmsd(
+    "reference.cif",
+    "mobile.cif",
+    superpose_residues="A",
+    rmsd_residues="B,C",
+    atoms="ca",
+)
 pairs = arpeggia.pairwise_rmsd(
-    "structures/", residues="A:1-120,B", atoms="ca", num_threads=8
+    "structures/",
+    superpose_residues="A",
+    rmsd_residues="B,C",
+    atoms="ca",
+    num_threads=8,
 )
 ```
 
@@ -101,16 +121,17 @@ CLI tables can be CSV, Parquet, or NDJSON. `--pairwise-rmsd` writes the
 pair table before clustering, preserving it if clustering fails. A later run
 reuses the exact requested pairwise path only when its schema, complete pair
 coverage, and ID set validate. Cache reuse checks IDs only—not file contents,
-selection, model, conformers, or Arpeggia version. Remove the pairwise file to
-force recalculation. Wrong-size caches are rejected with bounded reads before
+either residue selection, model, conformers, or Arpeggia version. Remove the
+pairwise file to force recalculation. Wrong-size caches are rejected with bounded reads before
 their complete tables are materialized.
 
 ## Memory and threads
 
 Pairwise RMSD is quadratic in structure count. Before parsing coordinates,
 Arpeggia estimates the packed matrix as `4n(n-1)` bytes. After preparing the
-first structure, it also estimates selected coordinates as `24na` bytes for
-`n` structures and `a` selected atoms. Either estimate fails above 80% of
+first structure, it also estimates selected coordinates as `24nu` bytes for
+`n` structures and `u` atoms in the union of both selections. Overlapping atoms
+are stored once. Either estimate fails above 80% of
 effective available RAM; `bypass_mem_check=True` or `--bypass-mem-check`
 disables this heuristic.
 

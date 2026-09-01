@@ -151,3 +151,63 @@ selection, table I/O, Python, and CLI concerns.
       Python tests, `ty`, and `prek` on every changed file.
 - [x] Audit the implementation against ADR 0008 and this ledger before marking
       the feature complete.
+
+## 11. Independent superposition and RMSD selections
+
+- [x] Replace the unreleased `residues` interface with `superpose_residues` and
+      `rmsd_residues` across scalar RMSD, pairwise RMSD, and structure-backed
+      clustering. Both ordinary strings independently default to the existing
+      empty-string selection of all recognized residues and retain the existing
+      residue grammar.
+- [x] Keep one shared atom preset and keep the rigid transform private. Preserve
+      `kabsch_rmsd` as the coordinate-array convenience function that uses the
+      same atoms for superposition and evaluation.
+- [x] Compare normalized parsed selectors, not raw strings. Route semantically
+      equal selections through the existing prepared Kabsch RMSD fast path, and
+      independently test and benchmark the generalized
+      transform-plus-evaluation path on equal selections against that result.
+- [x] Determine the Kabsch transform from at least three non-collinear
+      Superposition Selection atom pairs, then apply it without refitting to at
+      least one RMSD Selection atom pair. Choose fitted-versus-identity fallback
+      solely from the Superposition Selection objective; use uniform weights
+      and normalize by the RMSD Selection atom count.
+- [x] Prepare each structure once and partition the union coordinates into
+      contiguous superposition-only, overlap, and RMSD-only blocks. Represent
+      both selections with two shared slice boundaries and update the second
+      memory estimate to `24nu` bytes without masks or indexed hot-loop access.
+      Construct identities and classify membership in one atom traversal, then
+      discard the temporary classification.
+- [x] Validate both grammars before I/O and attribute later chain,
+      correspondence, and empty-selection failures to the responsible
+      selection.
+- [x] Report only the RMSD Selection value, retain one canonical evaluation per
+      unordered pair, and test reverse-direction equivalence within a strict
+      numerical tolerance.
+- [x] Keep CLI pairwise-cache validation ID-only and document that neither
+      residue selection participates in cache provenance.
+- [x] Defer residue weighting until the same future work that introduces
+      sequence and/or structural correspondence before superposition and RMSD
+      evaluation.
+- [x] Return a typed error when an RMSD-only coordinate cannot be represented
+      finitely in the Superposition Selection's numerical frame; do not add a
+      second extreme-range scaling system.
+- [x] Map `--superpose-residues` to `-s` and `--rmsd-residues` to the existing
+      `-r` short option.
+- [x] Cover equal, disjoint, partially overlapping, one-atom, rigid-domain,
+      selection-specific failure, independent-default, and forward/reverse
+      regression scenarios.
+- [x] Benchmark equal, heavily overlapping, and disjoint selections against the
+      existing implementation. Record exact retained coordinate payload against
+      `24n(f+r)` and observed peak RSS. Require equal-selection median runtime to
+      remain within 5% with one worker and 10% with eight workers; investigate
+      either exceedance. Keep these performance gates separate from numerical
+      result checks.
+- [x] Require bit-for-bit agreement between the generalized equal-selection path
+      and existing prepared Kabsch result in the same direction. Use tolerances
+      only for reverse-direction and analytical tests.
+- [x] Require equal selections to retain exactly the existing coordinate payload
+      and keep median peak RSS within 10%. Verify overlapping-selection payload
+      savings equal `24n(f+r-u)`.
+- [x] Add only focused `TODO:` comments at the current correspondence seam for
+      future weighting and sequence/structural correspondence. Do not add
+      generic weights, pair-specific mappings, or other speculative types.

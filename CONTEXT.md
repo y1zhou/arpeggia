@@ -197,6 +197,16 @@ The recognized amino-acid atoms retained from a Structure Observation by its
 chain-residue ranges and atom subset.
 _Avoid_: Atom filter, alignment
 
+**Superposition Selection**:
+The exactly corresponding atoms used to determine the rigid-body Kabsch
+transform between two Structure Observations.
+_Avoid_: Fit selection, alignment selection, sequence alignment
+
+**RMSD Selection**:
+The exactly corresponding atoms whose residual distances are evaluated after
+applying a transform determined solely by the Superposition Selection.
+_Avoid_: Fit selection, superposition selection
+
 **Exact Atom Correspondence**:
 A one-to-one pairing in which two Structure Selections contain the same atom
 identities. It is the required correspondence for the current RMSD method.
@@ -210,7 +220,7 @@ _Avoid_: Centroid, average structure
 
 **Pairwise RMSD Matrix**:
 The symmetric dissimilarity values produced by comparing every pair of Structure
-Observations with one shared Structure Selection policy.
+Observations with shared Superposition Selection and RMSD Selection policies.
 _Avoid_: RMSD features, coordinate matrix
 
 **Pairwise RMSD Table**:
@@ -222,7 +232,8 @@ _Avoid_: Wide RMSD matrix, square RMSD table
 **Pairwise RMSD Cache**:
 A Pairwise RMSD Table at the exact CLI output path that may replace RMSD
 recalculation when its complete ID set matches the current inputs. Cache reuse
-does not verify source coordinates or Structure Selection settings.
+does not verify source coordinates, Superposition Selection settings, or RMSD
+Selection settings.
 _Avoid_: Verified RMSD cache, provenance-matched matrix
 
 **Fixed Cluster Count**:

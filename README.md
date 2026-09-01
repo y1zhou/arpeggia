@@ -167,8 +167,14 @@ for chain_id, seq in sequences:
 # Extract declared SEQRES/entity-polymer sequences, including missing coordinates
 declared_sequences = arpeggia.seqres("structure.pdb")
 
-# Superpose two conformations and cluster an existing pairwise matrix
-rmsd = arpeggia.rmsd("reference.cif", "mobile.cif", atoms="ca")
+# Superpose on chain A, measure chains B/C, and cluster a pairwise matrix
+rmsd = arpeggia.rmsd(
+    "reference.cif",
+    "mobile.cif",
+    superpose_residues="A",
+    rmsd_residues="B,C",
+    atoms="ca",
+)
 pairs = arpeggia.pairwise_rmsd("structures/", num_threads=8)
 clusters = arpeggia.cluster_structs(pairwise_rmsd=pairs, max_clusters=10)
 ```
