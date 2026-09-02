@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-02
+
 ### Added
 
 - Added uniform-weight Kabsch RMSD for exact protein-atom correspondence through
@@ -25,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced the Rust public surface to supported scientific APIs. Contact and SC
   implementation details, chain-group parsing, and CLI-only table writers are
   now private; Python functions and CLI behavior are unchanged.
+
+### Fixed
+
+- Hardened Kabsch superposition and RMSD rescaling for degenerate, extreme, and
+  subnormal coordinate cases.
+- Strengthened pairwise RMSD cache, matrix, selection, and output validation.
 
 ## [0.9.0] - 2026-08-27
 
@@ -297,7 +305,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/y1zhou/arpeggia/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.1
 [0.8.0]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.0
