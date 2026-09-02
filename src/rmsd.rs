@@ -667,7 +667,7 @@ fn finish_rmsd(residual_norm: f64, scale: f64, count: usize) -> ArpeggiaResult<f
 fn scaled_rmsd(residual_norm: f64, scale: f64, count: usize) -> f64 {
     let divisor = (count as f64).sqrt();
     let normalized = residual_norm / divisor;
-    if normalized == 0.0 && residual_norm != 0.0 {
+    if residual_norm != 0.0 && (normalized == 0.0 || (scale > 1.0 && normalized.is_subnormal())) {
         residual_norm * scale / divisor
     } else {
         normalized * scale
@@ -1214,6 +1214,10 @@ mod tests {
         assert_eq!(
             scaled_rmsd(minimum_subnormal, 1e308, 4),
             minimum_subnormal * 1e308 / 2.0
+        );
+        assert_eq!(
+            scaled_rmsd(2.0 * minimum_subnormal, 1e308, 9),
+            2.0 * minimum_subnormal * 1e308 / 3.0
         );
     }
 
