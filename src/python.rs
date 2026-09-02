@@ -105,7 +105,6 @@ fn pairwise_rmsd(
     num_threads: usize,
     bypass_mem_check: bool,
 ) -> PyResult<PyDataFrame> {
-    crate::validate_rmsd_selections(superpose_residues, rmsd_residues).map_err(python_error)?;
     let options = crate::PairwiseRmsdOptions {
         model_num,
         superpose_residues: superpose_residues.to_string(),
