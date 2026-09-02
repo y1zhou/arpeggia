@@ -509,16 +509,15 @@ pub(crate) fn kabsch_prepared_selected_rmsd(
         &transform.rotation,
         &transform.residual_centroid,
     );
-    if transform.angular_uncertainty.is_some_and(|uncertainty| {
-        uncertainty
-            * rms_radius(
-                mobile_rmsd,
-                transform.mobile_factor,
-                na::Vector3::from(mobile.centroid) * transform.mobile_factor,
-            )
-            * transform.scale
-            > 1e-6
-    }) {
+    let scoring_radius = rms_radius(
+        mobile_rmsd,
+        transform.mobile_factor,
+        na::Vector3::from(mobile.centroid) * transform.mobile_factor,
+    );
+    if scoring_radius > 0.0
+        && (!transform.angular_error_bound.is_finite()
+            || transform.angular_error_bound * scoring_radius * transform.scale > 1e-6)
+    {
         return Err(ArpeggiaError::Calculation(
             "coordinate scale prevents a reliable Kabsch residual in Angstroms".into(),
         ));
@@ -533,7 +532,7 @@ struct PreparedTransform {
     mobile_factor: f64,
     scale: f64,
     fit_residual_norm: f64,
-    angular_uncertainty: Option<f64>,
+    angular_error_bound: f64,
 }
 
 fn fit_prepared_transform(
@@ -574,7 +573,8 @@ fn fit_prepared_transform(
     let minimum_rotational_inertia = svd.singular_values.sum() - svd.singular_values.max();
     let v = v_t.transpose();
     let mut correction = na::Matrix3::identity();
-    correction[(2, 2)] = (v * u.transpose()).determinant().signum();
+    let correction_sign = (v * u.transpose()).determinant().signum();
+    correction[(2, 2)] = correction_sign;
     let rotation = v * correction * u.transpose();
 
     let (fitted_residual, fitted_centroid) = aligned_residual_norm(
@@ -598,30 +598,39 @@ fn fit_prepared_transform(
         } else {
             (identity_residual, false, identity, identity_centroid)
         };
-    let rmsd = residual_norm * (scale / (reference_points.len() as f64).sqrt());
+    let rmsd = scaled_rmsd(residual_norm, scale, reference_points.len());
     let solver_tolerance = f64::EPSILON * (reference_points.len() as f64).sqrt() * 64.0;
     let unreliable_fitted_residual = fitted && residual_norm <= solver_tolerance;
-    // [WARNING] Identity-fallback uncertainty is not yet propagated to a
-    // separate RMSD Selection; revisit this with future correspondence work.
-    let angular_uncertainty = unreliable_fitted_residual
-        .then(|| solver_tolerance / minimum_rotational_inertia.max(0.0).sqrt());
+    let identity_rotation = if fitted {
+        None
+    } else {
+        identity_rotational_residual(
+            reference_points,
+            reference_factor,
+            mobile_points,
+            mobile.centroid,
+            mobile_factor,
+        )
+    };
     let unreliable_identity_rotation =
         !fitted && residual_norm <= solver_tolerance && rmsd > 1e-6 && {
-            let rotation = identity_rotational_residual_norm(
-                reference_points,
-                reference_factor,
-                mobile_points,
-                mobile.centroid,
-                mobile_factor,
-            );
+            let rotation = identity_rotation.map_or(0.0, |(_, norm)| norm);
             rotation <= solver_tolerance
-                && rotation * (scale / (reference_points.len() as f64).sqrt()) > 1e-6
+                && scaled_rmsd(rotation, scale, reference_points.len()) > 1e-6
         };
     if (unreliable_fitted_residual && rmsd > 1e-6) || unreliable_identity_rotation {
         return Err(ArpeggiaError::Calculation(
             "coordinate scale prevents a reliable Kabsch residual in Angstroms".into(),
         ));
     }
+    let solver_angular_error = solver_tolerance / minimum_rotational_inertia.max(0.0).sqrt();
+    let angular_error_bound = if correction_sign < 0.0 {
+        f64::INFINITY
+    } else if fitted {
+        solver_angular_error
+    } else {
+        identity_rotation.map_or(f64::INFINITY, |(angle, _)| solver_angular_error + angle)
+    };
     Ok(PreparedTransform {
         rotation,
         residual_centroid,
@@ -629,7 +638,7 @@ fn fit_prepared_transform(
         mobile_factor,
         scale,
         fit_residual_norm: residual_norm,
-        angular_uncertainty,
+        angular_error_bound,
     })
 }
 
@@ -642,7 +651,7 @@ fn rms_radius(points: &[[f64; 3]], factor: f64, centroid: na::Vector3<f64>) -> f
 }
 
 fn finish_rmsd(residual_norm: f64, scale: f64, count: usize) -> ArpeggiaResult<f64> {
-    let rmsd = residual_norm * (scale / (count as f64).sqrt());
+    let rmsd = scaled_rmsd(residual_norm, scale, count);
     if rmsd.is_finite() {
         Ok(rmsd)
     } else {
@@ -650,6 +659,10 @@ fn finish_rmsd(residual_norm: f64, scale: f64, count: usize) -> ArpeggiaResult<f
             "Kabsch RMSD produced a non-finite result".into(),
         ))
     }
+}
+
+fn scaled_rmsd(residual_norm: f64, scale: f64, count: usize) -> f64 {
+    residual_norm / (count as f64).sqrt() * scale
 }
 
 fn aligned_residual_norm(
@@ -699,13 +712,13 @@ fn fixed_transform_residual_norm(
         })
 }
 
-fn identity_rotational_residual_norm(
+fn identity_rotational_residual(
     reference: &[[f64; 3]],
     reference_factor: f64,
     mobile: &[[f64; 3]],
     mobile_centroid: [f64; 3],
     mobile_factor: f64,
-) -> f64 {
+) -> Option<(f64, f64)> {
     let n = reference.len() as f64;
     let residual_centroid =
         reference
@@ -731,16 +744,15 @@ fn identity_rotational_residual_norm(
             )
         },
     );
-    let Some(rotation) = inertia.lu().solve(&torque) else {
-        return 0.0;
-    };
-    mobile.iter().fold(0.0_f64, |norm, mobile| {
+    let rotation = inertia.lu().solve(&torque)?;
+    let residual_norm = mobile.iter().fold(0.0_f64, |norm, mobile| {
         let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
         rotation
             .cross(&mobile)
             .iter()
             .fold(norm, |norm, value| norm.hypot(*value))
-    })
+    });
+    Some((rotation.norm(), residual_norm))
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -1057,6 +1069,54 @@ mod tests {
     }
 
     #[test]
+    fn distant_rmsd_atoms_reject_identity_fallback_rotation_error() {
+        let distance = 1e12;
+        let angle = 1e-17;
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 0.0, 3.0],
+            [distance, 0.0, 0.0],
+        ];
+        let mobile =
+            reference.map(|[x, y, z]| [x - angle * y + 10.0, angle * x + y - 4.0, z + 2.0]);
+        let reference = prepare_coordinate_union(&reference, 4, 4).unwrap();
+        let mobile = prepare_coordinate_union(&mobile, 4, 4).unwrap();
+        let transform = fit_prepared_transform(&reference, &mobile).unwrap();
+        assert_eq!(transform.rotation, na::Matrix3::identity());
+        assert!(matches!(
+            kabsch_prepared_selected_rmsd(&reference, &mobile),
+            Err(ArpeggiaError::Calculation(message))
+                if message.contains("reliable Kabsch residual")
+        ));
+    }
+
+    #[test]
+    fn distant_rmsd_atoms_reject_solver_error_with_fit_residual() {
+        let distance = 1e12;
+        let reference = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 0.0, 3.0],
+            [distance, 0.3 * distance, -0.2 * distance],
+        ];
+        let mut mobile = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
+        mobile[3][0] += 0.01;
+        let reference = prepare_coordinate_union(&reference, 4, 4).unwrap();
+        let mobile = prepare_coordinate_union(&mobile, 4, 4).unwrap();
+        let transform = fit_prepared_transform(&reference, &mobile).unwrap();
+        let solver_tolerance = f64::EPSILON * 4.0_f64.sqrt() * 64.0;
+        assert!(transform.fit_residual_norm > solver_tolerance);
+        assert!(matches!(
+            kabsch_prepared_selected_rmsd(&reference, &mobile),
+            Err(ArpeggiaError::Calculation(message))
+                if message.contains("reliable Kabsch residual")
+        ));
+    }
+
+    #[test]
     fn rmsd_only_coordinates_must_fit_the_superposition_frame() {
         let coordinates = [
             [0.0, 0.0, 0.0],
@@ -1136,6 +1196,12 @@ mod tests {
             assert!(rmsd.is_finite());
             assert!(rmsd / scale < 1e-12);
         }
+    }
+
+    #[test]
+    fn rmsd_rescaling_preserves_subnormal_results() {
+        let minimum_subnormal = f64::from_bits(1);
+        assert_eq!(scaled_rmsd(2.0, minimum_subnormal, 4), minimum_subnormal);
     }
 
     #[test]
