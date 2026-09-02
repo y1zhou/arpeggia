@@ -8,7 +8,6 @@ use crate::utils::polars_calculation_error;
 use crate::{
     Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, AtomSubset, WarningCode, load_model,
 };
-use kmedoids::ArrayAdapter;
 use polars::prelude::*;
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
@@ -79,6 +78,7 @@ pub fn get_pairwise_rmsd(
     path_column: &str,
     options: &PairwiseRmsdOptions,
 ) -> ArpeggiaResult<Analysis<DataFrame>> {
+    ResidueSelector::parse(&options.residues)?;
     let observations = read_structure_observations(input, id_column, path_column)?;
     get_pairwise_rmsd_matrix(&observations, options).and_then(|analysis| {
         analysis
@@ -308,20 +308,6 @@ fn pairwise_dataframe(ids: &[String], rmsd: Vec<f64>) -> ArpeggiaResult<DataFram
     .map_err(polars_calculation_error)
 }
 
-impl ArrayAdapter<f64> for PairwiseRmsdMatrix {
-    fn len(&self) -> usize {
-        self.ids.len()
-    }
-
-    fn is_square(&self) -> bool {
-        checked_pair_count(self.ids.len()).is_ok_and(|count| count == self.data.len())
-    }
-
-    fn get(&self, left: usize, right: usize) -> f64 {
-        self.distance(left, right)
-    }
-}
-
 /// Read and validate a cached pairwise RMSD table for the expected IDs.
 ///
 /// The packed-matrix memory guard runs before the table is decoded unless
@@ -343,6 +329,7 @@ pub fn get_pairwise_rmsd_matrix(
     observations: &[StructureObservation],
     options: &PairwiseRmsdOptions,
 ) -> ArpeggiaResult<Analysis<PairwiseRmsdMatrix>> {
+    let selector = ResidueSelector::parse(&options.residues)?;
     let observations = validate_observations(observations.to_vec())?;
     if observations.len() < 2 {
         return Err(ArpeggiaError::InvalidArgument(
@@ -355,7 +342,6 @@ pub fn get_pairwise_rmsd_matrix(
         ArpeggiaError::InvalidArgument("pairwise matrix size overflows usize".into())
     })? as u64;
 
-    let selector = ResidueSelector::parse(&options.residues)?;
     let first_loaded = load_observation(&observations[0], options, &selector, None)?;
     let reference_keys = first_loaded
         .keys
@@ -725,16 +711,18 @@ fn effective_available_memory() -> Option<u64> {
     let mut system = sysinfo::System::new();
     system.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
     let host = system.available_memory();
-    if host == 0 {
-        return None;
-    }
-    Some(
-        system
-            .cgroup_limits()
-            .map(|limits| limits.free_memory)
-            .filter(|available| *available > 0)
-            .map_or(host, |available| host.min(available)),
+    minimum_available_memory(
+        host,
+        system.cgroup_limits().map(|limits| limits.free_memory),
     )
+}
+
+fn minimum_available_memory(host: u64, cgroup: Option<u64>) -> Option<u64> {
+    match (host, cgroup) {
+        (0, None) => None,
+        (host, None) => Some(host),
+        (host, Some(cgroup)) => Some(host.min(cgroup)),
+    }
 }
 
 fn check_memory(
@@ -976,6 +964,8 @@ mod tests {
             memory_warnings_or_error(FALLBACK_WARNING_BYTES + 1, None, "test").unwrap()[0].code,
             WarningCode::MemoryEstimate
         );
+        assert_eq!(minimum_available_memory(100, Some(0)), Some(0));
+        assert_eq!(minimum_available_memory(0, None), None);
     }
 
     #[test]
@@ -1113,6 +1103,28 @@ mod tests {
     fn pairwise_matrix_requires_two_observations() {
         assert!(matches!(
             get_pairwise_rmsd_matrix(&[], &PairwiseRmsdOptions::default()),
+            Err(ArpeggiaError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn residue_selection_is_validated_before_structure_io() {
+        let options = PairwiseRmsdOptions {
+            residues: "::".into(),
+            ..PairwiseRmsdOptions::default()
+        };
+        let missing = std::env::temp_dir().join("arpeggia-missing-pairwise-input");
+        assert!(matches!(
+            get_pairwise_rmsd(&missing, "id", "path", &options),
+            Err(ArpeggiaError::InvalidArgument(_))
+        ));
+
+        let observations = ["a", "b"].map(|id| StructureObservation {
+            id: id.into(),
+            path: missing.join(format!("{id}.pdb")),
+        });
+        assert!(matches!(
+            get_pairwise_rmsd_matrix(&observations, &options),
             Err(ArpeggiaError::InvalidArgument(_))
         ));
     }

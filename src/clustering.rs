@@ -139,7 +139,7 @@ impl ArrayAdapter<f64> for ScaledPairwiseRmsdMatrix<'_> {
     }
 
     fn is_square(&self) -> bool {
-        self.matrix.is_square()
+        true
     }
 
     fn get(&self, left: usize, right: usize) -> f64 {
