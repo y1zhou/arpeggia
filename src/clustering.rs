@@ -138,6 +138,8 @@ impl ArrayAdapter<f64> for ScaledPairwiseRmsdMatrix<'_> {
         self.matrix.len()
     }
 
+    // Required by kmedoids::ArrayAdapter; construction already guarantees a
+    // complete packed symmetric matrix.
     fn is_square(&self) -> bool {
         true
     }
