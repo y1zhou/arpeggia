@@ -4,7 +4,7 @@ use super::vector3::Vec3;
 
 /// Atom attention/visibility state.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-pub enum Attention {
+pub(super) enum Attention {
     /// Far from the interface; not considered for surface emission
     Far,
     /// Buried and flagged for interface processing
@@ -13,24 +13,24 @@ pub enum Attention {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ScAtom {
-    pub atomi: usize,
-    pub molecule: u8,
-    pub radius: f64,
-    pub attention: Attention,
+pub(super) struct ScAtom {
+    pub(super) atomi: usize,
+    pub(super) molecule: u8,
+    pub(super) radius: f64,
+    pub(super) attention: Attention,
     /// Is atom accessible to solvent/contact surface
-    pub accessible: bool,
-    pub atomn: String,
-    pub resn: String,
-    pub coor: Vec3,
+    pub(super) accessible: bool,
+    pub(super) atomn: String,
+    pub(super) resn: String,
+    pub(super) coor: Vec3,
     /// Same-molecule neighbors sorted by distance.
-    pub neighbor_indices: Vec<usize>,
+    pub(super) neighbor_indices: Vec<usize>,
     /// Same-molecule neighbor distances sorted by compact atom index.
-    pub neighbor_distances: Vec<(usize, f64)>,
+    pub(super) neighbor_distances: Vec<(usize, f64)>,
 }
 
 impl ScAtom {
-    pub fn neighbor_distance_squared(&self, index: usize) -> Option<f64> {
+    pub(super) fn neighbor_distance_squared(&self, index: usize) -> Option<f64> {
         self.neighbor_distances
             .binary_search_by_key(&index, |&(neighbor, _)| neighbor)
             .ok()
@@ -39,37 +39,37 @@ impl ScAtom {
 }
 
 #[derive(Clone, Debug)]
-pub struct Probe {
+pub(super) struct Probe {
     /// Indices of the three atoms defining the probe center
-    pub atom_indices: [usize; 3],
-    pub height: f64,
-    pub point: Vec3,
-    pub alt: Vec3,
+    pub(super) atom_indices: [usize; 3],
+    pub(super) height: f64,
+    pub(super) point: Vec3,
+    pub(super) alt: Vec3,
 }
 
 #[derive(Clone, Debug)]
-pub struct Dot {
+pub(super) struct Dot {
     /// Discretized surface point
-    pub coor: Vec3,
+    pub(super) coor: Vec3,
     /// Outward unit normal at the point
-    pub outnml: Vec3,
-    pub buried: bool,
+    pub(super) outnml: Vec3,
+    pub(super) buried: bool,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct SurfaceStats {
-    pub s_median: f64,
+pub(super) struct SurfaceStats {
+    pub(super) s_median: f64,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Results {
-    pub surfaces: [SurfaceStats; 2],
-    pub sc: f64,
+pub(super) struct Results {
+    pub(super) surfaces: [SurfaceStats; 2],
+    pub(super) sc: f64,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct AtomRadius {
-    pub residue: &'static str,
-    pub atom: &'static str,
-    pub radius: f64,
+pub(super) struct AtomRadius {
+    pub(super) residue: &'static str,
+    pub(super) atom: &'static str,
+    pub(super) radius: f64,
 }

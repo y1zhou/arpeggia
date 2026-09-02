@@ -1,6 +1,9 @@
 """Shared Python exposure contract for arpeggia."""
 
 EXPORTED_FUNCTIONS = (
+    "rmsd",
+    "pairwise_rmsd",
+    "cluster_structs",
     "contacts",
     "sasa",
     "relative_sasa",
@@ -14,8 +17,36 @@ EXPORTED_FUNCTIONS = (
 
 SASA_LEVELS = ("atom", "residue", "chain")
 SAP_LEVELS = ("atom", "residue")
+ATOM_SUBSETS = ("ca", "backbone", "heavy", "all")
+CLUSTERING_METHODS = ("k-medoids",)
 
 DEFAULTS = {
+    "rmsd": {
+        "model_num": 0,
+        "superpose_residues": "",
+        "rmsd_residues": "",
+        "atoms": "ca",
+    },
+    "pairwise_rmsd": {
+        "id_col": "id",
+        "path_col": "path",
+        "model_num": 0,
+        "superpose_residues": "",
+        "rmsd_residues": "",
+        "atoms": "ca",
+        "num_threads": 0,
+        "bypass_mem_check": False,
+    },
+    "cluster_structs": {
+        "method": "k-medoids",
+        "max_iterations": 100,
+        "model_num": 0,
+        "superpose_residues": "",
+        "rmsd_residues": "",
+        "atoms": "ca",
+        "num_threads": 0,
+        "bypass_mem_check": False,
+    },
     "contacts": {
         "groups": "/",
         "vdw_comp": 0.1,
@@ -151,3 +182,6 @@ SAP_COLUMNS = {
 }
 
 SEQUENCE_RETURN = "list[tuple[str, str]]"
+
+PAIRWISE_RMSD_COLUMNS = ("id_1", "id_2", "rmsd")
+CLUSTER_COLUMNS = ("id", "cluster_id", "medoid_id", "rmsd_to_medoid")

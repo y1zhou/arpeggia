@@ -27,7 +27,7 @@ const POLAR_DIST: f64 = 3.5;
 ///
 /// [WARNING] Water-mediated hydrogen-bond geometry is not currently modeled.
 /// Search strong hydrogen bonds using canonical names or explicit input bonds.
-pub(crate) fn find_hydrogen_bond(
+pub(super) fn find_hydrogen_bond(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     vdw_comp_factor: f64,
@@ -81,7 +81,7 @@ pub(crate) fn find_hydrogen_bond(
 /// * Checks for angle(donor, H, acceptor) >= 130° instead of 90°.
 ///
 /// Search weak hydrogen bonds using canonical names or explicit input bonds.
-pub(crate) fn find_weak_hydrogen_bond(
+pub(super) fn find_weak_hydrogen_bond(
     entity1: &AtomConformerResidueChainModel,
     entity2: &AtomConformerResidueChainModel,
     vdw_comp_factor: f64,
@@ -261,7 +261,7 @@ fn is_hydrogen_for_donor(res_name: &str, donor_name: &str, hydrogen_name: &str) 
     }
 }
 
-pub(crate) fn count_donors_without_explicit_hydrogen(
+pub(super) fn count_donors_without_explicit_hydrogen(
     pdb: &PDB,
     bonds: &ResolvedBonds,
     ligand: &std::collections::HashSet<String>,

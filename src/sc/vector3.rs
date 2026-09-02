@@ -4,21 +4,21 @@ use rstar::{AABB, PointDistance, RTreeObject};
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Vec3 {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+pub(super) struct Vec3 {
+    pub(super) x: f64,
+    pub(super) y: f64,
+    pub(super) z: f64,
 }
 
 /// Wrapper for indexing dots in an RTree
 #[derive(Clone, Copy, Debug)]
-pub struct DotPoint {
-    pub index: usize,
-    pub coor: Vec3,
+pub(super) struct DotPoint {
+    pub(super) index: usize,
+    pub(super) coor: Vec3,
 }
 
 impl DotPoint {
-    pub fn new(index: usize, coor: Vec3) -> Self {
+    pub(super) fn new(index: usize, coor: Vec3) -> Self {
         Self { index, coor }
     }
 }
@@ -41,33 +41,33 @@ impl PointDistance for DotPoint {
 }
 
 impl Vec3 {
-    pub fn new(x: f64, y: f64, z: f64) -> Self {
+    pub(super) fn new(x: f64, y: f64, z: f64) -> Self {
         Self { x, y, z }
     }
-    pub fn zero() -> Self {
+    pub(super) fn zero() -> Self {
         Self {
             x: 0.0,
             y: 0.0,
             z: 0.0,
         }
     }
-    pub fn dot(&self, other: Vec3) -> f64 {
+    pub(super) fn dot(&self, other: Vec3) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
-    pub fn cross(&self, other: Vec3) -> Vec3 {
+    pub(super) fn cross(&self, other: Vec3) -> Vec3 {
         Vec3::new(
             self.y * other.z - self.z * other.y,
             self.z * other.x - self.x * other.z,
             self.x * other.y - self.y * other.x,
         )
     }
-    pub fn magnitude_squared(&self) -> f64 {
+    fn magnitude_squared(&self) -> f64 {
         self.dot(*self)
     }
-    pub fn magnitude(&self) -> f64 {
+    fn magnitude(&self) -> f64 {
         self.magnitude_squared().max(0.0).sqrt()
     }
-    pub fn normalize(&mut self) {
+    pub(super) fn normalize(&mut self) {
         let m = self.magnitude();
         if m > 0.0 {
             self.x /= m;
@@ -75,15 +75,15 @@ impl Vec3 {
             self.z /= m;
         }
     }
-    pub fn normalized(&self) -> Vec3 {
+    pub(super) fn normalized(&self) -> Vec3 {
         let mut v = *self;
         v.normalize();
         v
     }
-    pub fn distance_squared(&self, other: Vec3) -> f64 {
+    pub(super) fn distance_squared(&self, other: Vec3) -> f64 {
         (*self - other).magnitude_squared()
     }
-    pub fn distance(&self, other: Vec3) -> f64 {
+    pub(super) fn distance(&self, other: Vec3) -> f64 {
         self.distance_squared(other).sqrt()
     }
 }

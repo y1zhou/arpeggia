@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![warn(unreachable_pub)]
 #![doc = include_str!("../README.md")]
 
 //! # Arpeggia Library
@@ -10,9 +11,12 @@
 //! The library returns results as Polars `DataFrames`, which can be easily converted
 //! to various output formats or used directly in Python via `PyO3` bindings.
 
+mod clustering;
 mod contacts;
 mod diagnostics;
 mod metadata;
+mod pairwise_rmsd;
+mod rmsd;
 mod sap;
 mod sasa;
 mod sc;
@@ -21,12 +25,17 @@ mod structure;
 mod utils;
 
 // Re-export key public types
-pub use contacts::residues::{Plane, ResidueExt, ResidueId};
-pub use contacts::{InteractingEntity, Interaction, Interactions, ProtonationMode, ResultEntry};
+pub use clustering::{ClusterOptions, ClusteringMethod, cluster_pairwise_rmsd};
+pub use contacts::ProtonationMode;
 pub use diagnostics::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 pub use metadata::{BondEndpoint, StructureMetadata, get_seqres, read_metadata};
-pub use structure::{load_model, parse_groups};
-pub use utils::{DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file};
+pub use pairwise_rmsd::{
+    PairwiseRmsdMatrix, PairwiseRmsdOptions, StructureObservation, get_pairwise_rmsd,
+    get_pairwise_rmsd_matrix, read_pairwise_matrix, read_structure_observations,
+};
+pub use rmsd::{AtomSubset, get_rmsd, kabsch_rmsd, validate_rmsd_selections};
+pub use structure::load_model;
+pub use utils::run_with_threads;
 
 // Re-export public functions from modules
 pub use contacts::analyze_contacts;

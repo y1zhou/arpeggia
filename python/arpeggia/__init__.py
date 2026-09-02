@@ -8,6 +8,7 @@ It includes functionality for:
 - Calculating Spatial Aggregation Propensity (SAP) scores for predicting aggregation-prone regions
 - Calculating buried surface area (dSASA) at interfaces between chain groups
 - Calculating Shape Complementarity (SC) between chain groups
+- Superposing structures and clustering conformations by pairwise RMSD
 - Extracting coordinate-observed and declared polymer sequences
 
 The module is built on Rust using PyO3 and returns results as Polars DataFrames for
@@ -59,10 +60,13 @@ from importlib.metadata import version
 
 from arpeggia._contract import EXPORTED_FUNCTIONS
 from arpeggia.arpeggia import (  # noqa: F401
+    cluster_structs,
     contacts,
     dsasa,
     dsasa_components,
+    pairwise_rmsd,
     relative_sasa,
+    rmsd,
     sap_score,
     sasa,
     sc,

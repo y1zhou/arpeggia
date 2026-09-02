@@ -3,7 +3,7 @@ use pdbtbx::*;
 
 /// Interaction types.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Interaction {
+pub(super) enum Interaction {
     /// A non-disulfide bond explicitly declared by the input structure.
     Covalent,
     /// A disulfide explicitly declared by the input structure.
@@ -62,6 +62,38 @@ pub enum Interaction {
     HydrophobicContact,
 }
 
+impl Interaction {
+    pub(super) const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Covalent => "Covalent",
+            Self::Disulfide => "Disulfide",
+            Self::StericClash => "StericClash",
+            Self::PotentialCovalent => "PotentialCovalent",
+            Self::PotentialDisulfide => "PotentialDisulfide",
+            Self::VanDerWaalsClash => "VanDerWaalsClash",
+            Self::VanDerWaalsContact => "VanDerWaalsContact",
+            Self::IonicBond => "IonicBond",
+            Self::PotentialIonicBond => "PotentialIonicBond",
+            Self::HydrogenBond => "HydrogenBond",
+            Self::WeakHydrogenBond => "WeakHydrogenBond",
+            Self::PolarContact => "PolarContact",
+            Self::WeakPolarContact => "WeakPolarContact",
+            Self::IonicRepulsion => "IonicRepulsion",
+            Self::PotentialIonicRepulsion => "PotentialIonicRepulsion",
+            Self::SaltBridge => "SaltBridge",
+            Self::PiDisplacedStacking => "PiDisplacedStacking",
+            Self::PiTStacking => "PiTStacking",
+            Self::PiSandwichStacking => "PiSandwichStacking",
+            Self::PiParallelInPlaneStacking => "PiParallelInPlaneStacking",
+            Self::PiTiltedStacking => "PiTiltedStacking",
+            Self::PiLStacking => "PiLStacking",
+            Self::CationPi => "CationPi",
+            Self::PotentialCationPi => "PotentialCationPi",
+            Self::HydrophobicContact => "HydrophobicContact",
+        }
+    }
+}
+
 /// Policy for interpreting histidine protonation in ionic contacts.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
 pub enum ProtonationMode {
@@ -76,41 +108,41 @@ pub enum ProtonationMode {
 
 /// Entity interacting with another.
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct InteractingEntity {
+pub(super) struct InteractingEntity {
     /// Chain identifier
-    pub chain: String,
+    pub(super) chain: String,
     /// Residue name
-    pub resn: String,
+    pub(super) resn: String,
     /// Residue index
-    pub resi: isize,
+    pub(super) resi: isize,
     /// residue insertion code
-    pub insertion: String,
+    pub(super) insertion: String,
     /// Alternate location identifier
-    pub altloc: String,
+    pub(super) altloc: String,
     /// Atom name
-    pub atomn: String,
+    pub(super) atomn: String,
     /// Atom index
-    pub atomi: usize,
+    pub(super) atomi: usize,
 }
 
 /// Entry passed to the results.
 #[derive(Debug, Clone)]
-pub struct ResultEntry {
+pub(super) struct ResultEntry {
     /// Model identifier
-    pub model: usize,
+    pub(super) model: usize,
     /// Interaction type
-    pub interaction: Interaction,
+    pub(super) interaction: Interaction,
     /// Ligand residue and atom
-    pub ligand: InteractingEntity,
+    pub(super) ligand: InteractingEntity,
     /// Receptor residue and atom
-    pub receptor: InteractingEntity,
+    pub(super) receptor: InteractingEntity,
     /// Distance between ligand and receptor atoms
-    pub distance: f64,
+    pub(super) distance: f64,
 }
 
 impl InteractingEntity {
     /// Create a new interacting entity
-    pub fn new(
+    pub(super) fn new(
         chain: &str,
         resi: isize,
         insertion: &str,
@@ -130,7 +162,7 @@ impl InteractingEntity {
         }
     }
     /// Helper function to convert an [`pdbtbx::AtomConformerResidueChainModel`] to a human-readable format
-    pub fn from_hier(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
+    pub(super) fn from_hier(hierarchy: &AtomConformerResidueChainModel<'_>) -> InteractingEntity {
         Self::new(
             hierarchy.chain().id(),
             hierarchy.residue().serial_number(),
@@ -174,8 +206,6 @@ impl fmt::Display for ResultEntry {
 
 impl fmt::Display for Interaction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
-        // or, alternatively:
-        // fmt::Debug::fmt(self, f)
+        f.write_str(self.as_str())
     }
 }

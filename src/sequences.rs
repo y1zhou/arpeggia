@@ -3,7 +3,7 @@
 //! This module provides functions for extracting amino acid sequences
 //! from PDB structures.
 
-use crate::contacts::residues::ResidueExt;
+use crate::contacts::one_letter_code;
 use pdbtbx::*;
 
 /// Get observed chain sequences from one model in a PDB structure.
@@ -34,7 +34,10 @@ pub fn get_sequences(pdb: &PDB, model_num: usize) -> crate::ArpeggiaResult<Vec<(
     Ok(model
         .chains()
         .map(|chain| {
-            let sequence = chain.residues().filter_map(ResidueExt::resn).collect();
+            let sequence = chain
+                .residues()
+                .filter_map(|residue| residue.name().and_then(one_letter_code))
+                .collect();
             (chain.id().to_string(), sequence)
         })
         .filter(|(_, sequence): &(String, String)| !sequence.is_empty())

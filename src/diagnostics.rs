@@ -10,6 +10,8 @@ pub enum WarningCode {
     Parser,
     /// One alternate conformer was selected from several.
     ConformerSelected,
+    /// The first coordinate model was selected from a multi-model input.
+    ModelSelected,
     /// A donor had no directly associated explicit hydrogen.
     MissingDonorHydrogen,
     /// A full-atom reference calculation received no hydrogen atoms.
@@ -24,6 +26,10 @@ pub enum WarningCode {
     UnsupportedPolarity,
     /// An optional geometric feature could not be built from the available atoms.
     IncompleteGeometry,
+    /// A memory estimate could not be enforced and may exceed practical RAM.
+    MemoryEstimate,
+    /// One argument took precedence over another explicitly supplied argument.
+    ArgumentIgnored,
 }
 
 impl Display for WarningCode {
@@ -31,6 +37,7 @@ impl Display for WarningCode {
         let code = match self {
             Self::Parser => "PARSER",
             Self::ConformerSelected => "CONFORMER_SELECTED",
+            Self::ModelSelected => "MODEL_SELECTED",
             Self::MissingDonorHydrogen => "MISSING_DONOR_HYDROGEN",
             Self::HydrogenFreeInput => "HYDROGEN_FREE_INPUT",
             Self::UnresolvedHistidine => "UNRESOLVED_HISTIDINE",
@@ -38,6 +45,8 @@ impl Display for WarningCode {
             Self::UnsupportedMonomer => "UNSUPPORTED_MONOMER",
             Self::UnsupportedPolarity => "UNSUPPORTED_POLARITY",
             Self::IncompleteGeometry => "INCOMPLETE_GEOMETRY",
+            Self::MemoryEstimate => "MEMORY_ESTIMATE",
+            Self::ArgumentIgnored => "ARGUMENT_IGNORED",
         };
         f.write_str(code)
     }

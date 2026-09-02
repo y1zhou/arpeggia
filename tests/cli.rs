@@ -15,6 +15,56 @@ fn missing_input_exits_nonzero() {
 }
 
 #[test]
+fn rmsd_rejects_selection_before_structure_io() {
+    let output = arpeggia()
+        .args([
+            "rmsd",
+            "missing-reference.pdb",
+            "missing-mobile.pdb",
+            "--superpose-residues",
+            "A:",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Superposition Selection"));
+    assert!(stderr.contains("empty residue selection"));
+
+    let output = arpeggia()
+        .args([
+            "rmsd",
+            "missing-reference.pdb",
+            "missing-mobile.pdb",
+            "--rmsd-residues",
+            "A:",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("RMSD Selection"));
+}
+
+#[test]
+fn cluster_structs_rejects_options_before_directory_io() {
+    let output = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            "missing-structure-directory",
+            "--output",
+            "unused-output",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("one of num_clusters or max_clusters is required")
+    );
+}
+
+#[test]
 fn unsafe_output_filename_exits_nonzero() {
     let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
     let output_dir =
@@ -156,4 +206,173 @@ fn sc_calculation_failure_exits_without_a_score() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("van der Waals radius"));
     assert!(!stderr.contains("INFO arpeggia::cli::sc: SC:"));
+}
+
+#[test]
+fn rmsd_prints_one_scalar() {
+    let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let output = arpeggia()
+        .args([
+            "rmsd",
+            &input,
+            &input,
+            "--superpose-residues",
+            "A:1-20",
+            "--rmsd-residues",
+            "A:1-20",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value = String::from_utf8(output.stdout)
+        .unwrap()
+        .trim()
+        .parse::<f64>()
+        .unwrap();
+    assert!(value < 1e-12);
+}
+
+#[test]
+fn cluster_structs_saves_and_reuses_pairwise_rmsd() {
+    let source = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let root = std::env::temp_dir().join(format!("arpeggia-cli-clustering-{}", std::process::id()));
+    let input = root.join("input");
+    let output = root.join("output");
+    std::fs::create_dir_all(&input).unwrap();
+    for id in ["a", "b", "c"] {
+        std::fs::copy(&source, input.join(format!("{id}.pdb"))).unwrap();
+    }
+    let arguments = [
+        "cluster-structs",
+        "--input",
+        input.to_str().unwrap(),
+        "--output",
+        output.to_str().unwrap(),
+        "--num-clusters",
+        "1",
+        "--pairwise-rmsd",
+        "--superpose-residues",
+        "A:1-20",
+        "--rmsd-residues",
+        "A:1-20",
+        "--num-threads",
+        "2",
+    ];
+    let first = arpeggia().args(arguments).output().unwrap();
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert!(output.join("clusters.csv").is_file());
+    assert!(output.join("pairwise_rmsd.csv").is_file());
+
+    let second = arpeggia()
+        .env("RUST_LOG", "debug")
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            output.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--pairwise-rmsd",
+            "--superpose-residues",
+            "A:1-10",
+            "--rmsd-residues",
+            "A:1-10",
+        ])
+        .output()
+        .unwrap();
+    assert!(second.status.success());
+    assert!(String::from_utf8_lossy(&second.stderr).contains("Reusing pairwise RMSD cache"));
+}
+
+#[test]
+fn cluster_structs_rejects_colliding_outputs() {
+    let source = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let root = std::env::temp_dir().join(format!(
+        "arpeggia-cli-cluster-output-collision-{}",
+        std::process::id()
+    ));
+    let input = root.join("input");
+    std::fs::create_dir_all(&input).unwrap();
+    for id in ["a", "b", "c"] {
+        std::fs::copy(&source, input.join(format!("{id}.pdb"))).unwrap();
+    }
+    let result = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            root.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--pairwise-rmsd",
+            "--pairwise-filename",
+            "clusters",
+        ])
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("output paths must differ"));
+}
+
+#[test]
+fn cluster_structs_preserves_pairwise_work_and_rejects_bad_cache() {
+    let source = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
+    let root = std::env::temp_dir().join(format!(
+        "arpeggia-cli-cluster-failure-{}",
+        std::process::id()
+    ));
+    let input = root.join("input");
+    let output = root.join("output");
+    std::fs::create_dir_all(&input).unwrap();
+    for id in ["a", "b", "c"] {
+        std::fs::copy(&source, input.join(format!("{id}.pdb"))).unwrap();
+    }
+    std::fs::create_dir_all(output.join("clusters.csv")).unwrap();
+    let failed = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            output.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--pairwise-rmsd",
+            "--superpose-residues",
+            "A:1-20",
+            "--rmsd-residues",
+            "A:1-20",
+        ])
+        .output()
+        .unwrap();
+    assert!(!failed.status.success());
+    assert!(output.join("pairwise_rmsd.csv").is_file());
+    assert!(!output.join("clusters.csv").is_file());
+
+    std::fs::write(output.join("pairwise_rmsd.csv"), "broken\ncache\n").unwrap();
+    let malformed = arpeggia()
+        .args([
+            "cluster-structs",
+            "--input",
+            input.to_str().unwrap(),
+            "--output",
+            output.to_str().unwrap(),
+            "--num-clusters",
+            "1",
+            "--pairwise-rmsd",
+        ])
+        .output()
+        .unwrap();
+    assert!(!malformed.status.success());
+    assert!(String::from_utf8_lossy(&malformed.stderr).contains("remove it to recalculate"));
 }

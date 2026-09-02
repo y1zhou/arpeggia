@@ -1,31 +1,19 @@
-use arpeggia::{
-    ArpeggiaResult, DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file,
-};
+use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file};
+use arpeggia::{ArpeggiaError, ArpeggiaResult, run_with_threads};
 use clap::{Parser, ValueEnum};
 use polars::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace};
 
 /// Granularity level for SASA calculation.
-#[derive(ValueEnum, Clone, Debug, Copy, Default)]
-pub enum SasaLevel {
+#[derive(ValueEnum, Clone, Debug, Copy)]
+enum SasaLevel {
     /// Calculate SASA for each individual atom
-    #[default]
     Atom,
     /// Aggregate SASA by residue
     Residue,
     /// Aggregate SASA by chain
     Chain,
-}
-
-impl std::fmt::Display for SasaLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SasaLevel::Atom => write!(f, "atom"),
-            SasaLevel::Residue => write!(f, "residue"),
-            SasaLevel::Chain => write!(f, "chain"),
-        }
-    }
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -64,7 +52,7 @@ pub(crate) struct Args {
     num_threads: usize,
 
     /// Granularity level for SASA calculation
-    #[arg(short = 'l', long = "level", default_value_t = SasaLevel::Atom)]
+    #[arg(short = 'l', long = "level", default_value = "atom")]
     level: SasaLevel,
 
     /// Comma-separated chain IDs to include (e.g., "A,B,C"). If empty, includes all chains.
@@ -121,11 +109,12 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     if tracing::enabled!(tracing::Level::DEBUG) {
         let non_zero_sasa_mask = df_sasa
             .column("sasa")
-            .unwrap()
-            .as_materialized_series()
-            .not_equal(0.0)
-            .unwrap();
-        let df_sasa_nonzero = df_sasa.filter(&non_zero_sasa_mask).unwrap();
+            .and_then(Column::f32)
+            .map_err(|error| ArpeggiaError::Calculation(error.to_string()))?
+            .not_equal(0.0);
+        let df_sasa_nonzero = df_sasa
+            .filter(&non_zero_sasa_mask)
+            .map_err(|error| ArpeggiaError::Calculation(error.to_string()))?;
         let entity_name = match args.level {
             SasaLevel::Atom => "atoms",
             SasaLevel::Residue => "residues",

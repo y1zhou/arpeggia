@@ -6,7 +6,7 @@ use super::types::AtomRadius;
 
 /// Embedded atomic radii table (from Lawrence & Colman).
 /// Radii are in Angstroms.
-pub static EMBEDDED_ATOMIC_RADII: &[AtomRadius] = &[
+pub(super) static EMBEDDED_ATOMIC_RADII: &[AtomRadius] = &[
     // Specific residue radii
     AtomRadius {
         residue: "ALA",
@@ -408,7 +408,7 @@ pub static EMBEDDED_ATOMIC_RADII: &[AtomRadius] = &[
 
 /// Wildcard match for residue/atom patterns.
 /// `*` at start matches everything, `*` elsewhere matches suffix.
-pub fn wildcard_match(query: &str, pattern: &str) -> bool {
+pub(super) fn wildcard_match(query: &str, pattern: &str) -> bool {
     fn rtrim_spaces(s: &str) -> &str {
         let mut end = s.len();
         let b = s.as_bytes();

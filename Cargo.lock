@@ -143,15 +143,16 @@ name = "arpeggia"
 version = "0.9.0"
 dependencies = [
  "clap",
+ "kmedoids",
  "nalgebra",
  "pdbtbx",
  "polars",
- "polars-io",
  "pyo3",
  "pyo3-polars",
  "rayon",
  "rstar",
  "rust-sasa",
+ "sysinfo",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1378,6 +1379,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kmedoids"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b39782f3ce4b95776e47d831fff2cfef1c88e3623755d17498493f3694f31a2c"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1803,10 +1813,10 @@ dependencies = [
  "polars-compute",
  "polars-core",
  "polars-error",
- "polars-expr",
  "polars-io",
  "polars-lazy",
  "polars-ops",
+ "polars-parquet",
  "polars-sql",
  "polars-time",
  "polars-utils",
@@ -2283,6 +2293,7 @@ dependencies = [
  "polars-io",
  "polars-json",
  "polars-ops",
+ "polars-parquet",
  "polars-time",
  "polars-utils",
  "rayon",
@@ -2453,9 +2464,9 @@ dependencies = [
 
 [[package]]
 name = "portable-atomic"
-version = "1.13.1"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c33a9471896f1c69cecef8d20cbe2f7accd12527ce60845ff44c153bb2a21b49"
+checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
 
 [[package]]
 name = "potential_utf"

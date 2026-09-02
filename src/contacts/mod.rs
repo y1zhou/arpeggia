@@ -2,26 +2,26 @@
 //!
 //! This module provides functions for analyzing atomic and ring contacts
 //! in PDB and mmCIF structures.
-pub mod aromatic;
-pub mod complex;
-pub mod hbond;
-pub mod hydrophobic;
-pub mod ionic;
-pub mod residues;
-pub mod structs;
-pub mod vdw;
+mod aromatic;
+mod complex;
+mod hbond;
+mod hydrophobic;
+mod ionic;
+mod residues;
+mod structs;
+mod vdw;
 
-// Re-exports
-pub use aromatic::{find_cation_pi, find_pi_pi};
-pub use complex::*;
-pub use hydrophobic::find_hydrophobic_contact;
-pub use ionic::{find_ionic_bond_with_protonation, find_ionic_repulsion_with_protonation};
-pub use structs::*;
-pub use vdw::find_vdw_contact;
+use complex::{InteractionComplex, SidechainStat};
+pub(crate) use ionic::{HistidinePreparationIssue, histidine_preparation_issue, is_histidine};
+pub(crate) use residues::one_letter_code;
+pub use structs::ProtonationMode;
+use structs::ResultEntry;
 
 use pdbtbx::*;
 use polars::prelude::*;
 use tracing::debug;
+
+use crate::utils::{polars_calculation_error, string_values};
 
 /// Analyze contacts with optional explicit connectivity and a
 /// histidine-protonation policy.
@@ -164,17 +164,19 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> crate::ArpeggiaRe
         "to_insertion",
         "to_altloc",
     ];
-    Ok(df_atomic
+    let mut join_args = JoinArgs::new(JoinType::Left);
+    join_args.validation = JoinValidation::ManyToOne;
+    df_atomic
         .vstack(&df_ring)
-        .unwrap()
+        .map_err(polars_calculation_error)?
         .join(
             &df_sc_stats,
             contacts_sc_join_cols,
             contacts_sc_join_cols,
-            JoinArgs::new(JoinType::Left),
+            join_args,
             None,
         )
-        .unwrap()
+        .map_err(polars_calculation_error)?
         .sort(
             [
                 "model",
@@ -190,50 +192,50 @@ fn contacts_from_complex(i_complex: InteractionComplex<'_>) -> crate::ArpeggiaRe
             ],
             SortMultipleOptions::default(),
         )
-        .unwrap())
+        .map_err(polars_calculation_error)
 }
 
 /// Convert a slice of `ResultEntry` into a Polars `DataFrame`.
-pub(crate) fn results_to_df(res: &[ResultEntry]) -> crate::ArpeggiaResult<DataFrame> {
-    Ok(df!(
+fn results_to_df(res: &[ResultEntry]) -> crate::ArpeggiaResult<DataFrame> {
+    df!(
         "model" => res.iter().map(|x| compact_model_id(x.model)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
-        "interaction" => res.iter().map(|x| x.interaction.to_string()).collect::<Vec<String>>(),
-        "distance" => res.iter().map(|x| x.distance as f32).collect::<Vec<f32>>(),
-        "from_chain" => res.iter().map(|x| x.ligand.chain.clone()).collect::<Vec<String>>(),
-        "from_resn" => res.iter().map(|x| x.ligand.resn.clone()).collect::<Vec<String>>(),
+        "interaction" => string_values(res.iter().map(|x| x.interaction.as_str())),
+        "distance" => res.iter().map(|x| x.distance as f32).collect::<Vec<_>>(),
+        "from_chain" => string_values(res.iter().map(|x| x.ligand.chain.as_str())),
+        "from_resn" => string_values(res.iter().map(|x| x.ligand.resn.as_str())),
         "from_resi" => res.iter().map(|x| compact_residue_id(x.ligand.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
-        "from_insertion" => res.iter().map(|x| x.ligand.insertion.clone()).collect::<Vec<String>>(),
-        "from_altloc" => res.iter().map(|x| x.ligand.altloc.clone()).collect::<Vec<String>>(),
-        "from_atomn" => res.iter().map(|x| x.ligand.atomn.clone()).collect::<Vec<String>>(),
+        "from_insertion" => string_values(res.iter().map(|x| x.ligand.insertion.as_str())),
+        "from_altloc" => string_values(res.iter().map(|x| x.ligand.altloc.as_str())),
+        "from_atomn" => string_values(res.iter().map(|x| x.ligand.atomn.as_str())),
         "from_atomi" => res.iter().map(|x| compact_atom_id(x.ligand.atomi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
-        "to_chain" => res.iter().map(|x| x.receptor.chain.clone()).collect::<Vec<String>>(),
-        "to_resn" => res.iter().map(|x| x.receptor.resn.clone()).collect::<Vec<String>>(),
+        "to_chain" => string_values(res.iter().map(|x| x.receptor.chain.as_str())),
+        "to_resn" => string_values(res.iter().map(|x| x.receptor.resn.as_str())),
         "to_resi" => res.iter().map(|x| compact_residue_id(x.receptor.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
-        "to_insertion" => res.iter().map(|x| x.receptor.insertion.clone()).collect::<Vec<String>>(),
-        "to_altloc" => res.iter().map(|x| x.receptor.altloc.clone()).collect::<Vec<String>>(),
-        "to_atomn" => res.iter().map(|x| x.receptor.atomn.clone()).collect::<Vec<String>>(),
+        "to_insertion" => string_values(res.iter().map(|x| x.receptor.insertion.as_str())),
+        "to_altloc" => string_values(res.iter().map(|x| x.receptor.altloc.as_str())),
+        "to_atomn" => string_values(res.iter().map(|x| x.receptor.atomn.as_str())),
         "to_atomi" => res.iter().map(|x| compact_atom_id(x.receptor.atomi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
     )
-    .unwrap())
+    .map_err(polars_calculation_error)
 }
 
 /// Convert sidechain statistics into a Polars `DataFrame`.
-pub(crate) fn sc_results_to_df(res: &[SidechainStat<'_>]) -> crate::ArpeggiaResult<DataFrame> {
-    Ok(df!(
-        "model" => res.iter().map(|(k, _)| compact_model_id(k.0.model)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
-        "from_chain" => res.iter().map(|(k, _)| k.0.chain.to_owned()).collect::<Vec<String>>(),
-        "from_resi" => res.iter().map(|(k, _)| compact_residue_id(k.0.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
-        "from_insertion" => res.iter().map(|(k, _)| k.0.insertion.to_owned()).collect::<Vec<String>>(),
-        "from_altloc" => res.iter().map(|(k, _)| k.0.altloc.to_owned()).collect::<Vec<String>>(),
-        "to_chain" => res.iter().map(|(k, _)| k.1.chain.to_owned()).collect::<Vec<String>>(),
-        "to_resi" => res.iter().map(|(k, _)| compact_residue_id(k.1.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
-        "to_insertion" => res.iter().map(|(k, _)| k.1.insertion.to_owned()).collect::<Vec<String>>(),
-        "to_altloc" => res.iter().map(|(k, _)| k.1.altloc.to_owned()).collect::<Vec<String>>(),
-        "sc_centroid_dist" => res.iter().map(|(_, v)| v.0 as f32).collect::<Vec<f32>>(),
-        "sc_dihedral" => res.iter().map(|(_, v)| v.1 as f32).collect::<Vec<f32>>(),
-        "sc_centroid_angle" => res.iter().map(|(_, v)| v.2 as f32).collect::<Vec<f32>>(),
+fn sc_results_to_df(res: &[SidechainStat<'_>]) -> crate::ArpeggiaResult<DataFrame> {
+    df!(
+        "model" => res.iter().map(|(key, _)| compact_model_id(key.0.model)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
+        "from_chain" => string_values(res.iter().map(|(key, _)| key.0.chain)),
+        "from_resi" => res.iter().map(|(key, _)| compact_residue_id(key.0.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
+        "from_insertion" => string_values(res.iter().map(|(key, _)| key.0.insertion)),
+        "from_altloc" => string_values(res.iter().map(|(key, _)| key.0.altloc)),
+        "to_chain" => string_values(res.iter().map(|(key, _)| key.1.chain)),
+        "to_resi" => res.iter().map(|(key, _)| compact_residue_id(key.1.resi)).collect::<crate::ArpeggiaResult<Vec<_>>>()?,
+        "to_insertion" => string_values(res.iter().map(|(key, _)| key.1.insertion)),
+        "to_altloc" => string_values(res.iter().map(|(key, _)| key.1.altloc)),
+        "sc_centroid_dist" => res.iter().map(|(_, value)| value.0 as f32).collect::<Vec<_>>(),
+        "sc_dihedral" => res.iter().map(|(_, value)| value.1 as f32).collect::<Vec<_>>(),
+        "sc_centroid_angle" => res.iter().map(|(_, value)| value.2 as f32).collect::<Vec<_>>(),
     )
-    .unwrap())
+    .map_err(polars_calculation_error)
 }
 
 fn compact_model_id(value: usize) -> crate::ArpeggiaResult<u32> {

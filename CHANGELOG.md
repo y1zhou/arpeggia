@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added uniform-weight Kabsch RMSD for exact protein-atom correspondence through
+  Rust, Python, and the `rmsd` CLI command, with chain/residue and atom-subset
+  selection. Superposition and RMSD residue selections can differ, allowing a
+  structure to be aligned on one region while motion is measured in another.
+- Added deterministic fixed-count FasterPAM and bounded automatic DynMSC
+  structure clustering, packed parallel pairwise RMSD, heuristic memory guards,
+  Polars outputs, and ID-only CLI pair-table reuse.
+
+### Changed
+
+- Simplified tabular IO to CSV, Parquet, and NDJSON. NDJSON reads use Polars'
+  bounded lazy scanner with projection pushdown; ordinary JSON tables are no
+  longer accepted or produced.
+- Reduced the Rust public surface to supported scientific APIs. Contact and SC
+  implementation details, chain-group parsing, and CLI-only table writers are
+  now private; Python functions and CLI behavior are unchanged.
+
 ## [0.9.0] - 2026-08-27
 
 ### Scientific corrections

@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![warn(unreachable_pub)]
 #![doc = include_str!("../README.md")]
 
 mod cli;
@@ -16,6 +17,10 @@ struct Cli {
 
 #[derive(Subcommand, Clone)]
 enum Commands {
+    /// Superpose two structures and print their RMSD in Angstroms
+    Rmsd(crate::cli::rmsd::Args),
+    /// Cluster a directory of exactly corresponding protein structures
+    ClusterStructs(crate::cli::cluster_structs::Args),
     /// Analyze atomic and ring contacts in a PDB or mmCIF file
     Contacts(crate::cli::contacts::Args),
     /// Calculate the solvent accessible surface area (SASA) of each atom in a PDB or mmCIF file
@@ -36,13 +41,20 @@ enum Commands {
 
 /// Entry to the CLI tool. Verbosity can be controlled with the `RUST_LOG` environment variable.
 fn main() -> ExitCode {
+    let log_level = std::env::var("RUST_LOG")
+        .ok()
+        .and_then(|level| level.parse().ok())
+        .unwrap_or(tracing::level_filters::LevelFilter::INFO);
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
+        .with_max_level(log_level)
         .init();
     config_polars_output();
 
     let cli = Cli::parse();
     let result: ArpeggiaResult<()> = match &cli.command {
+        Commands::Rmsd(args) => crate::cli::rmsd::run(args),
+        Commands::ClusterStructs(args) => crate::cli::cluster_structs::run(args),
         Commands::Contacts(args) => crate::cli::contacts::run(args),
         Commands::Sasa(args) => crate::cli::sasa::run(args),
         Commands::Dsasa(args) => crate::cli::dsasa::run(args),

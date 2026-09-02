@@ -1,8 +1,7 @@
-use arpeggia::{
-    ArpeggiaResult, DataFrameFileType, prepare_df_output_dir, run_with_threads, write_df_to_file,
-};
+use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file};
+use arpeggia::{ArpeggiaError, ArpeggiaResult, run_with_threads};
 use clap::Parser;
-use polars::prelude::ChunkCompareEq;
+use polars::prelude::{ChunkCompareEq, Column};
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, trace};
 
@@ -79,11 +78,12 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     if tracing::enabled!(tracing::Level::DEBUG) {
         let non_zero_sasa_mask = df_relative_sasa
             .column("sasa")
-            .unwrap()
-            .as_materialized_series()
-            .not_equal(0.0)
-            .unwrap();
-        let df_sasa_nonzero = df_relative_sasa.filter(&non_zero_sasa_mask).unwrap();
+            .and_then(Column::f32)
+            .map_err(|error| ArpeggiaError::Calculation(error.to_string()))?
+            .not_equal(0.0);
+        let df_sasa_nonzero = df_relative_sasa
+            .filter(&non_zero_sasa_mask)
+            .map_err(|error| ArpeggiaError::Calculation(error.to_string()))?;
         debug!(
             "Found {} residues with non-zero SASA\n{}",
             df_sasa_nonzero.height(),
