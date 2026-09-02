@@ -342,7 +342,9 @@ pub(crate) fn kabsch_prepared_rmsd(
         let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
         covariance += mobile * reference.transpose();
     }
-    let svd = covariance.svd(true, true);
+    let svd = covariance
+        .try_svd(true, true, f64::EPSILON * 5.0, 100)
+        .ok_or_else(|| ArpeggiaError::Calculation("Kabsch SVD failed to converge".into()))?;
     let u = svd.u.ok_or_else(|| {
         ArpeggiaError::Calculation("Kabsch SVD did not return left singular vectors".into())
     })?;
