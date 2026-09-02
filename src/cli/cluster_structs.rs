@@ -5,7 +5,7 @@ use arpeggia::{
     read_structure_observations, validate_residue_selection,
 };
 use clap::Parser;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
 #[derive(Parser, Debug, Clone)]
@@ -102,10 +102,8 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         .pairwise_rmsd
         .then(|| prepare_df_output_dir(&args.output, &args.pairwise_filename, args.output_format))
         .transpose()?;
-    if pairwise_path.as_ref() == Some(&output_path) {
-        return Err(ArpeggiaError::InvalidArgument(
-            "cluster and pairwise RMSD output paths must differ".into(),
-        ));
+    if let Some(path) = &pairwise_path {
+        ensure_distinct_outputs(&output_path, path)?;
     }
     let pairwise_options = PairwiseRmsdOptions {
         model_num: args.model_num,
@@ -146,6 +144,10 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
             analysis.value
         };
 
+    if let Some(path) = &pairwise_path {
+        ensure_distinct_outputs(&output_path, path)?;
+    }
+
     let analysis = cluster_pairwise_rmsd(&matrix, &cluster_options)?;
     for warning in analysis.warnings {
         warn!("{warning}");
@@ -154,4 +156,34 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     write_df_to_file(&mut clusters, &output_path, args.output_format)?;
     info!("Clusters saved to {}", output_path.display());
     Ok(())
+}
+
+fn ensure_distinct_outputs(cluster: &Path, pairwise: &Path) -> ArpeggiaResult<()> {
+    if cluster == pairwise
+        || (cluster.exists()
+            && pairwise.exists()
+            && cluster.canonicalize()? == pairwise.canonicalize()?)
+    {
+        return Err(ArpeggiaError::InvalidArgument(
+            "cluster and pairwise RMSD output paths must differ".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_aliases_are_rejected() {
+        let directory =
+            std::env::temp_dir().join(format!("arpeggia-output-alias-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let pairwise = directory.join("pairwise.csv");
+        let cluster = directory.join("clusters.csv");
+        std::fs::write(&pairwise, "pairwise").unwrap();
+        std::os::unix::fs::symlink(&pairwise, &cluster).unwrap();
+        assert!(ensure_distinct_outputs(&cluster, &pairwise).is_err());
+    }
 }
