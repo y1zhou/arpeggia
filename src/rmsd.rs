@@ -324,6 +324,7 @@ pub(crate) struct PreparedCoordinates {
     points: Vec<[f64; 3]>,
     centroid: [f64; 3],
     scale: f64,
+    rmsd_radius: f64,
     superpose_end: usize,
     rmsd_start: usize,
 }
@@ -391,10 +392,16 @@ pub(crate) fn prepare_coordinate_union(
             "coordinate centering produced a non-finite value".into(),
         ));
     }
+    let rmsd_radius = scaled_rmsd(
+        rms_radius(&points[rmsd_start..], na::Vector3::from(centroid)),
+        scale,
+        1,
+    );
     Ok(PreparedCoordinates {
         points,
         centroid,
         scale,
+        rmsd_radius,
         superpose_end,
         rmsd_start,
     })
@@ -509,14 +516,10 @@ pub(crate) fn kabsch_prepared_selected_rmsd(
         &transform.rotation,
         &transform.residual_centroid,
     );
-    let scoring_radius = rms_radius(
-        mobile_rmsd,
-        transform.mobile_factor,
-        na::Vector3::from(mobile.centroid) * transform.mobile_factor,
-    );
+    let scoring_radius = mobile.rmsd_radius;
     if scoring_radius > 0.0
         && (!transform.angular_error_bound.is_finite()
-            || transform.angular_error_bound * scoring_radius * transform.scale > 1e-6)
+            || transform.angular_error_bound * scoring_radius > 1e-6)
     {
         return Err(ArpeggiaError::Calculation(
             "coordinate scale prevents a reliable Kabsch residual in Angstroms".into(),
@@ -642,9 +645,9 @@ fn fit_prepared_transform(
     })
 }
 
-fn rms_radius(points: &[[f64; 3]], factor: f64, centroid: na::Vector3<f64>) -> f64 {
+fn rms_radius(points: &[[f64; 3]], centroid: na::Vector3<f64>) -> f64 {
     points.iter().fold(0.0_f64, |norm, point| {
-        (na::Vector3::from(*point) * factor - centroid)
+        (na::Vector3::from(*point) - centroid)
             .iter()
             .fold(norm, |norm, value| norm.hypot(*value))
     }) / (points.len() as f64).sqrt()
@@ -662,7 +665,13 @@ fn finish_rmsd(residual_norm: f64, scale: f64, count: usize) -> ArpeggiaResult<f
 }
 
 fn scaled_rmsd(residual_norm: f64, scale: f64, count: usize) -> f64 {
-    residual_norm / (count as f64).sqrt() * scale
+    let divisor = (count as f64).sqrt();
+    let normalized = residual_norm / divisor;
+    if normalized == 0.0 && residual_norm != 0.0 {
+        residual_norm * scale / divisor
+    } else {
+        normalized * scale
+    }
 }
 
 fn aligned_residual_norm(
@@ -1202,6 +1211,10 @@ mod tests {
     fn rmsd_rescaling_preserves_subnormal_results() {
         let minimum_subnormal = f64::from_bits(1);
         assert_eq!(scaled_rmsd(2.0, minimum_subnormal, 4), minimum_subnormal);
+        assert_eq!(
+            scaled_rmsd(minimum_subnormal, 1e308, 4),
+            minimum_subnormal * 1e308 / 2.0
+        );
     }
 
     #[test]
