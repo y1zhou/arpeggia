@@ -138,13 +138,6 @@ impl<'a> InteractionComplex<'a> {
     /// In such cases, we avoid calculations where c1 > c2 if the interaction is symmetric.
     /// Currently, only ring-atom interactions are asymmetric.
     fn should_compare_entities(&self, e1: &IndexedAtom, e2: &IndexedAtom, symmetric: bool) -> bool {
-        // Ignore if any of the atoms is a hydrogen atom
-        if (e1.entity.atom().element() == Some(&Element::H))
-            | (e2.entity.atom().element() == Some(&Element::H))
-        {
-            return false;
-        }
-
         let e1_res = ResidueId::from_hier(&e1.entity);
         let e2_res = ResidueId::from_hier(&e2.entity);
         self.should_compare_residues(
@@ -321,8 +314,7 @@ impl InteractionComplex<'_> {
                     }
                     // Potential protonation cannot establish a definite salt bridge. For
                     // other polar contacts, retain the stronger ionic classification.
-                    (Some(ionic), Some(_)) => Some(ionic),
-                    (Some(ionic), None) => Some(ionic),
+                    (Some(ionic), _) => Some(ionic),
                     (None, Some(hbond)) => Some(hbond),
                     _ => None,
                 }
@@ -390,36 +382,29 @@ impl InteractionComplex<'_> {
         // Find ring-atom interactions
         ring_atom_neighbors
             .par_iter()
-            .map(|&(ring_index, atom_index)| {
+            .filter_map(|&(ring_index, atom_index)| {
                 let indexed_ring = &self.rings[ring_index];
                 let k = &indexed_ring.residue;
                 let ring = &indexed_ring.plane;
                 let y = &self.atoms[atom_index].entity;
-                let mut ring_contacts = Vec::new();
-
                 // Cation-pi interactions
                 let dist = ring.point_dist(&y.atom().pos());
-                let cation_pi_contacts =
-                    find_cation_pi(ring, y, self.protonation, self.ph).map(|intxn| ResultEntry {
-                        model: k.model,
-                        interaction: intxn,
-                        ligand: InteractingEntity::new(
-                            k.chain,
-                            k.resi,
-                            k.insertion,
-                            k.altloc,
-                            k.resn,
-                            "Ring",
-                            0,
-                        ),
-                        receptor: InteractingEntity::from_hier(y),
-                        distance: dist,
-                    });
-                ring_contacts.extend(cation_pi_contacts);
-
-                ring_contacts
+                find_cation_pi(ring, y, self.protonation, self.ph).map(|intxn| ResultEntry {
+                    model: k.model,
+                    interaction: intxn,
+                    ligand: InteractingEntity::new(
+                        k.chain,
+                        k.resi,
+                        k.insertion,
+                        k.altloc,
+                        k.resn,
+                        "Ring",
+                        0,
+                    ),
+                    receptor: InteractingEntity::from_hier(y),
+                    distance: dist,
+                })
             })
-            .flatten()
             .collect::<Vec<ResultEntry>>()
     }
 
@@ -460,7 +445,7 @@ impl InteractionComplex<'_> {
                 let ring1 = &first.plane;
                 let ring2 = &second.plane;
                 let dist = (ring1.center - ring2.center).norm();
-                let pi_pi_contacts = find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
+                find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
                     model: k1.model,
                     interaction: intxn,
                     ligand: InteractingEntity::new(
@@ -482,11 +467,8 @@ impl InteractionComplex<'_> {
                         0,
                     ),
                     distance: dist,
-                });
-
-                Some(pi_pi_contacts)
+                })
             })
-            .flatten()
             .collect::<Vec<ResultEntry>>()
     }
 }
@@ -690,7 +672,7 @@ fn build_sc_plane_positions(model: &PDB) -> HashMap<ResidueId<'_>, Plane> {
                         conformer.alternative_location().unwrap_or(""),
                         resn,
                     );
-                    if let Some(plane) = r.center_and_normal(Some(r.sc_plane_atoms())) {
+                    if let Some(plane) = r.center_and_normal(None) {
                         sc_plane_positions.insert(res_id, plane);
                     }
                 }

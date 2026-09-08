@@ -256,7 +256,7 @@ impl ResidueExt for Residue {
     }
 
     fn center_and_normal(&self, atoms: Option<Vec<&Atom>>) -> Option<Plane> {
-        let sc_atoms = atoms.unwrap_or(self.sc_plane_atoms());
+        let sc_atoms = atoms.unwrap_or_else(|| self.sc_plane_atoms());
 
         if sc_atoms.len() < 3 {
             return None;
@@ -279,7 +279,7 @@ impl ResidueExt for Residue {
             atom_coords.set_column(i, &(atom_coords.column(i) - center));
         }
 
-        let svd = atom_coords.svd(true, true);
+        let svd = atom_coords.svd(true, false);
         let normal = svd.u.unwrap().column(2).clone_owned();
 
         Some(Plane { center, normal })
@@ -305,8 +305,8 @@ mod tests {
             normal: na::Vector3::new(0.0, 0.0, -1.0),
         };
         assert!((plane_x.point_vec_dist(&point) - 2.0_f64.sqrt()).abs() < 1e-6);
-        assert!((plane_x.point_vec_angle(&point) - 45.0) < 1e-6);
-        assert!((parallel_x.point_vec_angle(&plane_x.center) - 45.0) < 1e-6);
+        assert!((plane_x.point_vec_angle(&point) - 45.0).abs() < 1e-6);
+        assert!((parallel_x.point_vec_angle(&plane_x.center) - 45.0).abs() < 1e-6);
         assert!(plane_x.dihedral(&parallel_x) < 1e-6);
 
         // Test a plane perpendicular to the x-y plane
@@ -314,9 +314,8 @@ mod tests {
             center: point,
             normal: na::Vector3::new(1.0, 0.0, 0.0),
         };
-        assert!((plane_x.point_vec_angle(&point) - 90.0) < 1e-6);
-        assert!((perpendicular_x.point_vec_angle(&plane_x.center) - 90.0) < 1e-6);
-        assert!((plane_x.dihedral(&perpendicular_x) - 90.0) < 1e-6);
+        assert!((perpendicular_x.point_vec_angle(&plane_x.center) - 90.0).abs() < 1e-6);
+        assert!((plane_x.dihedral(&perpendicular_x) - 90.0).abs() < 1e-6);
     }
 
     #[test]
