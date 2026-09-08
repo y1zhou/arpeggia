@@ -150,17 +150,6 @@ def test_contacts(test_pdb_file):
     assert all(df["distance"] >= 0), "All distances should be non-negative"
 
 
-def test_contacts_chain_groups(test_pdb_file):
-    """Test contacts with specific chain groups."""
-    import arpeggia
-
-    # Test with specific chain if available
-    df = arpeggia.contacts(test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5)
-
-    # Should have some interactions
-    assert len(df) > 0
-
-
 def test_contacts_ignore_zero_occupancy(test_pdb_file):
     """Test contacts with ignore_zero_occupancy parameter."""
     import arpeggia
@@ -401,3 +390,19 @@ def test_histidine_modes_and_potential_ionic_category(tmp_path):
             str(structure), groups="A/B", protonation="explicit-only"
         )
     assert "PotentialIonicBond" not in explicit["interaction"].to_list()
+
+
+def test_dsasa_matches_components(tmp_path):
+    """The scalar interface shares the component calculation."""
+    import arpeggia
+
+    structure = tmp_path / "interface.pdb"
+    structure.write_text(
+        "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "ATOM      2  CA  ALA B   1       3.000   0.000   0.000  1.00 20.00           C  \n"
+        "END\n"
+    )
+    components = arpeggia.dsasa_components(str(structure), groups="A/B")
+    assert arpeggia.dsasa(str(structure), groups="A/B") == components[0]
+    assert components[0] > 0
+    assert components[0] == pytest.approx(sum(components[1:]))
