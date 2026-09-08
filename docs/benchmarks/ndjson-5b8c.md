@@ -1,0 +1,126 @@
+# 5B8C contacts: lazy versus eager NDJSON
+
+## Result
+
+The eager replacement showed no material slowdown on this input. Contact
+generation differed by 0.8% with one thread and 1.2% with eight threads.
+One-thread NDJSON reads were effectively unchanged when checking row counts
+and 9–13% faster without that check. With eight threads, eager reads were
+51–65% faster. This supports retaining the removal of the lazy engine.
+
+## Timings
+
+Milliseconds below are the median of seven batch medians. Negative change
+means the eager implementation was faster.
+
+| Threads | Operation | Lazy (ms) | Eager (ms) | Change |
+| ---: | --- | ---: | ---: | ---: |
+| 1 | Generate contacts and serialize NDJSON | 24.038 | 24.220 | +0.8% |
+| 1 | Read all 20 columns | 2.286 | 2.073 | -9.3% |
+| 1 | Read all 20 columns + row-count check | 2.267 | 2.278 | +0.5% |
+| 1 | Read 3 columns | 1.942 | 1.694 | -12.8% |
+| 1 | Read 3 columns + row-count check | 1.926 | 1.915 | -0.6% |
+| 8 | Generate contacts and serialize NDJSON | 19.726 | 19.972 | +1.2% |
+| 8 | Read all 20 columns | 1.500 | 0.593 | -60.4% |
+| 8 | Read all 20 columns + row-count check | 1.456 | 0.711 | -51.2% |
+| 8 | Read 3 columns | 1.229 | 0.432 | -64.9% |
+| 8 | Read 3 columns + row-count check | 1.238 | 0.592 | -52.2% |
+
+## Input and environment
+
+- Input: local `5B8C.pdb`, 469,557 bytes; the separate `5B8C_h.pdb` was not used.
+- Input SHA-256: `574a7ad1a4846aaae3f8e2924d67ce7a34fa76b0e0acf8fee9471ec1e4a56766`.
+- Generated contacts: 2,574 rows × 20 columns; 969,835 bytes of NDJSON.
+- Contact options: groups `/`, VdW compensation 0.1 Å, distance cutoff 6.5 Å, `AllCharged` protonation, pH 7.4.
+- Host: AMD Ryzen 9 9950X3D, 16 cores / 32 logical CPUs, Linux x86-64.
+- Rust: `rustc 1.96.0 (ac68faa20 2026-05-25)`; Polars 0.55.2; optimized release builds.
+- Both `POLARS_MAX_THREADS` and `RAYON_NUM_THREADS` were set to the reported thread count. Contact analysis used the same explicit count.
+
+## Method
+
+Two binaries were built from the same current source snapshot. The eager
+variant used the cleanup implementation. The lazy variant enabled
+`polars/lazy` and used the original `read_dataframe` function from commit
+`7e06c82549c1eb94a1e75b2e1d5c2d38f426bc99`. Scientific code and all other
+dependency versions were identical. This isolates the feature/reader change
+from the other cleanup edits.
+
+Each operation ran in seven batches per variant, with variant order shuffled
+using seed 5808. Each subprocess performed an untimed validation call and
+three warmups, then 15 timed iterations for contacts or 50 for reads.
+That gives 105 contact samples or 350 reader samples per variant/thread
+configuration. Timing used Rust `Instant` around the operation; subprocess
+startup and result destruction were outside the timer.
+
+Contact timing includes PDB loading, metadata loading, contact calculation,
+and NDJSON serialization to an I/O sink. It excludes CLI logging and disk
+output. Reader timing includes the production file checks, schema inference,
+projection, and materialization. The projected columns were `from_chain`,
+`to_chain`, and `distance`. Bounded reads supplied the actual expected row
+count, 2,574, exercising the eager preflight scan and the lazy row limit.
+
+Every batch checked the result shape, schema, and checksum of serialized
+NDJSON. They matched between variants for every operation and thread count.
+The contacts table serves as a realistic NDJSON input; contact generation
+itself does not call the NDJSON reader in production.
+
+## Limits
+
+These are steady-state measurements with warm filesystem caches on a small
+local table. They do not establish performance for cold disks, remote
+filesystems, or much larger RMSD caches. The eager row-count scan remains an
+additional sequential pass. The near-1% generation differences are small
+absolute differences (0.18–0.25 ms), not evidence that the scientific
+algorithm became slower.
+
+## Reproduction artifacts
+
+The local run retains its source snapshot, generated Rust harness, two
+binaries, contacts table, scripts, and raw nanosecond samples under
+`/tmp/arpeggia-5b8c-benchmark/`. The harness embeds the reader functions
+directly from the two source versions; production source was not edited
+for benchmarking. `prepare.py` creates the snapshot and harness, and
+`run.py` runs the interleaved measurements.
+
+```bash
+python3 /tmp/arpeggia-5b8c-benchmark/prepare.py
+export CARGO_TARGET_DIR="$PWD/target"
+cargo build --release --offline --locked --example ndjson_bench \
+  --manifest-path /tmp/arpeggia-5b8c-benchmark/source/Cargo.toml
+cp target/release/examples/ndjson_bench /tmp/arpeggia-5b8c-benchmark/eager
+POLARS_MAX_THREADS=1 RAYON_NUM_THREADS=1 \
+  /tmp/arpeggia-5b8c-benchmark/eager generate "$PWD/5B8C.pdb" \
+  /tmp/arpeggia-5b8c-benchmark/contacts.ndjson
+cargo build --release --offline --locked --example ndjson_bench \
+  --manifest-path /tmp/arpeggia-5b8c-benchmark/source/Cargo.toml \
+  --features bench-lazy
+cp target/release/examples/ndjson_bench /tmp/arpeggia-5b8c-benchmark/lazy
+python3 /tmp/arpeggia-5b8c-benchmark/run.py
+```
+
+## Batch medians
+
+All values below are milliseconds, in chronological batch order.
+
+| Threads | Operation | Variant | Seven batch medians |
+| ---: | --- | --- | --- |
+| 1 | Generate contacts and serialize NDJSON | lazy | 23.804, 24.128, 23.480, 24.038, 24.081, 24.080, 23.966 |
+| 1 | Generate contacts and serialize NDJSON | eager | 24.178, 24.379, 24.103, 24.215, 24.346, 24.439, 24.220 |
+| 1 | Read all 20 columns | lazy | 2.220, 2.325, 2.267, 2.331, 2.286, 2.234, 2.346 |
+| 1 | Read all 20 columns | eager | 2.073, 2.068, 2.107, 2.035, 2.110, 2.058, 2.212 |
+| 1 | Read all 20 columns + row-count check | lazy | 2.267, 2.240, 2.250, 2.221, 2.357, 2.287, 2.313 |
+| 1 | Read all 20 columns + row-count check | eager | 2.328, 2.394, 2.241, 2.278, 2.251, 2.180, 2.425 |
+| 1 | Read 3 columns | lazy | 1.945, 1.888, 1.888, 1.976, 1.931, 1.943, 1.942 |
+| 1 | Read 3 columns | eager | 1.694, 1.638, 1.674, 1.679, 1.712, 1.695, 1.704 |
+| 1 | Read 3 columns + row-count check | lazy | 1.934, 1.911, 1.918, 1.926, 1.947, 1.920, 1.971 |
+| 1 | Read 3 columns + row-count check | eager | 1.784, 1.796, 1.809, 2.004, 1.915, 1.985, 1.998 |
+| 8 | Generate contacts and serialize NDJSON | lazy | 19.974, 19.779, 19.682, 19.687, 20.007, 19.349, 19.726 |
+| 8 | Generate contacts and serialize NDJSON | eager | 20.054, 19.756, 20.020, 21.047, 19.972, 19.712, 19.657 |
+| 8 | Read all 20 columns | lazy | 1.492, 1.516, 1.484, 1.500, 1.515, 1.444, 1.548 |
+| 8 | Read all 20 columns | eager | 0.635, 0.593, 0.589, 0.628, 0.570, 0.627, 0.500 |
+| 8 | Read all 20 columns + row-count check | lazy | 1.513, 1.441, 1.395, 1.430, 1.456, 1.527, 1.461 |
+| 8 | Read all 20 columns + row-count check | eager | 0.791, 0.758, 0.677, 0.778, 0.674, 0.672, 0.711 |
+| 8 | Read 3 columns | lazy | 1.226, 1.227, 1.242, 1.259, 1.229, 1.230, 1.193 |
+| 8 | Read 3 columns | eager | 0.503, 0.456, 0.432, 0.452, 0.407, 0.416, 0.423 |
+| 8 | Read 3 columns + row-count check | lazy | 1.238, 1.223, 1.221, 1.259, 1.206, 1.248, 1.273 |
+| 8 | Read 3 columns + row-count check | eager | 0.578, 0.569, 0.599, 0.592, 0.592, 0.603, 0.647 |
