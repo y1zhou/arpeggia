@@ -2,26 +2,17 @@
 
 Research date: 2026-08-28
 
-## Decision summary
+This note retains solver comparisons, external performance evidence, and the
+Rust dependency survey. The accepted behavior is maintained in
+[ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md):
 
-Kabsch/SVD and quaternion characteristic polynomial (QCP) solve the same
-least-squares rigid-superposition problem. Given the same paired atoms,
-weights, centering convention, and proper-rotation constraint, they should
-produce the same minimum RMSD up to floating-point error. The solver should
-therefore remain an implementation detail rather than a user-visible
-scientific-method option.
+- [Correspondence and superposition](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#correspondence-and-superposition): exact atom pairing, independent fit/evaluation selections, numerical safeguards, and the choice of Kabsch.
+- [Storage and execution boundaries](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#storage-and-execution-boundaries): coordinate preparation, matrix storage, and pair-level parallelism.
+- [Persistence and validation](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#persistence-and-validation): numerical equivalence and performance gates.
 
-The accepted solver direction after the design interview is:
-
-1. Define and test one small, serial `f64` Kabsch kernel whose inputs are two
-   already-paired `(n, 3)` coordinate arrays with equal shapes.
-2. Use the existing `nalgebra` dependency for the 3-by-3 SVD and enforce a
-   proper rotation. The public result is RMSD; the transform remains internal.
-3. Parallelize independent structure pairs when constructing an ensemble
-   matrix, not atoms within one fit.
-4. Do not implement QCP or add a third-party superposition crate in this
-   version. The comparison below records why QCP remains a credible future
-   optimization rather than a second public method.
+Current selection syntax and examples belong in the
+[usage guide](../structure-clustering.md#rmsd), and the numerical implementation
+and regressions live in [`src/rmsd.rs`](../../src/rmsd.rs).
 
 ## Scientific equivalence
 
@@ -94,74 +85,8 @@ MDAnalysis exposes weighted `float32`/`float64` QCP RMSD and rotation while doin
 the QCP arithmetic internally in double precision
 ([MDAnalysis QCP API](https://docs.mdanalysis.org/stable/documentation_pages/lib/qcprot.html)).
 
-## Parallelization boundary
+## QCP numerical evidence
 
-For an ensemble of `S` structures there are `S(S-1)/2` independent pairs. At
-only 1,000 structures this is already 499,500 tasks, so pair-level parallelism
-provides ample work for a fixed Rayon pool. Each worker should run the serial
-Kabsch kernel for its assigned pairs and write to disjoint locations in the
-packed matrix. Contiguous matrix chunks can preserve useful row locality while
-avoiding an auxiliary vector of pair indices.
-
-Parallelizing atoms within each pair is a poorer initial boundary. Every pair
-would repeatedly schedule a reduction for a small 3-by-3 covariance, followed
-by a constant-size SVD that has no useful internal parallel work. Nesting that
-inside a parallel pair loop adds scheduling and reduction overhead, makes
-floating-point accumulation order depend on scheduling, and risks using an
-ambient Rayon pool differently from the explicitly configured Arpeggia pool.
-Rayon recommends sequential inner iteration when an outer parallel iterator
-already supplies the concurrency
-([`flat_map_iter` rationale](https://github.com/rayon-rs/rayon/blob/main/RELEASES.md)).
-
-The implementation should therefore install one existing Arpeggia-configured
-Rayon pool around packed-matrix construction, split the output into disjoint
-chunks, and calculate each pair serially in canonical atom order. This keeps
-each RMSD numerically deterministic regardless of thread scheduling. The
-standalone two-structure `rmsd` operation remains serial. Per-atom threading is
-a future optimization only if benchmarks on exceptionally large selections
-show that the scalar operation needs it.
-
-Structure preparation is a separate bounded parallel phase. Parse the first
-structure serially to establish the reference atom identities and selected atom
-count, perform the second memory check, then prepare the remaining structures
-with `min(num_threads, 8)` workers. Collect successful results in canonical
-input order so warnings remain deterministic, while allowing a parsing error
-to cooperatively cancel remaining collection. Drop each full parsed structure
-after retaining only its normalized-centered selected coordinates and its one
-physical scale value. Normalizing before centering avoids overflow at the edge
-of finite `f64`. The eight-worker cap is an I/O-pressure heuristic and must be
-benchmarked rather than presented as a hardware guarantee.
-
-## Numerical robustness
-
-Use `f64` internally for both methods. PDB and mmCIF coordinate precision does
-not justify accepting extra cancellation in an all-pairs distance matrix, and
-MDAnalysis likewise keeps the QCP calculation in double precision even when
-input coordinates are `float32`
-([MDAnalysis QCP API](https://docs.mdanalysis.org/stable/documentation_pages/lib/qcprot.html)).
-
-Kabsch has the advantage of relying on `nalgebra`'s maintained SVD. Its fallible
-`try_new` API permits an explicit convergence limit rather than an unbounded
-solve ([nalgebra SVD API](https://docs.rs/nalgebra/0.35.0/nalgebra/linalg/struct.SVD.html)).
-Regardless of solver termination policy, subtract an anchor before numerical
-scaling so large translations do not determine the scale or erase molecular
-geometry. Normalize those displacements; if subtraction would overflow, scale
-raw coordinates before subtracting the anchor. Cache their centroid,
-mean-center while forming covariance, and form residuals before subtracting the
-residual centroid so mixed-scale differences survive. Express both arrays
-against one shared physical magnitude, accumulate the residual with a scaled
-norm, then restore that magnitude. Treat the unrotated residual as a numerical
-upper bound when decomposition noise would make the fitted rotation worse, and
-project its first-order rotational component so an unresolved small rotation
-is not mislabeled as deformation.
-This preserves the rigid, no-scale-fit objective across large translations and
-finite extreme coordinates. Apply the same displacements to the
-non-collinearity check and cache each structure's preparation so all-pairs
-calculation does not rescan every atom for every pair.
-When fitted uncertainty or an unresolved first-order rotation is only
-solver-scale after normalization but converting it back to Angstroms would
-exceed a negligible tolerance, report the conditioning failure rather than a
-confidently wrong RMSD.
 QCP avoids a general decomposition, and the authors report rapid, stable
 Newton-Raphson convergence from the self-inner-product upper bound. The 2010
 paper reports roughly five iterations for relative precision `1e-6` and more
@@ -176,49 +101,6 @@ MDAnalysis has previously fixed a case where its QCP routine returned no RMSD
 ([MDAnalysis changelog](https://github.com/MDAnalysis/mdanalysis/blob/develop/package/CHANGELOG)).
 Those are reasons to validate a local implementation against Kabsch rather than
 to treat the formula as automatically infallible.
-
-Required numerical tests for the production Kabsch solver:
-
-- identical coordinates and pure translations/rotations;
-- noisy coordinates with a known transform;
-- mirrored coordinates, verifying `det(rotation) = +1`;
-- very large coordinate offsets, verifying that centering avoids loss of
-  precision, and very large finite magnitudes, verifying finite output;
-- repeated, collinear, and coplanar points, including the accepted degeneracy
-  failures;
-- near-zero RMSD, where an algebraic residual can become slightly negative
-  from rounding;
-- the accepted uniform-weight convention;
-- symmetry: `rmsd(A, B)` approximately equals `rmsd(B, A)`;
-- agreement across supported thread counts and randomized rigid transforms
-  within a stated absolute tolerance.
-
-A transform is non-unique for degenerate point sets even when the minimum RMSD
-is well defined. The accepted public behavior rejects empty selections and
-requires at least three non-collinear points, giving an unambiguous protein
-superposition boundary.
-
-## Atom pairing and subsets
-
-Chain, residue-range, and atom-type selection happens before the numerical
-solver. It must produce two coordinate arrays in one deterministic biological
-identity order, not merely in each file's record order. For the proposed first
-version, a safe identity key includes at least model, chain ID, residue serial,
-insertion code, residue name, atom name, and the selected conformer policy.
-Selection mismatch should be an error naming the first missing or different
-identity.
-
-The same selected pairs should define both the fit and the reported RMSD because
-that matches the requested tool. A future API may deliberately separate
-"alignment atoms" from "measurement atoms," as MDTraj permits by superposing
-first and then evaluating without another fit
-([MDTraj RMSD API](https://mdtraj.readthedocs.io/en/latest/api/generated/mdtraj.rmsd.html)),
-but adding that flexibility now would complicate both terminology and output.
-
-For the clustering workload, validate the shared chain/residue/atom identity
-once against a reference structure, store coordinates in that canonical order,
-and reuse them for all pairs. Re-parsing or rebuilding identity maps inside the
-`O(S^2)` loop would obscure the solver benchmark and waste work.
 
 ## Community acceptance
 
@@ -279,50 +161,3 @@ BSD license according to the 2010 paper, but any translation must retain
 attribution and be checked against the repository's GPL-3.0 distribution
 requirements
 ([Liu et al. 2010](https://pmc.ncbi.nlm.nih.gov/articles/PMC2958452/)).
-
-## Fit with the current repository
-
-Arpeggia already depends on `nalgebra = 0.35`. The existing
-`ResidueExt::center_and_normal` constructs a 3-by-N centered matrix and uses its
-least singular vector as a fitted plane normal in
-[`src/contacts/residues.rs`](../../src/contacts/residues.rs). Kabsch would also
-use SVD, but on a different 3-by-3 cross-covariance matrix. There is no useful
-shared "SVD algorithm" to extract beyond the dependency itself.
-
-The implementation uses a small superposition module for coordinate centering,
-proper-rotation validation, transform conventions, and RMSD. Moving `Plane`
-there is unnecessary; a generic SVD abstraction shared only by plane fitting
-and Kabsch would add indirection without removing meaningful duplication.
-
-The transform convention must be documented and tested: which structure moves,
-whether vectors are rows or columns, multiplication side, and whether translation
-is applied before or after rotation. Existing libraries differ on these details;
-for example, Biopython documents a right-multiplying rotation
-([Biopython QCP API](https://biopython.org/docs/latest/api/Bio.PDB.qcprot.html)).
-
-## Performance verification
-
-Use representative structures and selection sizes (C-alpha, backbone, heavy
-atoms, all atoms), and representative set sizes. Measure:
-
-- preprocessing and identity validation once per input;
-- total wall time and peak memory for the packed upper-triangle RMSD matrix;
-- serial-pair and pair-parallel Kabsch throughput with identical cached
-  coordinates;
-- single-thread and normal Rayon settings;
-- RMSD absolute differences between thread counts and maximum asymmetry;
-- rotation determinant and transformed-coordinate residuals.
-
-Do not add per-atom threading unless these end-to-end measurements show a
-material gap on the supported workload. A single pair-parallel boundary is the
-lean default.
-
-## Resolved implementation scope
-
-RMSD is uniformly weighted and requires at least three non-collinear selected
-atoms in each of its two structures. The default selection is every
-coordinate-observed amino acid recognized by Arpeggia in every chain, using
-C-alpha atoms.
-Alternate conformers and models follow Arpeggia's existing preparation and
-diagnostic policies; selected atom identities must match exactly. The rigid
-transform and Kabsch solver remain implementation details.
