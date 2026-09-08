@@ -129,7 +129,12 @@ def test_contacts(test_pdb_file):
     import arpeggia
     from arpeggia import _contract
 
-    df = arpeggia.contacts(test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5)
+    # 1UBQ has no hydrogens or explicit HIS68 protonation evidence.
+    with (
+        pytest.warns(UserWarning, match=r"^\[UNRESOLVED_HISTIDINE\]"),
+        pytest.warns(UserWarning, match=r"^\[MISSING_DONOR_HYDROGEN\]"),
+    ):
+        df = arpeggia.contacts(test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5)
 
     # Check DataFrame is not empty
     assert df.height > 0, "Contacts DataFrame should not be empty"
@@ -154,23 +159,27 @@ def test_contacts_ignore_zero_occupancy(test_pdb_file):
     """Test contacts with ignore_zero_occupancy parameter."""
     import arpeggia
 
-    # Test with ignore_zero_occupancy=False (default)
-    df1 = arpeggia.contacts(
-        test_pdb_file,
-        groups="/",
-        vdw_comp=0.1,
-        dist_cutoff=6.5,
-        ignore_zero_occupancy=False,
-    )
+    with (
+        pytest.warns(UserWarning, match=r"^\[UNRESOLVED_HISTIDINE\]"),
+        pytest.warns(UserWarning, match=r"^\[MISSING_DONOR_HYDROGEN\]"),
+    ):
+        # Test with ignore_zero_occupancy=False (default)
+        df1 = arpeggia.contacts(
+            test_pdb_file,
+            groups="/",
+            vdw_comp=0.1,
+            dist_cutoff=6.5,
+            ignore_zero_occupancy=False,
+        )
 
-    # Test with ignore_zero_occupancy=True
-    df2 = arpeggia.contacts(
-        test_pdb_file,
-        groups="/",
-        vdw_comp=0.1,
-        dist_cutoff=6.5,
-        ignore_zero_occupancy=True,
-    )
+        # Test with ignore_zero_occupancy=True
+        df2 = arpeggia.contacts(
+            test_pdb_file,
+            groups="/",
+            vdw_comp=0.1,
+            dist_cutoff=6.5,
+            ignore_zero_occupancy=True,
+        )
 
     # Both should return valid DataFrames
     assert len(df1) > 0
@@ -241,8 +250,13 @@ def test_sasa_and_sap_default_model_uses_first_explicit_model(test_pdb_file, tmp
 
     default_sasa = arpeggia.sasa(str(multimodel_pdb), model_num=0)
     explicit_sasa = arpeggia.sasa(str(multimodel_pdb), model_num=7)
-    default_sap = arpeggia.sap_score(str(multimodel_pdb), model_num=0)
-    explicit_sap = arpeggia.sap_score(str(multimodel_pdb), model_num=7)
+    # Copied 1UBQ coordinates still lack full-atom preparation for SAP.
+    with (
+        pytest.warns(UserWarning, match=r"^\[HYDROGEN_FREE_INPUT\]"),
+        pytest.warns(UserWarning, match=r"^\[UNRESOLVED_HISTIDINE\]"),
+    ):
+        default_sap = arpeggia.sap_score(str(multimodel_pdb), model_num=0)
+        explicit_sap = arpeggia.sap_score(str(multimodel_pdb), model_num=7)
 
     assert default_sasa.height == explicit_sasa.height == 602
     assert default_sap.height == explicit_sap.height > 0
@@ -375,17 +389,24 @@ def test_histidine_modes_and_potential_ionic_category(tmp_path):
     """Distinguish inferred histidine charge from explicit evidence."""
     import arpeggia
 
+    # One HIS ring atom exercises charge typing but cannot define a ring plane.
     structure = tmp_path / "histidine.pdb"
     structure.write_text(
         "ATOM      1  CG  HIS A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
         "ATOM      2  OD1 ASP B   1       3.000   0.000   0.000  1.00 20.00           O  \n"
         "END\n"
     )
-    with pytest.warns(UserWarning, match="UNRESOLVED_HISTIDINE"):
+    with (
+        pytest.warns(UserWarning, match=r"^\[UNRESOLVED_HISTIDINE\]"),
+        pytest.warns(UserWarning, match=r"^\[INCOMPLETE_GEOMETRY\]"),
+    ):
         compatible = arpeggia.contacts(str(structure), groups="A/B")
     assert "PotentialIonicBond" in compatible["interaction"].to_list()
 
-    with pytest.warns(UserWarning, match="UNRESOLVED_HISTIDINE"):
+    with (
+        pytest.warns(UserWarning, match=r"^\[UNRESOLVED_HISTIDINE\]"),
+        pytest.warns(UserWarning, match=r"^\[INCOMPLETE_GEOMETRY\]"),
+    ):
         explicit = arpeggia.contacts(
             str(structure), groups="A/B", protonation="explicit-only"
         )
