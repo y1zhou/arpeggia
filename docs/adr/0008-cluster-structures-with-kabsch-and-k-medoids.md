@@ -143,7 +143,8 @@ caches use no-clobber creation. Public details belong in the guide.
 Readers project required columns and reject wrong-size caches before complete
 table materialization. The original lazy NDJSON reader was replaced by an eager
 reader with a bounded row-count preflight after the
-[cleanup size and performance audit](../cleanup-audit.md). CSV and Parquet use
+[v0.9.2 cleanup size and performance audit](../research/v0.9.2-cleanup-audit.md).
+CSV and Parquet use
 their existing eager readers. XLSX remains excluded because it adds unrelated
 reader/writer dependencies.
 
