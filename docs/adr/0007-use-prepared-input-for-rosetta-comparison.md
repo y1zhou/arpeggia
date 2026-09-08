@@ -3,126 +3,70 @@
 Arpeggia targets numerical agreement with pinned Rosetta calculations only when
 both programs receive the same caller-prepared full-atom structure. Adding
 hydrogens, reconstructing missing atoms, assigning terminal variants, and
-otherwise completing molecular chemistry remain outside the project scope.
-Numerical agreement does not require method parity.
+completing molecular chemistry remain outside the project scope. Numerical
+agreement does not require method parity.
 
-The existing v0.9 implementation is preserved as a commit boundary before its
-SASA and SAP calculations are refined in place. A result may be described as
-Rosetta-numerically compatible only on a canonical compatibility set.
-Compatibility is evaluated with absolute-error distributions and overall
-Spearman rank correlation, not relative error, percentage change, linear slope,
-or post-hoc fitting. Heterogeneous and unsupported structures are reported
-separately.
+## Compatibility policy
 
-Prepared input does not predetermine the calculation's atom population.
-Arpeggia will benchmark all-atom and heavy-only surfaces independently because
-its Shrake--Rupley method may not benefit numerically from copying Rosetta's
-all-atom population in isolation. The implementation selected in place is the
-scientifically defined, non-fitted variant that passes the compatibility gate;
-its atom population is documented as part of that definition.
+Claims apply to a fixed canonical compatibility set and the selected default
+parameters. Modified residues, ligands, solvent, and unsupported chemistry are
+reported separately. Unprepared input remains calculable from observed atoms,
+with conservative diagnostics and no numerical-compatibility claim. An absence
+of preparation warnings does not prove chemical completeness.
 
-Unprepared or obviously hydrogen-free input remains calculable from its
-observed atoms but emits a structured warning and carries no numerical
-compatibility claim. Empirical output scaling, per-residue fitted corrections,
-and other post-hoc corpus fitting are prohibited. Rosetta commit
-`597b55d6600c3939574ffee30a4469b26c3337bd` is the documented v0.9 reference,
-but the revision is not encoded in production behavior.
+Each claimed metric must independently meet overall Spearman correlation of
+at least 0.99 and metric-specific absolute-error limits set before production
+changes. Reports include MAE, median absolute error, RMSE, 95th-percentile and
+maximum absolute error, and signed bias. Relative error, percentage change,
+linear slope, and post-hoc fitting do not establish compatibility. Whole-structure
+metrics order SAP candidates; per-residue absolute errors are also reported,
+but per-residue Spearman correlation is not an acceptance requirement.
 
-SASA partitioning and SAP select their heavy-only or all-atom populations
-independently because their observables and calibrations differ. If the allowed
-lean variants fail the gate, Arpeggia reports the residual error and narrows its
-claim; it does not port Rosetta's legacy method or weaken the acceptance gate.
-The compatibility claim covers supported canonical amino-acid proteins only.
-Concrete OXT and MSE bookkeeping defects are corrected, but modified residues,
-ligands, solvent, and other unsupported chemistry remain outside the claim.
+Candidates are deterministic definitions, not trained models, so the fixed
+corpus is evaluated as one set rather than split into training and holdout data.
+SASA partitions must reconcile with one surface, and SAP's atom population
+must match its maximum-area calibration with recorded upstream provenance.
+Empirical scaling, per-residue fitted corrections, and generated replacement
+calibrations are prohibited. Among passing definitions, choose the simplest,
+then fastest, then lowest-median-error candidate. Runtime and peak memory are
+reported for review without an automatic acceptance ceiling.
 
-Prepared-input diagnostics are intentionally conservative rather than chemical
-validation. They scan for an entirely hydrogen-free selected model and for
-histidine name/atom patterns that leave protonation unresolved or internally
-inconsistent. These checks emit warnings and never add atoms, infer missing
-chemistry, or claim that an input without warnings is complete.
+SASA and SAP choose their atom populations independently because their
+observables and calibrations differ. If the lean allowed definitions fail the
+gate, report the residual error and narrow the claim rather than port Rosetta's
+legacy method or relax the gate. Experimental combinations are not public API
+without a separate demonstrated scientific need.
 
-The preparation benchmark may use the pinned Rosetta executable to import and
-write a full-atom pose, after which both programs reload the identical saved
-file. It records file hashes and atom counts and performs no relaxation,
-minimization, or other expensive coordinate optimization. Rosetta remains a
-benchmark-only tool rather than a build or runtime dependency. Histidine
-preparation diagnostics reuse `ExplicitOnly` evidence without changing the
-caller's selected protonation mode.
+## Evidence and selected definitions
 
-Before production calculations change, the benchmark tests a bounded factorial.
-SASA crosses heavy-only and all-atom populations, ProtOr and atom-typed Reduce
-radii, and 100, 162, and 500 points at a 1.4 Angstrom probe. SAP crosses both
-atom populations, elemental and atom-typed Reduce radii, and 1.4 and 1.1
-Angstrom probes. SAP maximum areas are taken from pinned upstream calibration
-data, transformed without adjusting values, and matched to the candidate's
-heavy-only or all-atom population. Existing mismatched combinations remain a
-diagnostic baseline only; Arpeggia does not generate or fit a new empirical
-maximum-area dataset.
+The [v0.9.0 validation report](../benchmarks/v0.9.0-validation.html) records the
+reference comparisons, file hashes, atom counts, parameters, warnings, timings,
+and reproducibility details. Rosetta revision
+`597b55d6600c3939574ffee30a4469b26c3337bd` is the documented reference, not a
+production dependency or a version encoded into calculation behavior.
 
-Every claimed metric must pass the compatibility gate independently. Overall
-Spearman correlation must be at least 0.99. The report records MAE, median
-absolute error, RMSE, 95th-percentile absolute error, maximum error, and signed
-bias; the maintainer sets metric-specific absolute-error limits at the review
-checkpoint before production changes. Among passing definitions, Arpeggia
-selects the simplest, then the faster, then the one with lower median error. The
-complete matrix remains available so the selected implementation is auditable.
+The experiment compared heavy/all-atom populations, ProtOr/Reduce radii, and
+100/162/500 sampling points for SASA at a 1.4 Å probe. SAP compared heavy/all-atom
+populations, elemental/Reduce radii, and 1.4/1.1 Å probes with matched upstream
+maximum-area calibrations. Reference preparation imported and wrote a full-atom
+pose without relaxation or coordinate optimization; both programs reloaded the
+same saved structure.
 
-Runtime and peak memory are measured for every candidate but have no automatic
-acceptance ceiling; the maintainer reviews their trade-off after seeing the
-complete report. Total SASA may change with the selected additive surface, but
-its absolute-error distribution and Spearman correlation remain first-class
-acceptance evidence alongside the polar and hydrophobic partitions.
+Selected SAP uses all supplied atoms, Reduce SASA radii, a 1.1 Å probe,
+Rosetta's precise hydrophobicity constants, and maximum side-chain areas from
+`SapDatabase::generate_max_sasa()`. It excludes `OXT` from side-chain membership
+and normalizes MSE to methionine. No benchmark fitting or Rosetta database
+parser is shipped.
 
-Atom population and radius schemes remain internal during the experiment. If
-the complete results demonstrate that multiple schemes have distinct,
-scientifically useful strengths, the v0.9 release design may expose them through
-a public API; experimental combinations are not published speculatively.
-Compatibility applies only to the selected default parameters.
+Selected standard SASA retains heavy-atom Shrake–Rupley at 100 points and a
+1.4 Å probe with ProtOr radii and elemental fallback. The validation report
+quantifies its lower total, polar, and hydrophobic SASA errors on 85 identically
+prepared structures; it does not establish numerical equivalence to Rosetta's
+LeGrand method. [ADR 0006](0006-unify-standard-sasa-records.md) records the shared
+atom-record and polarity-partition contracts.
 
-The factorial ends at a review checkpoint before production calculations
-change. Its only durable generated evidence is one human-readable HTML report
-containing the source and prepared hashes, atom counts, parameters, Rosetta
-revision, per-structure metrics, warnings, failures, timings, and summary
-statistics needed to audit the decision. Machine-readable results, generated
-prepared structures, and intermediate reports are not selected for the release
-branch except for deliberately chosen regression fixtures. Existing experiment
-artifacts may remain in feature-branch history. The final HTML is documentation
-and is excluded from Rust and Python packages. Future local benchmarks use the
-same one-final-report policy.
-
-The canonical compatibility set is evaluated as one fixed corpus rather than
-split into development and holdout subsets. Candidate formulas are deterministic
-and derived from their stated scientific definitions; no benchmark values train
-or fit them. Whole-structure metrics order SAP candidates. Per-residue SAP
-absolute errors are reported because residue output is public, but per-residue
-Spearman correlation is not an acceptance requirement.
-
-Scientific consistency is a hard gate independent of numerical agreement. A
-candidate is rejected if its SASA partitions do not reconcile with one surface,
-or if its SAP atom population and maximum-area population are mismatched or the
-upstream calibration provenance is missing.
-
-Upstream Rosetta calibration data may be fetched, deterministically cleaned,
-and evaluated locally during the benchmark. Neither the upstream nor cleaned
-dataset is committed during this task; only the cleaner, source provenance, and
-result artifacts are candidates for version control. Arpeggia itself is
-GPL-3.0, and its README and Python package metadata point to the repository
-`LICENSE` file.
-
-## Outcome
-
-The selected production SAP definition uses all supplied atoms, Reduce SASA
-radii, a 1.1 Angstrom probe, Rosetta's precise hydrophobicity constants, and
-the maximum side-chain areas generated by `SapDatabase::generate_max_sasa()`.
-It excludes `OXT` from side-chain membership and normalizes MSE to methionine.
-No benchmark fitting or Rosetta database parser is shipped.
-
-The selected standard SASA definition keeps the production heavy-atom
-Shrake--Rupley calculation at 100 points and a 1.4 Angstrom probe, using ProtOr
-radii with elemental fallback. Compared with `main` on 85 identically prepared
-structures, it reduced whole-structure MAE against Rosetta by 26.3% for total
-SASA, 47.7% for polar SASA, and 52.6% for hydrophobic SASA. It remains a
-scientifically coherent Shrake--Rupley definition, not a numerical-equivalence
-claim for Rosetta's LeGrand method. Experimental radius, point-count, and atom-
-population combinations are not exposed or retained in production.
+One final human-readable report per benchmark retains its provenance and
+acceptance evidence. Generated structures, machine-result dumps, intermediate
+reports, and experimental implementations remain local or in feature-branch
+history, except deliberately selected regression fixtures. Final reports are
+documentation and excluded from Rust and Python packages.

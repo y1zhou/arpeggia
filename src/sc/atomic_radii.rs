@@ -409,30 +409,30 @@ pub(super) static EMBEDDED_ATOMIC_RADII: &[AtomRadius] = &[
 /// Wildcard match for residue/atom patterns.
 /// `*` at start matches everything, `*` elsewhere matches suffix.
 pub(super) fn wildcard_match(query: &str, pattern: &str) -> bool {
-    fn rtrim_spaces(s: &str) -> &str {
-        let mut end = s.len();
-        let b = s.as_bytes();
-        while end > 0 && (b[end - 1] as char) == ' ' {
-            end -= 1;
+    let query = query.trim_end_matches(' ');
+    let pattern = pattern.trim_end_matches(' ');
+    match pattern.split_once('*') {
+        Some((prefix, _)) => query.starts_with(prefix),
+        None => query == pattern,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wildcard_match;
+
+    #[test]
+    fn radius_patterns_match_exact_names_and_prefixes() {
+        for (query, pattern, expected) in [
+            ("CA ", "CA", true),
+            ("C", "CA", false),
+            ("CD1", "CD* ", true),
+            ("CA", "CD*", false),
+            ("H", "H***", true),
+            ("ALA", "***", true),
+            ("é", "C*", false),
+        ] {
+            assert_eq!(wildcard_match(query, pattern), expected);
         }
-        &s[..end]
     }
-
-    let q = rtrim_spaces(query);
-    let p = rtrim_spaces(pattern);
-
-    if p.starts_with('*') {
-        return true;
-    }
-
-    if let Some(star) = p.find('*') {
-        let plen = star;
-        if q.len() < plen {
-            return false;
-        }
-        return q[..plen] == p[..plen];
-    }
-
-    // No '*' in pattern: exact match
-    q == p
 }

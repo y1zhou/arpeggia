@@ -24,6 +24,7 @@ as an error distribution; it is not guaranteed, inferred from correlation, or
 enforced by broad golden-test tolerances.
 
 SAP's provisional elemental-radius decision was superseded by the prepared-input
-benchmark in ADR 0007, which selected the full-atom Reduce-radius definition.
+benchmark in [ADR 0007](0007-use-prepared-input-for-rosetta-comparison.md),
+which selected the full-atom Reduce-radius definition.
 The residue SAP fix preserves positive-only score accumulation while aggregating
 complete side-chain SASA and retaining eligible zero/nonpositive-score residues.

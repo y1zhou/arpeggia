@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
 use super::types::*;
-use super::vector3::{DotPoint, Vec3};
+use super::vector3::Vec3;
 use super::{GAUSSIAN_WEIGHT, PERIPHERAL_BAND, PROBE_RADIUS, SEPARATION_CUTOFF};
 use pdbtbx::*;
 use rayon::prelude::*;
@@ -195,14 +195,13 @@ impl ScCalculator {
         let r2 = PERIPHERAL_BAND * PERIPHERAL_BAND;
 
         // Build RTree of non-buried dots for efficient range queries
-        let non_buried_points: Vec<DotPoint> = sdots
+        let non_buried_points = sdots
             .iter()
-            .enumerate()
-            .filter(|(_, dot)| !dot.buried)
-            .map(|(idx, dot)| DotPoint::new(idx, dot.coor))
+            .filter(|dot| !dot.buried)
+            .map(|dot| [dot.coor.x, dot.coor.y, dot.coor.z])
             .collect();
 
-        let non_buried_tree: RTree<DotPoint> = RTree::bulk_load(non_buried_points);
+        let non_buried_tree = RTree::bulk_load(non_buried_points);
 
         // Filter buried dots that are NOT within r of any non-buried dot
         let indices: Vec<usize> = (0..sdots.len())
@@ -222,7 +221,6 @@ impl ScCalculator {
             })
             .collect();
 
-        self.base.run.trimmed_dots[i].clear();
         self.base.run.trimmed_dots[i] = indices;
     }
 
@@ -236,12 +234,12 @@ impl ScCalculator {
         }
 
         // Build RTree for buried dots on the opposite surface
-        let their_buried_points: Vec<DotPoint> = their_dots
+        let their_buried_points: Vec<_> = their_dots
             .iter()
             .filter_map(|&idx| {
                 let dot = &self.base.run.dots[their][idx];
                 if dot.buried {
-                    Some(DotPoint::new(idx, dot.coor))
+                    Some(GeomWithData::new([dot.coor.x, dot.coor.y, dot.coor.z], idx))
                 } else {
                     None
                 }
@@ -252,7 +250,7 @@ impl ScCalculator {
             return;
         }
 
-        let their_tree: RTree<DotPoint> = RTree::bulk_load(their_buried_points);
+        let their_tree = RTree::bulk_load(their_buried_points);
 
         let run = &self.base.run;
         let mut scores: Vec<f64> = my_dots
@@ -261,7 +259,7 @@ impl ScCalculator {
                 let dot = &run.dots[my][index];
                 let query = [dot.coor.x, dot.coor.y, dot.coor.z];
                 their_tree.nearest_neighbor(&query).map(|nearest| {
-                    let neighbor = &run.dots[their][nearest.index];
+                    let neighbor = &run.dots[their][nearest.data];
                     let distance_squared = nearest.distance_2(&query);
                     let score = dot.outnml.dot(neighbor.outnml)
                         * (-distance_squared * GAUSSIAN_WEIGHT).exp();

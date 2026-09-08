@@ -12,6 +12,7 @@ use crate::{
 use polars::prelude::*;
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
+use std::io::{BufRead, BufReader, Seek};
 use std::path::{Path, PathBuf};
 
 const FALLBACK_WARNING_BYTES: u64 = 8 * 1024 * 1024 * 1024;
@@ -639,17 +640,37 @@ fn read_dataframe(
                 .map_err(polars_input_error)
         }
         "ndjson" => {
-            LazyJsonLineReader::new(PlRefPath::try_from_path(path).map_err(polars_input_error)?)
-                .with_n_rows(expected_rows.map(|rows| rows.saturating_add(1)))
+            let mut file = std::fs::File::open(path)?;
+            if let Some(expected) = expected_rows {
+                // Reject oversized caches before allocating a DataFrame. The eager
+                // reader has no row limit; this pass avoids needing the lazy engine.
+                let mut actual = 0;
+                for line in BufReader::new(&mut file).lines() {
+                    if !line?.trim().is_empty() {
+                        actual += 1;
+                        if actual > expected {
+                            break;
+                        }
+                    }
+                }
+                if actual != expected {
+                    return Err(ArpeggiaError::InvalidArgument(format!(
+                        "pairwise table has {actual} rows; expected exactly {expected}"
+                    )));
+                }
+                file.rewind()?;
+            }
+            let schema = polars::io::ndjson::infer_schema(
+                &mut BufReader::new(&mut file),
+                std::num::NonZeroUsize::new(100),
+            )
+            .and_then(|schema| schema.try_project(columns))
+            .map_err(polars_input_error)?;
+            file.rewind()?;
+            JsonReader::new(file)
+                .with_json_format(JsonFormat::JsonLines)
+                .with_schema(schema.into())
                 .finish()
-                .map_err(polars_input_error)?
-                .select(
-                    columns
-                        .iter()
-                        .map(|column| col(*column))
-                        .collect::<Vec<_>>(),
-                )
-                .collect()
                 .map_err(polars_input_error)
         }
         _ => Err(ArpeggiaError::InvalidArgument(format!(
@@ -671,15 +692,15 @@ fn validate_observations(
         ));
     }
     observations.sort_unstable_by(|left, right| left.id.cmp(&right.id));
-    let mut ids = BTreeSet::new();
     let mut paths = BTreeSet::new();
-    for observation in &observations {
+    for (index, observation) in observations.iter().enumerate() {
         if observation.id.is_empty() {
             return Err(ArpeggiaError::InvalidArgument(
                 "structure IDs cannot be empty".into(),
             ));
         }
-        if !ids.insert(&observation.id) {
+        // IDs are sorted; adjacent comparison preserves per-observation error order.
+        if index > 0 && observations[index - 1].id == observation.id {
             return Err(ArpeggiaError::InvalidArgument(format!(
                 "duplicate structure ID: {}",
                 observation.id
@@ -1003,6 +1024,33 @@ mod tests {
                     .is_err()
             );
         }
+    }
+
+    #[test]
+    fn ndjson_reader_projects_columns_and_bounds_cache_rows() {
+        let path = std::env::temp_dir().join(format!(
+            "arpeggia-ndjson-reader-{}.ndjson",
+            std::process::id()
+        ));
+        let row = r#"{"id_1":"a","id_2":"b","rmsd":1.5,"extra":true}"#;
+        std::fs::write(&path, format!("\n{row}\n\n")).unwrap();
+        let columns = ["id_1", "id_2", "rmsd"];
+        let table = read_dataframe(&path, &columns, Some(1)).unwrap();
+        assert_eq!(table.shape(), (1, 3));
+        assert_eq!(
+            table.column("rmsd").unwrap().f64().unwrap().get(0),
+            Some(1.5)
+        );
+        assert!(read_dataframe(&path, &["missing"], None).is_err());
+        assert!(read_dataframe(&path, &columns, Some(2)).is_err());
+        // Stop at the first excess row, before parsing an invalid tail.
+        std::fs::write(&path, format!("{row}\n{row}\ninvalid JSON\n")).unwrap();
+        assert!(matches!(
+            read_dataframe(&path, &columns, Some(1)),
+            Err(ArpeggiaError::InvalidArgument(message))
+                if message.contains("expected exactly 1")
+        ));
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

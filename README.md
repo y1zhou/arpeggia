@@ -9,63 +9,22 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 
 ## Features
 
-- [x] Parse PDB and mmCIF files
-- [x] Parse user selection of chain groups
-- [x] Extract protein chains and residues
-- [x] Calculate distances between residues
-- Identify protein-protein interactions
-  - [x] Steric clashes
-  - [x] VdW interactions
-  - [x] Hydrophobic interactions
-  - [x] Aromatic interactions
-  - [x] Cation-pi interactions
-  - [x] Ionic interactions
-  - [x] Hydrogen bonds
-  - [x] Weak hydrogen bonds
-  - [x] Resolved disulfide/covalent bonds and inferred potential contacts
-- [x] Calculate SASA (Solvent Accessible Surface Area) at atom, residue, and chain levels
-- [x] Calculate relative SASA (RSA) normalized by MaxASA values
-- [x] Calculate SAP (Spatial Aggregation Propensity) scores for aggregation prediction
-- [x] Calculate Shape Complementarity (SC) scores at protein-protein interfaces
-- [x] Superpose structures with Kabsch RMSD and cluster conformations with k-medoids
-- [x] Filter calculations to specific chains
-- [x] Output results in CSV, Parquet, or NDJSON
-- [x] Python bindings via PyO3
-- [x] Returns Polars DataFrames for efficient data manipulation
+| Arpeggia module | Description |
+| --- | --- |
+| `contacts` | Atomic and aromatic contacts, including clashes, hydrogen bonds, ionic interactions, and explicit or potential covalent bonds. See [Scientific conventions](docs/scientific-conventions.md) for analysis assumptions, geometry rules, and the contact-identification decision path. |
+| `sasa` | Solvent accessible surface area at atom, residue, or chain level. |
+| `relative-sasa` | Residue SASA normalized by reference maximum areas. |
+| `sap` | Spatial Aggregation Propensity scores at atom or residue level. |
+| `dsasa`, `dsasa_components` | Two-sided buried interface area, including Rosetta-style polarity components. |
+| `sc` | Shape complementarity between chain groups. |
+| `seq` | Coordinate-observed protein sequences by chain. |
+| `seqres` | Declared polymer sequences, including residues without coordinates. |
+| `rmsd` | Kabsch superposition with separate fitting and measurement selections. |
+| `pairwise_rmsd` | Pairwise structure RMSDs using data in a folder or from a table. |
+| `cluster_structs` | Group conformations with k-medoids and select representative structures. See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection grammar, exact-correspondence requirements, output schemas, cache semantics, memory estimates, and threading behavior. |
 
-## Scientific conventions
-
-- Contact rows use `Disulfide` for resolved PDB `SSBOND` or mmCIF disulfide
-  declarations and `Covalent` for other resolved `LINK`, `CONECT`, or
-  `_struct_conn` bonds. Undeclared CYS pairs matching the original distance and
-  CB--SG--SG--CB dihedral rule produce `PotentialDisulfide`; other contacts in
-  the covalent-distance band produce `PotentialCovalent`. Clash and van der
-  Waals regions are separately named.
-- Explicit hydrogen-bond geometry uses only hydrogens associated with the donor
-  atom. Missing donor hydrogens produce warnings; Arpeggia does not protonate
-  input structures.
-- Histidines use `AllCharged` by default for Arpeggio-compatible
-  positive-ionisable typing. `Heuristic` applies explicit evidence followed by
-  a pH-dependent intrinsic-pKa prior, while `ExplicitOnly` never guesses.
-  Inferred histidine charge produces potential ionic, repulsion, and cation-pi
-  labels rather than definitive ones.
-- All analyses deterministically choose the highest-occupancy alternate
-  conformer, with `A` as the tie-breaker, and warn when selection occurs.
-- Standard atom, residue, and chain SASA use one atom population and ProtOr
-  radii with elemental fallback. Polar/hydrophobic columns follow Rosetta's
-  legacy `SasaFilter` atom partition; numerical areas remain Shrake–Rupley.
-- dSASA is the two-sided buried area
-  `SASA(group 1) + SASA(group 2) - SASA(complex)`. Divide by two only when a
-  one-sided interface-area convention is required.
-- SAP uses the Rosetta-compatible full-atom Reduce-radius exposure definition
-  with a 1.1 Å default probe and sums positive score contributions while
-  reporting complete side-chain SASA. Arpeggia does not add missing atoms, so
-  direct Rosetta comparison requires the same caller-prepared full-atom input.
-  Monomers without a Rosetta calibration are omitted with a warning.
-- RMSD uses uniform-weight Kabsch superposition with proper rotations and exact
-  selected-atom correspondence. Structure clustering uses the resulting
-  pairwise RMSD matrix and observed medoid structures; it does not perform
-  sequence alignment or add missing atoms.
+Analyses accept PDB and mmCIF files with chain selections. Tabular Python
+results are Polars DataFrames; CLI tables support CSV, Parquet, and NDJSON.
 
 ## Installation
 
@@ -179,7 +138,7 @@ pairs = arpeggia.pairwise_rmsd("structures/", num_threads=8)
 clusters = arpeggia.cluster_structs(pairwise_rmsd=pairs, max_clusters=10)
 ```
 
-The functions return [Polars](https://pola.rs/) DataFrames for efficient data manipulation. You can easily convert to pandas if needed:
+Tabular results are [Polars](https://pola.rs/) DataFrames for efficient data manipulation. You can easily convert to pandas if needed:
 
 ```python
 import polars as pl
@@ -245,11 +204,7 @@ arpeggia help
 arpeggia contacts --help
 ```
 
-See [Structure RMSD and clustering](docs/structure-clustering.md) for selection
-grammar, exact-correspondence requirements, output schemas, cache semantics,
-memory estimates, and threading behavior.
-
-## Chain Groups Specification
+### Chain Groups Specification
 
 The `groups` parameter allows you to specify which chains interact with each other:
 

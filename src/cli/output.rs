@@ -68,24 +68,13 @@ fn write_df(
     file_type: DataFrameFileType,
 ) -> ArpeggiaResult<()> {
     match file_type {
-        DataFrameFileType::Csv => CsvWriter::new(file),
-        DataFrameFileType::Parquet => {
-            ParquetWriter::new(file)
-                .finish(dataframe)
-                .map_err(|error| ArpeggiaError::Io(error.into()))?;
-            return Ok(());
-        }
-        DataFrameFileType::NDJson => {
-            JsonWriter::new(file)
-                .with_json_format(JsonFormat::JsonLines)
-                .finish(dataframe)
-                .map_err(|error| ArpeggiaError::Io(error.into()))?;
-            return Ok(());
-        }
+        DataFrameFileType::Csv => CsvWriter::new(file).finish(dataframe),
+        DataFrameFileType::Parquet => ParquetWriter::new(file).finish(dataframe).map(|_| ()),
+        DataFrameFileType::NDJson => JsonWriter::new(file)
+            .with_json_format(JsonFormat::JsonLines)
+            .finish(dataframe),
     }
-    .finish(dataframe)
-    .map_err(|error| ArpeggiaError::Io(error.into()))?;
-    Ok(())
+    .map_err(|error| ArpeggiaError::Io(error.into()))
 }
 
 #[cfg(test)]

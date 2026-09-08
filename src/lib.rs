@@ -50,6 +50,3 @@ pub use sequences::get_sequences;
 // Python bindings module (only compiled when python feature is enabled)
 #[cfg(feature = "python")]
 mod python;
-
-// #[cfg(feature = "python")]
-// pub use python::*;

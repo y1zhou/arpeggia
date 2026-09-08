@@ -211,7 +211,6 @@ fn cluster_structs(
 ///
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
-///     model_num (int, optional): Model number to select (0 for first). Defaults to 0.
 ///     groups (str, optional): Chain groups specification. Defaults to "/" (all-to-all).
 ///         Examples: "A,B/C,D" for chains A,B vs C,D; "A/" for chain A vs all others.
 ///     vdw_comp (float, optional): VdW radii compensation factor. Defaults to 0.1.
@@ -388,19 +387,16 @@ fn dsasa(
     model_num: usize,
     num_threads: usize,
 ) -> PyResult<f32> {
-    // Load the PDB file
-    let pdb = load_for_python(py, &input_file)?;
-
-    // Use the library function to calculate dSASA
-    let result = py
-        .detach(|| {
-            crate::run_with_threads(num_threads as isize, || {
-                crate::get_dsasa_components(&pdb, groups, probe_radius, n_points, model_num)
-            })
-        })
-        .map_err(python_error)?;
-    emit_python_warnings(py, result.warnings)?;
-    Ok(result.value.dsasa)
+    Ok(dsasa_components(
+        py,
+        input_file,
+        groups,
+        probe_radius,
+        n_points,
+        model_num,
+        num_threads,
+    )?
+    .0)
 }
 
 /// Return two-sided dSASA and polar, hydrophobic, and unclassified partitions.

@@ -142,14 +142,15 @@ pub(crate) fn parse_groups(
     all_chains: &HashSet<String>,
     groups: &str,
 ) -> ArpeggiaResult<(HashSet<String>, HashSet<String>)> {
-    let sel_vec: Vec<&str> = groups.split('/').collect();
-    if sel_vec.len() != 2 {
-        return Err(ArpeggiaError::InvalidArgument(
-            "chain groups must contain exactly one '/'; use '/' for all-to-all comparisons".into(),
-        ));
-    }
-    let ligand_chains = sel_vec.first().unwrap_or(&"");
-    let receptor_chains = sel_vec.get(1).unwrap_or(&"");
+    let (ligand_chains, receptor_chains) = groups
+        .split_once('/')
+        .filter(|(_, receptor)| !receptor.contains('/'))
+        .ok_or_else(|| {
+            ArpeggiaError::InvalidArgument(
+                "chain groups must contain exactly one '/'; use '/' for all-to-all comparisons"
+                    .into(),
+            )
+        })?;
 
     let mut ligand: HashSet<String> = ligand_chains
         .split(',')

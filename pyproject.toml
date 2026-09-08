@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "arpeggia"
-version = "0.9.1"
+version = "0.9.2"
 description = "A library for analyzing protein-protein interactions in PDB and mmCIF files"
 authors = [{ name = "Yi Zhou", email = "me@y1zhou.com" }]
 readme = "README.md"
@@ -42,6 +42,7 @@ Repository = "https://github.com/y1zhou/arpeggia"
 Issues = "https://github.com/y1zhou/arpeggia/issues"
 
 [tool.maturin]
+exclude = ["docs/**"]
 # The name of the resulting Python package
 python-source = "python"
 # Build with the python feature enabled

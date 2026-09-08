@@ -22,13 +22,6 @@ Accepted Deviation. It may change numerical or tabular output in a minor release
 when the change and its expected effects are documented.
 _Avoid_: Breaking change, cleanup
 
-**v0.9 Release Gate**:
-The complete set of confirmed correctness, performance, security, packaging,
-documentation, and approved code-simplification work required before v0.9.0 is
-published. Passing tests alone does not close the gate while a recorded task is
-unfinished.
-_Avoid_: Critical bugs only, optional cleanup list
-
 **Feature Reference**:
 The named authoritative method for one public calculation. Published methods
 govern scientific semantics; their official implementations resolve details the
@@ -111,7 +104,7 @@ _Avoid_: Observed sequence, coordinate sequence
 **Selected Conformer**:
 The single alternate conformer Arpeggia chooses for a residue: the unambiguous
 blank/default conformer, otherwise highest occupancy with deterministic `A`
-tie-breaking. Automatic selection produces a Scientific Warning.
+tie-breaking. Automatic selection produces an alternate-conformer warning.
 _Avoid_: First conformer, all conformers
 
 **Protonation Mode**:

@@ -1,6 +1,5 @@
 //! 3D Vector geometry for SC calculations.
 
-use rstar::{AABB, PointDistance, RTreeObject};
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -8,36 +7,6 @@ pub(super) struct Vec3 {
     pub(super) x: f64,
     pub(super) y: f64,
     pub(super) z: f64,
-}
-
-/// Wrapper for indexing dots in an RTree
-#[derive(Clone, Copy, Debug)]
-pub(super) struct DotPoint {
-    pub(super) index: usize,
-    pub(super) coor: Vec3,
-}
-
-impl DotPoint {
-    pub(super) fn new(index: usize, coor: Vec3) -> Self {
-        Self { index, coor }
-    }
-}
-
-impl RTreeObject for DotPoint {
-    type Envelope = AABB<[f64; 3]>;
-
-    fn envelope(&self) -> Self::Envelope {
-        AABB::from_point([self.coor.x, self.coor.y, self.coor.z])
-    }
-}
-
-impl PointDistance for DotPoint {
-    fn distance_2(&self, point: &[f64; 3]) -> f64 {
-        let dx = self.coor.x - point[0];
-        let dy = self.coor.y - point[1];
-        let dz = self.coor.z - point[2];
-        dx * dx + dy * dy + dz * dz
-    }
 }
 
 impl Vec3 {

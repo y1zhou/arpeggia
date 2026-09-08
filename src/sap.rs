@@ -325,10 +325,8 @@ fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisW
     let Some(model) = pdb.models().next() else {
         return;
     };
-    let selected_chains = model.chains().collect::<Vec<_>>();
-    if selected_chains
-        .iter()
-        .flat_map(|chain| chain.atoms())
+    if model
+        .atoms()
         .all(|atom| atom.element() != Some(&Element::H))
     {
         warnings.push(crate::AnalysisWarning::new(
@@ -339,7 +337,7 @@ fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisW
 
     let mut unresolved = 0;
     let mut inconsistent = 0;
-    for residue in selected_chains.iter().flat_map(|chain| chain.residues()) {
+    for residue in model.residues() {
         match crate::contacts::histidine_preparation_issue(residue) {
             Some(crate::contacts::HistidinePreparationIssue::Unresolved) => unresolved += 1,
             Some(crate::contacts::HistidinePreparationIssue::Inconsistent) => {
@@ -367,6 +365,7 @@ fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisW
 }
 
 fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
+    // calculate_per_atom_sap_records supplies records sorted by atom serial number.
     df!(
         "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
         "resn" => string_values(records.iter().map(|record| record.resn.as_str())),
@@ -378,14 +377,12 @@ fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
         "sap_score" => records.iter().map(|record| record.sap_score).collect::<Vec<_>>(),
     )
     .unwrap()
-    .sort(["atomi"], Default::default())
-    .unwrap()
 }
 
 /// Calculate the SAP score aggregated by residue.
 ///
-/// The per-residue SAP score is calculated by summing the per-atom SAP scores
-/// for all atoms in each residue, weighted by their SASA contribution.
+/// The per-residue SAP score sums positive per-atom SAP scores over each
+/// residue's side-chain atoms; side-chain SASA includes all their area.
 ///
 /// # Arguments
 ///

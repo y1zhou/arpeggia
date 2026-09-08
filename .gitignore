@@ -163,4 +163,3 @@ cython_debug/
 # Local structure and benchmark inputs
 /*.pdb
 /*.zip
-/docs/benchmarks/*-vs-*.html
