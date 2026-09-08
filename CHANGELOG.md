@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Simplified chain-group splitting and duplicate observation-ID checks while
+  preserving accepted grammar, path uniqueness checks, and validation order.
+  Documented the already-sorted input expected by SAP DataFrame construction.
 - Shared strong/weak hydrogen-bond geometry and aromatic plane fitting while
   retaining donor rules, classification thresholds, and missing-geometry warnings.
 - Removed the ring-ring candidate-index vector by classifying borrowed pairs

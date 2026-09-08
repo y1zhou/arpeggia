@@ -365,6 +365,7 @@ fn append_prepared_input_warnings(pdb: &PDB, warnings: &mut Vec<crate::AnalysisW
 }
 
 fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
+    // calculate_per_atom_sap_records supplies records sorted by atom serial number.
     df!(
         "chain" => string_values(records.iter().map(|record| record.chain.as_str())),
         "resn" => string_values(records.iter().map(|record| record.resn.as_str())),

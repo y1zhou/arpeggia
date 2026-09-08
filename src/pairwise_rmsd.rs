@@ -692,15 +692,15 @@ fn validate_observations(
         ));
     }
     observations.sort_unstable_by(|left, right| left.id.cmp(&right.id));
-    let mut ids = BTreeSet::new();
     let mut paths = BTreeSet::new();
-    for observation in &observations {
+    for (index, observation) in observations.iter().enumerate() {
         if observation.id.is_empty() {
             return Err(ArpeggiaError::InvalidArgument(
                 "structure IDs cannot be empty".into(),
             ));
         }
-        if !ids.insert(&observation.id) {
+        // IDs are sorted; adjacent comparison preserves per-observation error order.
+        if index > 0 && observations[index - 1].id == observation.id {
             return Err(ArpeggiaError::InvalidArgument(format!(
                 "duplicate structure ID: {}",
                 observation.id
