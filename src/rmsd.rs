@@ -613,6 +613,7 @@ fn fit_prepared_transform(
             mobile_points,
             mobile.centroid,
             mobile_factor,
+            identity_centroid,
         )
     };
     let unreliable_identity_rotation =
@@ -727,17 +728,8 @@ fn identity_rotational_residual(
     mobile: &[[f64; 3]],
     mobile_centroid: [f64; 3],
     mobile_factor: f64,
+    residual_centroid: na::Vector3<f64>,
 ) -> Option<(f64, f64)> {
-    let n = reference.len() as f64;
-    let residual_centroid =
-        reference
-            .iter()
-            .zip(mobile)
-            .fold(na::Vector3::zeros(), |sum, (reference, mobile)| {
-                let reference = na::Vector3::from(*reference) * reference_factor;
-                let mobile = na::Vector3::from(*mobile) * mobile_factor;
-                sum + (reference - mobile) / n
-            });
     let mobile_centroid = na::Vector3::from(mobile_centroid) * mobile_factor;
     let (inertia, torque) = reference.iter().zip(mobile).fold(
         (na::Matrix3::zeros(), na::Vector3::zeros()),
