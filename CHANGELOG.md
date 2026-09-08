@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Propagated SC surface-sampling errors instead of silently omitting failed
+  patches. Legitimately empty geometry remains valid. Removed redundant
+  first-atom guards with comments documenting their caller-established
+  preconditions, and simplified an infallible probe helper.
 - Corrected geometry-test tolerances to check absolute errors and removed an
   inconsistent angle assertion.
 - Made Python tests explicitly assert expected missing-hydrogen, unresolved
