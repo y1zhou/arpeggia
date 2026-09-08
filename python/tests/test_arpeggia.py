@@ -30,18 +30,6 @@ def test_import():
     assert arpeggia.__all__ == list(_contract.EXPORTED_FUNCTIONS)
 
 
-def test_stub_consumes_python_contract():
-    """Test that the type stub imports the shared exposure contract."""
-    stub = Path(__file__).parent.parent / "arpeggia" / "arpeggia.pyi"
-    stub_text = stub.read_text()
-
-    assert "ProtonationMode" in stub_text
-    assert "level: SasaLevel = ..." in stub_text
-    assert "level: SapLevel = ..." in stub_text
-    assert "def seq(input_file: str, model_num: int = ...) -> SequenceList" in stub_text
-    assert "atoms: AtomSubset = ..." in stub_text
-
-
 def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
     """Expose exact-correspondence RMSD and clustering through Python."""
     import arpeggia
@@ -155,38 +143,24 @@ def test_contacts(test_pdb_file):
     assert all(df["distance"] >= 0), "All distances should be non-negative"
 
 
-def test_contacts_ignore_zero_occupancy(test_pdb_file):
-    """Test contacts with ignore_zero_occupancy parameter."""
+def test_contacts_ignore_zero_occupancy(tmp_path):
+    """Filtering removes only contacts involving the zero-occupancy atom."""
     import arpeggia
+    from polars.testing import assert_frame_equal
 
-    with (
-        pytest.warns(UserWarning, match=r"^\[UNRESOLVED_HISTIDINE\]"),
-        pytest.warns(UserWarning, match=r"^\[MISSING_DONOR_HYDROGEN\]"),
-    ):
-        # Test with ignore_zero_occupancy=False (default)
-        df1 = arpeggia.contacts(
-            test_pdb_file,
-            groups="/",
-            vdw_comp=0.1,
-            dist_cutoff=6.5,
-            ignore_zero_occupancy=False,
-        )
+    path = tmp_path / "occupancy.pdb"
+    path.write_text(
+        "ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n"
+        "ATOM      2  CB  ALA B   1       3.500   0.000   0.000  0.00 20.00           C  \n"
+        "ATOM      3  CB  ALA B   2      -3.500   0.000   0.000  1.00 20.00           C  \n"
+        "END\n"
+    )
+    all_contacts = arpeggia.contacts(str(path), groups="A/B")
+    filtered = arpeggia.contacts(str(path), groups="A/B", ignore_zero_occupancy=True)
 
-        # Test with ignore_zero_occupancy=True
-        df2 = arpeggia.contacts(
-            test_pdb_file,
-            groups="/",
-            vdw_comp=0.1,
-            dist_cutoff=6.5,
-            ignore_zero_occupancy=True,
-        )
-
-    # Both should return valid DataFrames
-    assert len(df1) > 0
-    assert len(df2) > 0
-
-    # For 1ubq.pdb, all atoms have occupancy 1.0, so results should be identical
-    assert len(df1) == len(df2)
+    assert set(all_contacts["to_atomi"]) == {2, 3}
+    assert set(filtered["to_atomi"]) == {3}
+    assert_frame_equal(filtered, all_contacts.filter(all_contacts["to_atomi"] == 3))
 
 
 def test_sasa(test_pdb_file):

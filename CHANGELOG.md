@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Replaced the ineffective zero-occupancy test with a fixture that verifies
+  exactly which contacts disappear and preserves unaffected rows. Replaced
+  stub source-text assertions with typed public-API usage checked by `ty`.
 - Propagated SC surface-sampling errors instead of silently omitting failed
   patches. Legitimately empty geometry remains valid. Removed redundant
   first-atom guards with comments documenting their caller-established
