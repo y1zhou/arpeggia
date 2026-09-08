@@ -3,7 +3,7 @@
 Arpeggia uses a serial `f64` Kabsch kernel and a packed pairwise RMSD matrix
 with k-medoids clustering. The public selection grammar, table schemas, input
 formats, cache behavior, and measured performance are documented in the
-[structure-clustering guide](../structure-clustering.md).
+[structure-clustering guide](../benchmarks/structure-clustering.md).
 
 ## Correspondence and superposition
 
@@ -129,7 +129,7 @@ reductions. Nested atom-level parallelism is deferred until measured need.
 
 FasterPAM and DynMSC stay serial. Enabling parallel k-medoids would add
 `ndarray` and randomization without providing parallel DynMSC. The
-[local measurements](../structure-clustering.md#local-structure-clustering-benchmark)
+[local measurements](../benchmarks/structure-clustering.md#local-structure-clustering-benchmark)
 support keeping pairwise RMSD as the parallel boundary.
 
 ## Persistence and validation

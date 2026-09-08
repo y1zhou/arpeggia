@@ -154,7 +154,7 @@ Kabsch solve and k-medoids clustering remains single-threaded. `num_threads=0`
 selects available processors.
 
 Algorithm choices and their rationale are recorded in
-[ADR 0008](adr/0008-cluster-structures-with-kabsch-and-k-medoids.md).
+[ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md).
 
 ## Local structure-clustering benchmark
 

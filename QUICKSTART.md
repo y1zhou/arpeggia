@@ -126,7 +126,7 @@ Supported formats: `csv`, `parquet`, `ndjson`
 arpeggia contacts -i input.pdb -o output/ -t parquet
 ```
 
-See [Structure RMSD and clustering](docs/structure-clustering.md) for atom and
+See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for atom and
 residue selection, automatic cluster counts, and pairwise cache behavior.
 
 ## Examples

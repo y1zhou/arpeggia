@@ -11,7 +11,7 @@ Rust dependency survey. The accepted behavior is maintained in
 - [Persistence and validation](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#persistence-and-validation): numerical equivalence and performance gates.
 
 Current selection syntax and examples belong in the
-[usage guide](../structure-clustering.md#rmsd), and the numerical implementation
+[usage guide](../benchmarks/structure-clustering.md#rmsd), and the numerical implementation
 and regressions live in [`src/rmsd.rs`](../../src/rmsd.rs).
 
 ## Scientific equivalence

@@ -9,7 +9,7 @@ This note retains the alternatives, crate survey, and supporting sources behind
 - [Storage and execution boundaries](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#storage-and-execution-boundaries): packed matrices, available-memory checks, and threading.
 - [Persistence and validation](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#persistence-and-validation): eager table readers, cache behavior, and validation gates.
 
-The [usage guide](../structure-clustering.md) owns public arguments, schemas,
+The [usage guide](../benchmarks/structure-clustering.md) owns public arguments, schemas,
 and local benchmark results. Surveys below describe the versions checked in
 August 2026 rather than an ongoing claim about ecosystem availability.
 

@@ -204,7 +204,7 @@ arpeggia help
 arpeggia contacts --help
 ```
 
-See [Structure RMSD and clustering](docs/structure-clustering.md) for selection
+See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection
 grammar, exact-correspondence requirements, output schemas, cache semantics,
 memory estimates, and threading behavior.
 
