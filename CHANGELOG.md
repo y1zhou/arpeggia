@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Python contract declarations while retaining supported APIs and schemas.
 - Consolidated development documentation into ADRs, retained additional research
   and benchmark evidence, and reorganized README features and usage guidance.
+  Removed machine-specific paths, unavailable benchmark commands, and repeated prose.
   Scientific conventions now include a contact-identification decision diagram
   in a dedicated [document](docs/scientific-conventions.md).
 

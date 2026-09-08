@@ -21,10 +21,8 @@ non-collinear atom pairs; evaluation requires at least one finite pair.
 Reflection and physical scale fitting are prohibited. Weights are uniform,
 and the residual sum is normalized by the evaluation atom count.
 
-The transform stays private. The coordinate-array `kabsch_rmsd` convenience
-API fits and evaluates the same arrays. Semantically equal parsed selections
-reuse that prepared fast path, while tests also exercise the generalized
-transform-and-evaluate path to ensure the shortcut does not hide disagreement.
+The transform stays private. `kabsch_rmsd` fits and evaluates the same arrays;
+semantically equal parsed selections reuse this prepared fast path.
 
 Kabsch uses the existing `nalgebra` SVD dependency. Coordinate normalization,
 centering, scaled residual norms, and conditioning checks prevent overflow,
@@ -39,19 +37,15 @@ Kabsch and QCP solve the same least-squares objective given identical paired
 atoms, weights, and proper-rotation constraints. The solver is therefore an
 implementation choice, not a public scientific-method option. Kabsch is short,
 auditable, and needs no new dependency. QCP remains a possible optimization
-only after an end-to-end benchmark shows a need. Its published rotation-solve
-speedup excludes construction of coordinate inner products, which both solvers
-still require; it is not an all-pairs protein-workflow speedup.
+only after an end-to-end benchmark shows a need.
 
 Sources: [Kabsch 1976](https://doi.org/10.1107/S0567739476001873),
 [Kabsch 1978](https://doi.org/10.1107/S0567739478001680),
 [Theobald 2005](https://doi.org/10.1107/S0108767305015266), and
 [Liu, Agrafiotis, and Theobald 2010](https://pmc.ncbi.nlm.nih.gov/articles/PMC2958452/).
-The [superposition research](../research/structure-superposition.md) retains
-the scientific solver comparison, external performance evidence, numerical
-caveats for QCP, and dependency survey. Plane fitting also uses SVD on a
-different matrix for a different purpose and does not justify a shared solver
-abstraction.
+See the [superposition research](../research/structure-superposition.md) for
+solver comparisons, QCP timing limitations, and dependency evidence. Plane fitting
+uses SVD on a different matrix and does not justify a shared solver abstraction.
 
 ## Clustering objective and determinism
 
@@ -138,14 +132,13 @@ Requested pairwise output is persisted before clustering to preserve useful
 work if clustering fails. CLI cache reuse validates schema, complete pair
 coverage, and exact IDs only; coordinate and selection provenance remain the
 caller's responsibility. Malformed caches fail without overwrite, and new
-caches use no-clobber creation. Public details belong in the guide.
+caches use no-clobber creation.
 
 Readers project required columns and reject wrong-size caches before complete
 table materialization. The original lazy NDJSON reader was replaced by an eager
 reader with a bounded row-count preflight after the
 [v0.9.2 cleanup size and performance audit](../research/v0.9.2-cleanup-audit.md).
-CSV and Parquet use
-their existing eager readers. XLSX remains excluded because it adds unrelated
+CSV and Parquet use eager readers. XLSX remains excluded because it adds unrelated
 reader/writer dependencies.
 
 Equal-selection generalized results must match the prepared fast path bit for
@@ -154,8 +147,7 @@ numerical tolerances. The independent-selection change retained its existing
 coordinate payload for equal selections, with runtime gates of 5% for one
 worker and 10% for eight, and a 10% peak-RSS gate. Overlapping selections must
 save exactly `24n(f+r-u)` coordinate bytes. The guide retains the measurements;
-regression cases live with the implementation rather than in a completed task
-ledger.
+regressions live with the implementation.
 
 Exact correspondence, one shared atom preset, quadratic matrix storage,
 heuristic memory protection, and caller-managed cache provenance remain the

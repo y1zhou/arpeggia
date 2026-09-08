@@ -2,17 +2,10 @@
 
 Research date: 2026-08-28
 
-This note retains solver comparisons, external performance evidence, and the
-Rust dependency survey. The accepted behavior is maintained in
-[ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md):
-
-- [Correspondence and superposition](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#correspondence-and-superposition): exact atom pairing, independent fit/evaluation selections, numerical safeguards, and the choice of Kabsch.
-- [Storage and execution boundaries](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#storage-and-execution-boundaries): coordinate preparation, matrix storage, and pair-level parallelism.
-- [Persistence and validation](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#persistence-and-validation): numerical equivalence and performance gates.
-
-Current selection syntax and examples belong in the
-[usage guide](../benchmarks/structure-clustering.md#rmsd), and the numerical implementation
-and regressions live in [`src/rmsd.rs`](../../src/rmsd.rs).
+Solver comparisons and dependency evidence as of the research date. Accepted
+behavior is in [ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md);
+selection examples are in the [usage guide](../benchmarks/structure-clustering.md#rmsd).
+Numerical invariants and tests live in [`src/rmsd.rs`](../../src/rmsd.rs).
 
 ## Scientific equivalence
 
@@ -101,28 +94,6 @@ MDAnalysis has previously fixed a case where its QCP routine returned no RMSD
 ([MDAnalysis changelog](https://github.com/MDAnalysis/mdanalysis/blob/develop/package/CHANGELOG)).
 Those are reasons to validate a local implementation against Kabsch rather than
 to treat the formula as automatically infallible.
-
-## Community acceptance
-
-Both approaches are mainstream:
-
-- Biopython provides both an SVD superimposer and a QCP superimposer for protein
-  and crystal structures
-  ([SVD documentation](https://biopython.org/docs/latest/api/Bio.SVDSuperimposer.html),
-  [QCP documentation](https://biopython.org/docs/latest/api/Bio.PDB.qcprot.html)).
-- MDAnalysis uses QCP for minimum RMSD and optimal rotation
-  ([official documentation](https://docs.mdanalysis.org/stable/documentation_pages/lib/qcprot.html)).
-- MDTraj uses QCP for its optimized, parallel RMSD path
-  ([official documentation](https://mdtraj.readthedocs.io/en/latest/api/generated/mdtraj.rmsd.html)).
-- Rust molecular-analysis projects such as `groan_rs` and `molar` implement
-  Kabsch/SVD, but through their own molecular system abstractions rather than a
-  small coordinate-slice API
-  ([groan_rs RMSD API](https://docs.rs/groan_rs/0.11.3/groan_rs/system/rmsd/index.html),
-  [molar source](https://docs.rs/crate/molar/2.2.0/source/src/measure.rs)).
-
-Thus "widely accepted" does not break the tie. QCP has stronger evidence for
-high-throughput molecular RMSD; Kabsch has the broader general point-set and
-linear-algebra footprint.
 
 ## Rust dependency survey
 

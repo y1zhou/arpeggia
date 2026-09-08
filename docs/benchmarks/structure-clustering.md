@@ -97,7 +97,7 @@ arpeggia cluster-structs \
   --num-threads 8
 ```
 
-The CLI intentionally accepts only a non-recursive structure directory. Python
+The CLI accepts only a non-recursive structure directory. Python
 accepts exactly one of a directory/manifest `input` or a complete long-form
 Polars `pairwise_rmsd` DataFrame, allowing a calculated matrix to be reused
 without recomputation:
@@ -149,8 +149,7 @@ space, so they are not a maximum-RAM guarantee.
 The first structure is prepared serially. Remaining structures use at most
 `min(num_threads, 8)` parser workers to avoid saturating storage; pairwise RMSD
 uses up to the smallest of the requested worker count, available processors,
-and number of pairs. Each
-Kabsch solve and k-medoids clustering remains single-threaded. `num_threads=0`
+and number of pairs. Each Kabsch solve and k-medoids clustering remains single-threaded. `num_threads=0`
 selects available processors.
 
 Algorithm choices and their rationale are recorded in
@@ -158,12 +157,10 @@ Algorithm choices and their rationale are recorded in
 
 ## Local structure-clustering benchmark
 
-This local, doc-only benchmark used the 250 mmCIF files in
-`/tmp/arpeggia-benchmark-structs/` (52 MiB) on 2026-08-28. The host exposed 32
-processors and 123 GiB RAM. Commands used a locked release build, fixed
-`k=5`, and three warm-cache repetitions in shuffled order. `/usr/bin/time`
-reported end-to-end wall time and process peak RSS; benchmark outputs remained
-under `/tmp` and are not packaged or committed.
+Measured on 2026-08-28 using 250 mmCIF files (52 MiB), 32 processors, and
+123 GiB RAM. Locked release builds used fixed `k=5` and three warm-cache
+repetitions in shuffled order. GNU `time` measured end-to-end wall time and
+process peak RSS. The input corpus and generated outputs are not committed.
 
 ### Default C-alpha selection
 
@@ -218,7 +215,7 @@ automatic 32-worker pair calculation adds no speed but has similar memory to
 eight. Retaining atom identities only for the reference structure and releasing
 parser workers before pairwise calculation reduced the heavy-atom peak RSS
 from 148.8 to 35.5 MiB with one worker and from 173.4 to 57.0 MiB with eight
-workers, without changing either output. Peak RSS still exceeds the partial estimate described under
+workers, without changing either output. Peak RSS exceeds the estimate under
 [Memory and threads](#memory-and-threads).
 
 ### Independent superposition and RMSD selections

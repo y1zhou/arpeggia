@@ -50,8 +50,7 @@ The experiment compared heavy/all-atom populations, ProtOr/Reduce radii, and
 populations, elemental/Reduce radii, and 1.4/1.1 Å probes with matched upstream
 maximum-area calibrations. Reference preparation imported and wrote a full-atom
 pose without relaxation or coordinate optimization; both programs reloaded the
-same saved structure. These experiments are completed evidence, not a pending
-implementation plan.
+same saved structure.
 
 Selected SAP uses all supplied atoms, Reduce SASA radii, a 1.1 Å probe,
 Rosetta's precise hydrophobicity constants, and maximum side-chain areas from
@@ -60,11 +59,10 @@ and normalizes MSE to methionine. No benchmark fitting or Rosetta database
 parser is shipped.
 
 Selected standard SASA retains heavy-atom Shrake–Rupley at 100 points and a
-1.4 Å probe with ProtOr radii and elemental fallback. On 85 identically prepared
-structures it reduced whole-structure MAE against Rosetta, relative to the
-benchmark baseline, by 26.3% for total SASA, 47.7% for polar SASA, and 52.6% for
-hydrophobic SASA. It remains a coherent Shrake–Rupley definition, not a claim of
-numerical equivalence to Rosetta's LeGrand method. ADR 0006 records the shared
+1.4 Å probe with ProtOr radii and elemental fallback. The validation report
+quantifies its lower total, polar, and hydrophobic SASA errors on 85 identically
+prepared structures; it does not establish numerical equivalence to Rosetta's
+LeGrand method. [ADR 0006](0006-unify-standard-sasa-records.md) records the shared
 atom-record and polarity-partition contracts.
 
 One final human-readable report per benchmark retains its provenance and

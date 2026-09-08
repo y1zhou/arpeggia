@@ -2,16 +2,10 @@
 
 Research date: 2026-08-28
 
-This note retains the alternatives, crate survey, and supporting sources behind
-[ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md):
-
-- [Clustering objective and determinism](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#clustering-objective-and-determinism): PAM/FasterPAM and DynMSC, bounds, ties, scaling, and failure policy.
-- [Storage and execution boundaries](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#storage-and-execution-boundaries): packed matrices, available-memory checks, and threading.
-- [Persistence and validation](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md#persistence-and-validation): eager table readers, cache behavior, and validation gates.
-
-The [usage guide](../benchmarks/structure-clustering.md) owns public arguments, schemas,
-and local benchmark results. Surveys below describe the versions checked in
-August 2026 rather than an ongoing claim about ecosystem availability.
+Alternative methods and crate evidence as of the research date. Accepted choices
+are in [ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md);
+arguments, schemas, and measurements are in the
+[usage guide](../benchmarks/structure-clustering.md).
 
 ## K-medoids and automatic-count evidence
 
@@ -138,17 +132,9 @@ future experiment, not the lean first choice.
 
 ## Additional Rust crate survey
 
-Average-linkage clustering does have a direct Rust implementation. `kodama`
-0.3.0 accepts a mutable condensed pairwise dissimilarity vector and
-`Method::Average`; its documentation gives average linkage `O(n^2)` runtime
-and returns the complete dendrogram
-([`kodama` API](https://docs.rs/kodama/0.3.0/kodama/)). The repository is not
-archived, but development is quiet: its last push was 2025-04-09 when checked
-through the GitHub repository API. `linfa-hierarchical` is maintained as part
-of Linfa, but it delegates its agglomeration to `kodama` and presents a
-similarity-kernel/`ndarray` interface instead of improving the fit for an
-existing condensed RMSD matrix
-([Linfa hierarchical documentation](https://docs.rs/linfa-hierarchical/0.8.1/linfa_hierarchical/)).
+`linfa-hierarchical` delegates to `kodama`, described above, but adds a
+similarity-kernel/`ndarray` interface rather than accepting the existing condensed
+RMSD matrix ([Linfa documentation](https://docs.rs/linfa-hierarchical/0.8.1/linfa_hierarchical/)).
 
 No maintained crate directly implementing the Daura/GROMOS conformation
 algorithm over a precomputed dissimilarity matrix was found in the crates.io
@@ -159,9 +145,7 @@ algorithm being unavailable generally: GROMOS++ documents its `cluster`
 program as consuming an RMSD matrix, repeatedly choosing the structure with
 the most neighbors below a cutoff, and removing that cluster
 ([GROMOS++ manual](https://www.gromos.net/gromos11_pdf_manuals/vol5.pdf)).
-Therefore, under the design rule that every exposed method must have a suitable
-off-the-shelf Rust implementation, the first release should expose
-**k-medoids only**.
+These findings support the k-medoids-only decision in ADR 0008.
 
 ## Memory-query alternatives
 
