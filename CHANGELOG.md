@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-08
+
+### Changed
+
+- Replaced the Polars lazy NDJSON scanner with eager reading and schema
+  projection, retaining bounded cache row-count validation. Removing the lazy
+  engine eliminates 115 normal dependency nodes and reduced a same-machine
+  release wheel from 22.38 MB to 9.48 MB (57.6%). These are local build results,
+  not measurements of published release artifacts.
+- Excluded `docs/` from Rust crates and Python source distributions and wheels.
+- Removed redundant contact geometry work, reused native spatial-index and
+  string-matching operations in SC, and avoided repeated RMSD and SAP work.
+- Shared Python dSASA and CLI output handling, and removed unused internal
+  Python contract declarations while retaining supported APIs and schemas.
+- Consolidated development documentation into ADRs, retained additional research
+  and benchmark evidence, and reorganized README features and usage guidance.
+  Scientific conventions now include a contact-identification decision diagram
+  in a dedicated [document](docs/scientific-conventions.md).
+
+### Fixed
+
+- Corrected geometry-test tolerances to check absolute errors and removed an
+  inconsistent angle assertion.
+- Made Python tests explicitly assert expected missing-hydrogen, unresolved
+  histidine, and incomplete-geometry warnings from their fixtures.
+
+### Validation
+
+- The [5B8C benchmark and cleanup audit](docs/research/v0.9.2-cleanup-audit.md)
+  records essentially unchanged contact generation (+0.8–1.2%) and unchanged
+  or faster NDJSON loading on a 2,574-row contacts table after removing the
+  lazy engine. These measurements do not establish performance for all inputs.
+
 ## [0.9.1] - 2026-09-02
 
 ### Added
@@ -305,7 +338,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/y1zhou/arpeggia/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/y1zhou/arpeggia/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/y1zhou/arpeggia/releases/tag/v0.8.1
