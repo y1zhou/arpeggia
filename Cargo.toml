@@ -23,7 +23,6 @@ nalgebra = "0.35"
 pdbtbx = { version = "0.12.0", features = ["rayon", "rstar"] }
 polars = { version = "0.55.2", default-features = false, features = [
     "json",
-    "lazy",
     "parquet",
     "performant"
 ] }
