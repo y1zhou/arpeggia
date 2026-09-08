@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Shared strong/weak hydrogen-bond geometry and aromatic plane fitting while
+  retaining donor rules, classification thresholds, and missing-geometry warnings.
+- Removed the ring-ring candidate-index vector by classifying borrowed pairs
+  within the parallel ring loop. Atom and ring preparation remain outside it;
+  atom-atom and ring-atom candidate handling is unchanged.
 - Replaced the Polars lazy NDJSON scanner with eager reading and schema
   projection, retaining bounded cache row-count validation. Removing the lazy
   engine eliminates 115 normal dependency nodes and reduced a same-machine
@@ -39,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Validation
 
+- Isolated ring-ring benchmarks on 5B8C and 6BFT were faster with one and eight
+  threads and retained identical outputs. A synthetic 5,632-ring case reduced
+  peak process RSS from about 249 MiB to 7 MiB. These are ring-classification
+  measurements, not end-to-end contact-analysis speedups; details are in the
+  [cleanup audit](docs/research/v0.9.2-cleanup-audit.md#ring-ring-enumeration-benchmark).
 - The [5B8C benchmark and cleanup audit](docs/research/v0.9.2-cleanup-audit.md)
   records essentially unchanged contact generation (+0.8–1.2%) and unchanged
   or faster NDJSON loading on a 2,574-row contacts table after removing the

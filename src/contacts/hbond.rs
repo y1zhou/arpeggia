@@ -33,44 +33,16 @@ pub(super) fn find_hydrogen_bond(
     vdw_comp_factor: f64,
     bonds: &ResolvedBonds,
 ) -> Option<Interaction> {
-    if let Some((donor, acceptor)) = is_donor_acceptor_pair(entity1, entity2) {
-        let da_dist = donor.atom().distance(acceptor.atom());
-        if da_dist <= HYDROGEN_BOND_DIST {
-            let donor_has_valid_h = donor
-                .residue()
-                .atoms()
-                .filter(|atom| {
-                    atom.element() == Some(&Element::H)
-                        && (is_hydrogen_for_donor(
-                            donor.conformer().name(),
-                            donor.atom().name(),
-                            atom.name(),
-                        ) || bonds.contains_entity_atom(donor, atom))
-                })
-                .any(|hydrogen| {
-                    let acceptor_vdw = acceptor
-                        .atom()
-                        .element()
-                        .and_then(|element| element.atomic_radius().van_der_waals);
-                    let h_vdw = Element::H.atomic_radius().van_der_waals;
-                    acceptor_vdw
-                        .zip(h_vdw)
-                        .is_some_and(|(acceptor_vdw, h_vdw)| {
-                            hydrogen.distance(acceptor.atom())
-                                <= h_vdw + acceptor_vdw + vdw_comp_factor
-                                && donor.atom().angle(hydrogen, acceptor.atom()) >= 90.0
-                        })
-                });
-            if donor_has_valid_h {
-                return Some(Interaction::HydrogenBond);
-            }
-        }
-        if da_dist <= POLAR_DIST {
-            // Polar interactions are more relaxed as only distance is checked
-            return Some(Interaction::PolarContact);
-        }
-    }
-    None
+    let (donor, acceptor) = is_donor_acceptor_pair(entity1, entity2)?;
+    classify_hydrogen_bond(
+        donor,
+        acceptor,
+        vdw_comp_factor,
+        bonds,
+        90.0,
+        |name| is_hydrogen_for_donor(donor.conformer().name(), donor.atom().name(), name),
+        (Interaction::HydrogenBond, Interaction::PolarContact),
+    )
 }
 
 /// Search for weak hydrogen bonds and weak polar contacts.
@@ -87,41 +59,48 @@ pub(super) fn find_weak_hydrogen_bond(
     vdw_comp_factor: f64,
     bonds: &ResolvedBonds,
 ) -> Option<Interaction> {
-    if let Some((donor, acceptor)) = is_weak_donor_acceptor_pair(entity1, entity2) {
-        let da_dist = donor.atom().distance(acceptor.atom());
-        if da_dist <= HYDROGEN_BOND_DIST {
-            let donor_has_valid_h = donor
-                .residue()
-                .atoms()
-                .filter(|atom| {
-                    atom.element() == Some(&Element::H)
-                        && (is_hydrogen_for_carbon(donor.atom().name(), atom.name())
-                            || bonds.contains_entity_atom(donor, atom))
-                })
-                .any(|hydrogen| {
-                    let acceptor_vdw = acceptor
-                        .atom()
-                        .element()
-                        .and_then(|element| element.atomic_radius().van_der_waals);
-                    let h_vdw = Element::H.atomic_radius().van_der_waals;
-                    acceptor_vdw
-                        .zip(h_vdw)
-                        .is_some_and(|(acceptor_vdw, h_vdw)| {
-                            hydrogen.distance(acceptor.atom())
-                                <= h_vdw + acceptor_vdw + vdw_comp_factor
-                                && donor.atom().angle(hydrogen, acceptor.atom()) >= 130.0
-                        })
-                });
-            if donor_has_valid_h {
-                return Some(Interaction::WeakHydrogenBond);
-            }
-        }
-        if da_dist <= POLAR_DIST {
-            // Polar interactions are more relaxed as only distance is checked
-            return Some(Interaction::WeakPolarContact);
+    let (donor, acceptor) = is_weak_donor_acceptor_pair(entity1, entity2)?;
+    classify_hydrogen_bond(
+        donor,
+        acceptor,
+        vdw_comp_factor,
+        bonds,
+        130.0,
+        |name| is_hydrogen_for_carbon(donor.atom().name(), name),
+        (Interaction::WeakHydrogenBond, Interaction::WeakPolarContact),
+    )
+}
+
+fn classify_hydrogen_bond(
+    donor: &AtomConformerResidueChainModel,
+    acceptor: &AtomConformerResidueChainModel,
+    vdw_comp_factor: f64,
+    bonds: &ResolvedBonds,
+    min_angle: f64,
+    matches_hydrogen_name: impl Fn(&str) -> bool,
+    (hydrogen_bond, polar_contact): (Interaction, Interaction),
+) -> Option<Interaction> {
+    let da_dist = donor.atom().distance(acceptor.atom());
+    if da_dist <= HYDROGEN_BOND_DIST {
+        let max_ha_dist = acceptor
+            .atom()
+            .element()
+            .and_then(|element| element.atomic_radius().van_der_waals)
+            .zip(Element::H.atomic_radius().van_der_waals)
+            .map(|(acceptor_vdw, h_vdw)| acceptor_vdw + h_vdw + vdw_comp_factor);
+        if max_ha_dist.is_some_and(|max_ha_dist| {
+            donor.residue().atoms().any(|hydrogen| {
+                hydrogen.element() == Some(&Element::H)
+                    && (matches_hydrogen_name(hydrogen.name())
+                        || bonds.contains_entity_atom(donor, hydrogen))
+                    && hydrogen.distance(acceptor.atom()) <= max_ha_dist
+                    && donor.atom().angle(hydrogen, acceptor.atom()) >= min_angle
+            })
+        }) {
+            return Some(hydrogen_bond);
         }
     }
-    None
+    (da_dist <= POLAR_DIST).then_some(polar_contact)
 }
 
 /// Determine if the two entities are a valid hydrogen bond donor-acceptor pair

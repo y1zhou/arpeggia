@@ -201,10 +201,6 @@ impl ResidueExt for Residue {
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "CD" | "OE1" | "NE2"))
                 .collect(),
-            "HIS" | "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => self
-                .par_atoms()
-                .filter(|atom| matches!(atom.name(), "CG" | "ND1" | "CE1" | "NE2" | "CD2"))
-                .collect(),
             "ILE" => self
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CB" | "CG1" | "CG2" | "CD1"))
@@ -221,10 +217,6 @@ impl ResidueExt for Residue {
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CG" | "SD" | "CE"))
                 .collect(),
-            "PHE" | "TYR" => self
-                .par_atoms()
-                .filter(|atom| matches!(atom.name(), "CG" | "CD1" | "CD2" | "CE1" | "CE2" | "CZ"))
-                .collect(),
             "PRO" => self
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "N" | "CA" | "CB" | "CG" | "CD"))
@@ -237,21 +229,13 @@ impl ResidueExt for Residue {
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CA" | "CB" | "OG1" | "CG2"))
                 .collect(),
-            "TRP" => self
-                .par_atoms()
-                .filter(|atom| {
-                    matches!(
-                        atom.name(),
-                        "CG" | "CD1" | "CD2" | "NE1" | "CE2" | "CE3" | "CZ2" | "CZ3" | "CH2"
-                    )
-                })
-                .collect(),
             "VAL" => self
                 .par_atoms()
                 .filter(|atom| matches!(atom.name(), "CA" | "CB" | "CG1" | "CG2"))
                 .collect(),
-            // Nothing for alanine and glycine
-            _ => vec![],
+            // Aromatic annotations use exactly the ring atom selection.
+            // Other residues (including Ala/Gly) have no plane atoms.
+            _ => self.ring_atoms(),
         }
     }
 

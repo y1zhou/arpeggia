@@ -94,11 +94,10 @@ impl<'a> InteractionComplex<'a> {
             metadata.resolve_bonds(model)
         });
 
-        // Build a mapping of ring residue names to ring centers and normals
-        let (rings, ring_err) = build_ring_positions(model, &ligand, &receptor, &res2idx);
-
-        // Similarly, build a mapping of side chain planes
+        // Aromatic rings and side-chain annotations use the same fitted planes.
         let sc_planes = build_sc_plane_positions(model);
+        let (rings, ring_err) =
+            build_ring_positions(model, &ligand, &receptor, &res2idx, &sc_planes);
 
         Ok((
             Self {
@@ -138,6 +137,7 @@ impl<'a> InteractionComplex<'a> {
     /// In such cases, we avoid calculations where c1 > c2 if the interaction is symmetric.
     /// Currently, only ring-atom interactions are asymmetric.
     fn should_compare_entities(&self, e1: &IndexedAtom, e2: &IndexedAtom, symmetric: bool) -> bool {
+        // Both atoms come from build_indexed_atoms, which excludes hydrogen atoms.
         let e1_res = ResidueId::from_hier(&e1.entity);
         let e2_res = ResidueId::from_hier(&e2.entity);
         self.should_compare_residues(
@@ -409,67 +409,54 @@ impl InteractionComplex<'_> {
     }
 
     pub(super) fn get_ring_ring_contacts(&self) -> Vec<ResultEntry> {
-        // Find ring - ring contacts
-        let ring_ring_neighbors = self
-            .rings
-            .iter()
-            .enumerate()
-            .flat_map(|(first_index, first)| {
-                self.rings
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(second_index, second)| {
-                        self.should_compare_residues(
-                            &first.residue,
-                            &second.residue,
-                            first.group,
-                            second.group,
-                            first.residue_index,
-                            second.residue_index,
-                            true,
-                        )
-                        .then_some((first_index, second_index))
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-
-        // Find ring-ring interactions
-        ring_ring_neighbors
+        // Ring identities and planes are prepared once by new_with_options.
+        // Enumerate borrowed pairs here; do not rebuild rings or fit planes per pair.
+        self.rings
             .par_iter()
-            .filter_map(|&(first_index, second_index)| {
-                let first = &self.rings[first_index];
-                let second = &self.rings[second_index];
-                let k1 = &first.residue;
-                let k2 = &second.residue;
-                let ring1 = &first.plane;
-                let ring2 = &second.plane;
-                let dist = (ring1.center - ring2.center).norm();
-                find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
-                    model: k1.model,
-                    interaction: intxn,
-                    ligand: InteractingEntity::new(
-                        k1.chain,
-                        k1.resi,
-                        k1.insertion,
-                        k1.altloc,
-                        k1.resn,
-                        "Ring",
-                        0,
-                    ),
-                    receptor: InteractingEntity::new(
-                        k2.chain,
-                        k2.resi,
-                        k2.insertion,
-                        k2.altloc,
-                        k2.resn,
-                        "Ring",
-                        0,
-                    ),
-                    distance: dist,
+            .flat_map_iter(|first| {
+                self.rings.iter().filter_map(move |second| {
+                    if !self.should_compare_residues(
+                        &first.residue,
+                        &second.residue,
+                        first.group,
+                        second.group,
+                        first.residue_index,
+                        second.residue_index,
+                        true,
+                    ) {
+                        return None;
+                    }
+                    let k1 = &first.residue;
+                    let k2 = &second.residue;
+                    let ring1 = &first.plane;
+                    let ring2 = &second.plane;
+                    let dist = (ring1.center - ring2.center).norm();
+                    find_pi_pi(ring1, ring2).map(|intxn| ResultEntry {
+                        model: k1.model,
+                        interaction: intxn,
+                        ligand: InteractingEntity::new(
+                            k1.chain,
+                            k1.resi,
+                            k1.insertion,
+                            k1.altloc,
+                            k1.resn,
+                            "Ring",
+                            0,
+                        ),
+                        receptor: InteractingEntity::new(
+                            k2.chain,
+                            k2.resi,
+                            k2.insertion,
+                            k2.altloc,
+                            k2.resn,
+                            "Ring",
+                            0,
+                        ),
+                        distance: dist,
+                    })
                 })
             })
-            .collect::<Vec<ResultEntry>>()
+            .collect()
     }
 }
 
@@ -594,6 +581,7 @@ fn build_ring_positions<'a>(
     ligand: &HashSet<String>,
     receptor: &HashSet<String>,
     residues: &HashMap<ResidueId<'a>, usize>,
+    sc_planes: &HashMap<ResidueId<'a>, Plane>,
 ) -> (Vec<IndexedRing<'a>>, Vec<String>) {
     let mut ring_positions = Vec::new();
     let mut errors = Vec::new();
@@ -631,7 +619,7 @@ fn build_ring_positions<'a>(
                         conformer.alternative_location().unwrap_or(""),
                         resn,
                     );
-                    match r.center_and_normal(Some(r.ring_atoms())) {
+                    match sc_planes.get(&res_id).copied() {
                         Some(ring) => {
                             ring_positions.push(IndexedRing {
                                 group: group_mask(chain_id, ligand, receptor),
@@ -713,7 +701,8 @@ ENDMDL\nEND\n";
 
         let chains = HashSet::from(["A".to_string()]);
         let residues = build_residue_index(&pdb);
-        let (rings, errors) = build_ring_positions(&pdb, &chains, &chains, &residues);
+        let planes = build_sc_plane_positions(&pdb);
+        let (rings, errors) = build_ring_positions(&pdb, &chains, &chains, &residues, &planes);
 
         assert!(errors.is_empty());
         assert_eq!(rings.len(), 2);
