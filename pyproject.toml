@@ -42,6 +42,7 @@ Repository = "https://github.com/y1zhou/arpeggia"
 Issues = "https://github.com/y1zhou/arpeggia/issues"
 
 [tool.maturin]
+exclude = ["docs/**"]
 # The name of the resulting Python package
 python-source = "python"
 # Build with the python feature enabled

@@ -6,9 +6,7 @@ edition = "2024"
 authors = ["Yi Zhou <me@y1zhou.com>"]
 license-file = "LICENSE"
 repository = "https://github.com/y1zhou/arpeggia"
-exclude = ["docs/benchmarks/*.html"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+exclude = ["docs/**"]
 
 [lib]
 name = "arpeggia"
