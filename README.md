@@ -26,6 +26,13 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 Analyses accept PDB and mmCIF files with chain selections. Tabular Python
 results are Polars DataFrames; CLI tables support CSV, Parquet, and NDJSON.
 
+See [Scientific conventions](docs/scientific-conventions.md) for analysis
+assumptions, geometry rules, and the contact-identification decision path.
+
+See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection
+grammar, exact-correspondence requirements, output schemas, cache semantics,
+memory estimates, and threading behavior.
+
 ## Installation
 
 ### Python Package (Recommended)
@@ -204,10 +211,6 @@ arpeggia help
 arpeggia contacts --help
 ```
 
-See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection
-grammar, exact-correspondence requirements, output schemas, cache semantics,
-memory estimates, and threading behavior.
-
 ### Chain Groups Specification
 
 The `groups` parameter allows you to specify which chains interact with each other:
@@ -235,11 +238,6 @@ To run Rust tests:
 ```bash
 cargo test --locked
 ```
-
-## Scientific conventions
-
-See [Scientific conventions](docs/scientific-conventions.md) for analysis
-assumptions, geometry rules, and the contact-identification decision path.
 
 ## License
 
