@@ -9,29 +9,22 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 
 ## Features
 
-| Python API (`arpeggia.*`) | Rust CLI (`arpeggia …`) | Description |
-| --- | --- | --- |
-| `contacts` | `contacts` | Atomic and aromatic contacts, including clashes, hydrogen bonds, ionic interactions, and explicit or potential covalent bonds. |
-| `sasa` | `sasa` | Solvent accessible surface area at atom, residue, or chain level. |
-| `relative_sasa` | `relative-sasa` | Residue SASA normalized by reference maximum areas. |
-| `sap_score` | `sap` | Spatial Aggregation Propensity scores at atom or residue level. |
-| `dsasa`, `dsasa_components` | `dsasa` | Two-sided buried interface area, including polarity components. |
-| `sc` | `sc` | Shape complementarity between chain groups. |
-| `seq` | `seq` | Coordinate-observed protein sequences by chain. |
-| `seqres` | `seqres` | Declared polymer sequences, including residues without coordinates. |
-| `rmsd` | `rmsd` | Kabsch superposition with separate fitting and measurement selections. |
-| `pairwise_rmsd` | `cluster-structs --pairwise-rmsd` | Pairwise structure RMSDs in a reusable table. |
-| `cluster_structs` | `cluster-structs` | Group conformations with k-medoids and select representative structures. |
+| Arpeggia module | Description |
+| --- | --- |
+| `contacts` | Atomic and aromatic contacts, including clashes, hydrogen bonds, ionic interactions, and explicit or potential covalent bonds. See [Scientific conventions](docs/scientific-conventions.md) for analysis assumptions, geometry rules, and the contact-identification decision path. |
+| `sasa` | Solvent accessible surface area at atom, residue, or chain level. |
+| `relative-sasa` | Residue SASA normalized by reference maximum areas. |
+| `sap` | Spatial Aggregation Propensity scores at atom or residue level. |
+| `dsasa`, `dsasa_components` | Two-sided buried interface area, including Rosetta-style polarity components. |
+| `sc` | Shape complementarity between chain groups. |
+| `seq` | Coordinate-observed protein sequences by chain. |
+| `seqres` | Declared polymer sequences, including residues without coordinates. |
+| `rmsd` | Kabsch superposition with separate fitting and measurement selections. |
+| `pairwise_rmsd` | Pairwise structure RMSDs using data in a folder or from a table. |
+| `cluster_structs` | Group conformations with k-medoids and select representative structures. See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection grammar, exact-correspondence requirements, output schemas, cache semantics, memory estimates, and threading behavior. |
 
 Analyses accept PDB and mmCIF files with chain selections. Tabular Python
 results are Polars DataFrames; CLI tables support CSV, Parquet, and NDJSON.
-
-See [Scientific conventions](docs/scientific-conventions.md) for analysis
-assumptions, geometry rules, and the contact-identification decision path.
-
-See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection
-grammar, exact-correspondence requirements, output schemas, cache semantics,
-memory estimates, and threading behavior.
 
 ## Installation
 
