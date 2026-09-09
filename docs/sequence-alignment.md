@@ -8,7 +8,8 @@ import arpeggia
 alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")
 print(alignment.score, alignment.identity_alignment, alignment.edit_distance)
 print(alignment.reference_span, alignment.mobile_span)  # (2, 11), (0, 9)
-print(alignment.columns[0])  # (2, 0): zero-based input indices
+print(alignment.aligned_reference, alignment.aligned_mobile)
+print(alignment.operations)  # spaces for matches; + insertion, - deletion, x mismatch
 ```
 
 ```bash
@@ -32,8 +33,11 @@ empty inputs are invalid. One deterministic optimum is returned; equal scores
 do not establish a unique biological correspondence.
 
 `SeqAlignment` has read-only Python attributes. Spans are zero-based and
-half-open; `columns` contains an index pair per alignment column, with `None`
-for gaps. Clipped terminal segments are outside the spans and columns.
+half-open. `aligned_reference` and `aligned_mobile` contain the scored alignment
+with `-` for gaps; `operations` describes reference-to-mobile changes. These three
+plain strings have equal lengths. Clipped terminal segments remain in the original
+inputs, outside the spans and aligned strings. These fields replace `.columns`;
+input indices can be recovered by counting nongap residues from each span start.
 
 | Attribute | Meaning |
 | --- | --- |

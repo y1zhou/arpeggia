@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Replaced `SeqAlignment.columns` with plain gapped `aligned_reference`,
+  `aligned_mobile`, and `operations` strings; structural mapping derives indices
+  internally from the alignment spans.
+
 - Python `rmsd()` now returns a read-only `RmsdResult`; use `.rmsd` for full
   evaluation RMSD and `.core_rmsd` for retained fitting pairs. The CLI reports
   details by default and supports `--json` instead of printing one scalar.

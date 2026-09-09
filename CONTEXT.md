@@ -217,6 +217,12 @@ An alignment consuming the entire second sequence while allowing unaligned
 terminal segments of the first sequence without penalty.
 _Avoid_: Symmetric overlap, local alignment
 
+**Alignment Operation**:
+A match, substitution, insertion, or deletion along a chosen alignment, directed
+from the reference sequence to the mobile sequence. Unaligned terminal segments
+are outside these operations.
+_Avoid_: Minimum edit script, sequence edit distance
+
 **Sequence Identity**:
 The identical-residue pair count divided by either alignment-column count
 (including gaps) or shorter full input length, with the denominator named.

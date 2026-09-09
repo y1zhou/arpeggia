@@ -412,7 +412,8 @@ def test_sequence_alignment_results():
     alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")
     assert isinstance(alignment, arpeggia.SeqAlignment)
     assert alignment.reference_span == (2, 11)
-    assert alignment.columns[0] == (2, 0)
+    assert alignment.aligned_reference == alignment.aligned_mobile == "ACDEFGHIK"
+    assert alignment.operations == " " * 9
     assert alignment.edit_distance == 4
     assert alignment.identity_alignment == alignment.identity_shorter == 1.0
     with pytest.raises(AttributeError):

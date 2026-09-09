@@ -57,7 +57,7 @@ impl Default for SeqAlignOptions {
 
 /// One exact protein alignment with zero-based, half-open spans.
 ///
-/// Columns contain input indices or a gap (`None`); terminal clipping is represented
+/// Gapped strings contain the scored alignment; terminal clipping is represented
 /// by the spans. Identity uses original symbols, including distinct U/C and O/K.
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(
@@ -83,8 +83,12 @@ pub struct SeqAlignment {
     pub reference_span: (usize, usize),
     /// Aligned second-sequence span, excluding clipping.
     pub mobile_span: (usize, usize),
-    /// Alignment columns as first/second input indices, with gaps as None.
-    pub columns: Vec<(Option<usize>, Option<usize>)>,
+    /// Scored reference alignment, with `-` for gaps and without clipped tails.
+    pub aligned_reference: String,
+    /// Scored mobile alignment, with `-` for gaps and without clipped tails.
+    pub aligned_mobile: String,
+    /// Reference-to-mobile operations: space (match), + (insertion), - (deletion), x (mismatch).
+    pub operations: String,
     /// Number of columns, including gaps.
     pub alignment_length: usize,
     /// Length of the shorter complete input.
@@ -109,6 +113,30 @@ pub struct SeqAlignment {
     pub coverage_shorter: f64,
     /// Full-input unit-cost Levenshtein distance, independent of this traceback.
     pub edit_distance: usize,
+}
+
+impl SeqAlignment {
+    // Normalized ASCII strings have equal aligned lengths. Recover correspondence
+    // only when needed, without storing a second representation of the alignment.
+    pub(crate) fn columns(&self) -> impl Iterator<Item = (Option<usize>, Option<usize>)> + '_ {
+        let (mut i, mut j) = (self.reference_span.0, self.mobile_span.0);
+        self.aligned_reference
+            .bytes()
+            .zip(self.aligned_mobile.bytes())
+            .map(move |(a, b)| {
+                let left = (a != b'-').then(|| {
+                    let index = i;
+                    i += 1;
+                    index
+                });
+                let right = (b != b'-').then(|| {
+                    let index = j;
+                    j += 1;
+                    index
+                });
+                (left, right)
+            })
+    }
 }
 
 pub(crate) fn scaled_cost(value: f64) -> ArpeggiaResult<i32> {
@@ -190,7 +218,9 @@ pub fn align_seqs(
         result => result,
     }
     .map_err(backend_error)?;
-    let mut columns = Vec::with_capacity(alignment.ops.len());
+    let mut aligned_reference = String::with_capacity(alignment.ops.len());
+    let mut aligned_mobile = String::with_capacity(alignment.ops.len());
+    let mut operations = String::with_capacity(alignment.ops.len());
     let (mut i, mut j) = (alignment.query_start, alignment.target_start);
     let (mut matches, mut paired, mut gap_runs) = (0, 0, 0);
     let mut last_gap = None;
@@ -206,23 +236,30 @@ pub fn align_seqs(
         last_gap = gap;
         match op {
             hyalite::AlignOp::Match | hyalite::AlignOp::Mismatch => {
-                columns.push((Some(i), Some(j)));
+                let same = reference.as_bytes()[i] == mobile.as_bytes()[j];
+                aligned_reference.push(reference.as_bytes()[i] as char);
+                aligned_mobile.push(mobile.as_bytes()[j] as char);
+                operations.push(if same { ' ' } else { 'x' });
                 paired += 1;
-                matches += usize::from(reference.as_bytes()[i] == mobile.as_bytes()[j]);
+                matches += usize::from(same);
                 i += 1;
                 j += 1;
             }
             hyalite::AlignOp::Ins => {
-                columns.push((Some(i), None));
+                aligned_reference.push(reference.as_bytes()[i] as char);
+                aligned_mobile.push('-');
+                operations.push('-');
                 i += 1;
             }
             hyalite::AlignOp::Del => {
-                columns.push((None, Some(j)));
+                aligned_reference.push('-');
+                aligned_mobile.push(mobile.as_bytes()[j] as char);
+                operations.push('+');
                 j += 1;
             }
         }
     }
-    let length = columns.len();
+    let length = operations.len();
     let shorter = reference.len().min(mobile.len());
     let mut warnings = Vec::new();
     if reference
@@ -247,7 +284,9 @@ pub fn align_seqs(
             score: f64::from(alignment.score) / 100.0,
             reference_span: (alignment.query_start, alignment.query_end),
             mobile_span: (alignment.target_start, alignment.target_end),
-            columns,
+            aligned_reference,
+            aligned_mobile,
+            operations,
             alignment_length: length,
             shorter_length: shorter,
             matches,
@@ -321,6 +360,14 @@ mod tests {
         assert_eq!((a.gap_residues, a.gap_runs, a.edit_distance), (3, 1, 3));
         assert_eq!(a.coverage_alignment, Some(9.0 / 12.0));
         assert_eq!(a.coverage_shorter, 1.0);
+        assert_eq!(a.aligned_reference, "ACD---EFGHIK");
+        assert_eq!(a.aligned_mobile, "ACDQQQEFGHIK");
+        assert_eq!(a.operations, "   +++      ");
+        assert_eq!(a.columns().nth(6), Some((Some(3), Some(6))));
+        let reversed = align_seqs("ACDQQQEFGHIK", "ACDEFGHIK", &SeqAlignOptions::default())
+            .unwrap()
+            .value;
+        assert_eq!(reversed.operations, "   ---      ");
         let a = align_seqs(
             "AAAA",
             "WWWW",
@@ -332,12 +379,18 @@ mod tests {
         .unwrap()
         .value;
         assert_eq!(a.score, 0.0);
+        assert!(
+            a.aligned_reference.is_empty()
+                && a.aligned_mobile.is_empty()
+                && a.operations.is_empty()
+        );
         assert_eq!(a.identity_alignment, None);
         assert_eq!(a.coverage_alignment, None);
         assert_eq!(a.identity_shorter, 0.0);
         assert_eq!(a.edit_distance, 4);
         let a = align_seqs("UO", "CK", &SeqAlignOptions::default()).unwrap();
         assert_eq!(a.value.matches, 0);
+        assert_eq!(a.value.operations, "xx");
         assert_eq!(a.value.edit_distance, 2);
         assert_eq!(a.warnings.len(), 1);
     }

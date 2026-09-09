@@ -338,12 +338,12 @@ pub(super) fn aligned_coordinates(
         warnings.extend(analysis.warnings);
         let alignment = analysis.value;
         let mut residue_pairs = Vec::new();
-        for (i, j) in &alignment.columns {
+        for (i, j) in alignment.columns() {
             let (Some(i), Some(j)) = (i, j) else {
                 continue;
             };
-            let left = a.residues[*i];
-            let right = b.residues[*j];
+            let left = a.residues[i];
+            let right = b.residues[j];
             residue_pairs.push(residue_pair(left, right));
             let membership = match (
                 fit.matches(a.chain.id(), left.serial_number(), left.insertion_code()),
@@ -356,7 +356,7 @@ pub(super) fn aligned_coordinates(
             };
             let left_atoms = selected_atoms(left, options.atoms)?;
             let right_atoms = selected_atoms(right, options.atoms)?;
-            let equivalent = a.sequence.as_bytes()[*i] == b.sequence.as_bytes()[*j];
+            let equivalent = a.sequence.as_bytes()[i] == b.sequence.as_bytes()[j];
             let mut paired = 0;
             for (name, atom) in &left_atoms {
                 let Some(other) = right_atoms.get(name) else {
@@ -391,11 +391,8 @@ pub(super) fn aligned_coordinates(
             omitted += left_atoms.len() + right_atoms.len() - 2 * paired;
         }
         // Include selected reference residues excluded by gaps or terminal clipping.
-        let paired_indices: BTreeSet<_> = alignment
-            .columns
-            .iter()
-            .filter_map(|(i, j)| j.and(*i))
-            .collect();
+        let paired_indices: BTreeSet<_> =
+            alignment.columns().filter_map(|(i, j)| j.and(i)).collect();
         for (i, r) in a.residues.iter().enumerate() {
             if !paired_indices.contains(&i)
                 && (fit.matches(a.chain.id(), r.serial_number(), r.insertion_code())
