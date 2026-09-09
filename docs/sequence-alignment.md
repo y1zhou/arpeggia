@@ -56,7 +56,7 @@ still compares the complete inputs. JSON represents undefined ratios as `null`.
 ## Display an alignment
 
 Evaluating or printing a Python `SeqAlignment` shows statistics followed by
-reference, query, and operation rows. The CLI uses the same layout, including
+reference and query rows followed by an unlabeled operation row. The CLI uses the same layout, including
 per-chain alignments from `rmsd --align-seqs`.
 
 ```python

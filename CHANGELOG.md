@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the operation-row label from CLI and Python alignment displays;
+  colored edit markers remain aligned below the sequences.
+
 - Renamed the second alignment/RMSD input from `mobile` to `query`, including
   Python keywords, result fields, CLI labels, and reference-to-query mappings.
 

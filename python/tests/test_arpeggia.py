@@ -475,7 +475,7 @@ def test_alignment_display_controls(monkeypatch):
 
     alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDFGHIKLMN")
     plain = alignment.format(width=40, color="never", rulers=False)
-    assert "operations" in plain and "-" in alignment.operations
+    assert "operations" not in plain and "-" in alignment.operations
     assert "\x1b" not in plain
     assert all(len(line) <= 40 for line in plain.splitlines())
     assert "\x1b[31m" in alignment.format(color="always")

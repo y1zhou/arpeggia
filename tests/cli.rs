@@ -422,7 +422,7 @@ fn alignment_display_flags_preserve_plain_json_and_wrapping() {
     assert!(plain.status.success());
     let text = String::from_utf8(plain.stdout).unwrap();
     assert!(!text.contains('\x1b'));
-    assert!(text.contains("operations"));
+    assert!(!text.contains("operations"));
     assert!(text.lines().all(|line| line.len() <= 40));
     let ruled = run(&["--width", "40"]);
     assert_eq!(

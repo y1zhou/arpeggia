@@ -154,7 +154,7 @@ impl SeqAlignment {
                 }
                 output.push_str(&format!(" {last_number:>digits$}\n"));
             }
-            output.push_str(&format!("{:<prefix$}", "operations"));
+            output.push_str(&" ".repeat(prefix));
             for &op in ops {
                 paint(&mut output, if op == b'.' { b' ' } else { op }, op, color);
             }
