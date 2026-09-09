@@ -3,9 +3,9 @@
 Research date: 2026-08-28
 
 Solver comparisons and dependency evidence as of the research date. Accepted
-behavior is in [ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md);
-selection examples are in the [usage guide](../structure-comparison.md#rmsd).
-Numerical invariants and tests live in [`src/rmsd.rs`](../../src/rmsd.rs).
+behavior is in [ADR 0008](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0008-cluster-structures-with-kabsch-and-k-medoids.md);
+selection examples are in the [usage guide](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md#rmsd).
+Numerical invariants and tests live in [`src/rmsd.rs`](https://github.com/y1zhou/arpeggia/blob/master/src/rmsd.rs).
 
 ## Scientific equivalence
 

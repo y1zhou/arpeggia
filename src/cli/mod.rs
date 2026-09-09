@@ -45,4 +45,5 @@ Repeat the chain in every comma-separated clause (A:1,A:3).
 An empty --rmsd-residues does not inherit --superpose-residues.
 Selections apply to both structures; rmsd --align-seqs uses reference numbering.
 Fitting needs at least three non-collinear atom pairs; evaluation needs one.
-See docs/structure-comparison.md for examples, schemas, and cache behavior.";
+Examples, schemas, and cache behavior:
+https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md";

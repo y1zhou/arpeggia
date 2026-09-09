@@ -3,9 +3,9 @@
 Arpeggia uses a serial `f64` Kabsch kernel and a packed pairwise RMSD matrix
 with k-medoids clustering. The public selection grammar, table schemas, input
 formats, cache behavior, and measured performance are documented in the
-[structure-clustering guide](../structure-comparison.md).
+[structure-clustering guide](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md).
 
-[ADR 0009](0009-separate-sequence-correspondence-from-rmsd-evaluation.md) extends
+[ADR 0009](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) extends
 two-structure RMSD with optional sequence correspondence and refinement; the
 exact-correspondence collection behavior below remains unchanged.
 
@@ -15,7 +15,7 @@ Selected atoms must correspond exactly after model and conformer selection.
 Their identities include chain, author residue number, insertion code, residue
 name, and atom name. A mismatch fails rather than silently intersecting atom
 sets. Sequence/structural alignment and weighting remain deferred at the
-correspondence boundary in [the RMSD module](../../src/rmsd.rs).
+correspondence boundary in [the RMSD module](https://github.com/y1zhou/arpeggia/blob/master/src/rmsd.rs).
 
 The Superposition Selection determines one proper rigid-body transform; the
 RMSD Selection is evaluated with that transform without recentering or
@@ -47,7 +47,7 @@ Sources: [Kabsch 1976](https://doi.org/10.1107/S0567739476001873),
 [Kabsch 1978](https://doi.org/10.1107/S0567739478001680),
 [Theobald 2005](https://doi.org/10.1107/S0108767305015266), and
 [Liu, Agrafiotis, and Theobald 2010](https://pmc.ncbi.nlm.nih.gov/articles/PMC2958452/).
-See the [superposition research](../research/structure-superposition.md) for
+See the [superposition research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/structure-superposition.md) for
 solver comparisons, QCP timing limitations, and dependency evidence. Plane fitting
 uses SVD on a different matrix and does not justify a shared solver abstraction.
 
@@ -80,7 +80,7 @@ is applied. Positive uniform scaling preserves the objective; a distance range
 that collapses relative to its maximum instead produces a calculation error.
 The adapter avoids a square matrix copy and retains raw distances for ordinary
 inputs. These numerical and convergence invariants are documented and tested
-in [the clustering module](../../src/clustering.rs).
+in [the clustering module](https://github.com/y1zhou/arpeggia/blob/master/src/clustering.rs).
 
 Iteration exhaustion is a calculation failure. FasterPAM's cumulative swap
 count sometimes requires a diagnostic pass to distinguish final-pass convergence
@@ -97,7 +97,7 @@ and the [kmedoids adapter API](https://docs.rs/kmedoids/0.5.5/kmedoids/arrayadap
 Average linkage remains a possible extension for a concrete hierarchy or
 RMSD-cutoff requirement. Density, spectral, and affinity methods introduce
 parameters or output semantics outside the fixed/automatic-count contract.
-The [clustering research](../research/structure-clustering.md) retains the
+The [clustering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/structure-clustering.md) retains the
 alternative-method comparison, additional crate survey, and supporting sources.
 
 ## Storage and execution boundaries
@@ -127,7 +127,7 @@ reductions. Nested atom-level parallelism is deferred until measured need.
 
 FasterPAM and DynMSC stay serial. Enabling parallel k-medoids would add
 `ndarray` and randomization without providing parallel DynMSC. The
-[local measurements](../benchmarks/structure-clustering.md#local-structure-clustering-benchmark)
+[local measurements](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/structure-clustering.md#local-structure-clustering-benchmark)
 support keeping pairwise RMSD as the parallel boundary.
 
 ## Persistence and validation
@@ -141,7 +141,7 @@ caches use no-clobber creation.
 Readers project required columns and reject wrong-size caches before complete
 table materialization. The original lazy NDJSON reader was replaced by an eager
 reader with a bounded row-count preflight after the
-[v0.9.2 cleanup size and performance audit](../research/v0.9.2-cleanup-audit.md).
+[v0.9.2 cleanup size and performance audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md).
 CSV and Parquet use eager readers. XLSX remains excluded because it adds unrelated
 reader/writer dependencies.
 

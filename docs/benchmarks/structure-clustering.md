@@ -1,6 +1,6 @@
 # Structure-clustering benchmark
 
-See the [structure-comparison guide](../structure-comparison.md) for usage,
+See the [structure-comparison guide](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md) for usage,
 selection syntax, output schemas, and cache behavior.
 
 ## Local structure-clustering benchmark
@@ -64,7 +64,7 @@ eight. Retaining atom identities only for the reference structure and releasing
 parser workers before pairwise calculation reduced the heavy-atom peak RSS
 from 148.8 to 35.5 MiB with one worker and from 173.4 to 57.0 MiB with eight
 workers, without changing either output. Peak RSS exceeds the estimate under
-[Memory and threads](../structure-comparison.md#memory-and-threads).
+[Memory and threads](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md#memory-and-threads).
 
 ### Independent superposition and RMSD selections
 

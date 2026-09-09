@@ -26,9 +26,9 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 
 ¹ The CLI writes the pair table as part of clustering; Python can calculate it independently.
 
-See [sequence alignment](docs/sequence-alignment.md),
-[structure comparison](docs/structure-comparison.md), and
-[scientific conventions](docs/scientific-conventions.md) for usage and assumptions.
+See [sequence alignment](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md),
+[structure comparison](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md), and
+[scientific conventions](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md) for usage and assumptions.
 
 Analyses accept PDB and mmCIF files with chain selections. Tabular Python
 results are Polars DataFrames; CLI tables support CSV, Parquet, and NDJSON.
@@ -247,7 +247,7 @@ cargo test --locked
 
 ## License
 
-GNU General Public License v3.0 - see [LICENSE](LICENSE) for details.
+GNU General Public License v3.0 - see [LICENSE](https://github.com/y1zhou/arpeggia/blob/master/LICENSE) for details.
 
 ## Credit
 

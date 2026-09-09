@@ -29,7 +29,7 @@
   Monomers without a Rosetta calibration are omitted with a warning.
 - RMSD uses uniform-weight Kabsch superposition with proper rotations and exact
   selected-atom correspondence by default. Optional [sequence correspondence and
-  refinement](sequence-alignment.md) preserve a separate evaluation population.
+  refinement](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md) preserve a separate evaluation population.
   Structure clustering uses the resulting
   pairwise RMSD matrix and observed medoid structures; it does not perform
   sequence alignment or add missing atoms.
@@ -128,9 +128,9 @@ unusable ring geometry produce a warning and omit that ring's interactions.
 | Two rings | Center distance ≤ 6.0 Å: classify relative ring-plane and center-vector angles as sandwich, displaced, parallel-in-plane, tilted, L, or T stacking. T stacking additionally requires distance ≤ 5.0 Å. |
 
 The implementation details and atom-typing tables live in the
-[candidate and label assembly](../src/contacts/complex.rs),
-[bond/distance rules](../src/contacts/vdw.rs),
-[hydrogen-bond rules](../src/contacts/hbond.rs),
-[charge rules](../src/contacts/ionic.rs),
-[hydrophobic rules](../src/contacts/hydrophobic.rs), and
-[aromatic geometry rules](../src/contacts/aromatic.rs).
+[candidate and label assembly](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/complex.rs),
+[bond/distance rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/vdw.rs),
+[hydrogen-bond rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/hbond.rs),
+[charge rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/ionic.rs),
+[hydrophobic rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/hydrophobic.rs), and
+[aromatic geometry rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/aromatic.rs).

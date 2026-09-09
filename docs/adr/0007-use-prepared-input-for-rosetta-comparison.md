@@ -39,7 +39,7 @@ without a separate demonstrated scientific need.
 
 ## Evidence and selected definitions
 
-The [v0.9.0 validation report](../benchmarks/v0.9.0-validation.html) records the
+The [v0.9.0 validation report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/v0.9.0-validation.html) records the
 reference comparisons, file hashes, atom counts, parameters, warnings, timings,
 and reproducibility details. Rosetta revision
 `597b55d6600c3939574ffee30a4469b26c3337bd` is the documented reference, not a
@@ -62,7 +62,7 @@ Selected standard SASA retains heavy-atom Shrake–Rupley at 100 points and a
 1.4 Å probe with ProtOr radii and elemental fallback. The validation report
 quantifies its lower total, polar, and hydrophobic SASA errors on 85 identically
 prepared structures; it does not establish numerical equivalence to Rosetta's
-LeGrand method. [ADR 0006](0006-unify-standard-sasa-records.md) records the shared
+LeGrand method. [ADR 0006](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0006-unify-standard-sasa-records.md) records the shared
 atom-record and polarity-partition contracts.
 
 One final human-readable report per benchmark retains its provenance and

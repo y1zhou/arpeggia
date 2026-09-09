@@ -103,7 +103,7 @@ forces ANSI color. Fields and JSON always contain plain data.
 Residue selectors use comma-separated chains and inclusive author-number ranges,
 e.g. `A:1-100,A:110-120,B`. Repeat the chain in each clause. Empty selectors
 independently mean all eligible residues; an empty evaluation selection never
-inherits the fitting selection. See the [selection guide](structure-comparison.md#rmsd)
+inherits the fitting selection. See the [selection guide](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md#rmsd)
 for insertion codes, negative numbers, and atom populations.
 
 ```python
@@ -176,5 +176,5 @@ without per-atom residuals or transformations. The CLI prints a detailed summary
 
 `pairwise_rmsd` and clustering still require exact correspondence. Sequence-aware
 collection comparisons and antibody numbering are follow-ups. See
-[ADR 0009](adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) for
-rationale and [validation](benchmarks/sequence-alignment.md) for reference checks.
+[ADR 0009](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) for
+rationale and [validation](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md) for reference checks.

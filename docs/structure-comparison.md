@@ -3,7 +3,7 @@
 Arpeggia superposes exactly corresponding protein atoms with the Kabsch
 algorithm and clusters the resulting pairwise RMSD matrix with k-medoids.
 Collection APIs require exact selected atom correspondence. Two-structure `rmsd`
-also supports optional [sequence correspondence and refinement](sequence-alignment.md).
+also supports optional [sequence correspondence and refinement](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md).
 
 ## RMSD
 
@@ -161,7 +161,7 @@ and number of pairs. Each Kabsch solve and k-medoids clustering remains single-t
 selects available processors.
 
 Algorithm choices and their rationale are recorded in
-[ADR 0008](adr/0008-cluster-structures-with-kabsch-and-k-medoids.md).
+[ADR 0008](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0008-cluster-structures-with-kabsch-and-k-medoids.md).
 
 Measured runtime and memory results are in the
-[structure-clustering benchmark](benchmarks/structure-clustering.md).
+[structure-clustering benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/structure-clustering.md).

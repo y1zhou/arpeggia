@@ -17,11 +17,11 @@ pub(crate) struct Args {
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Fit residues: comma-separated chains/ranges, e.g. A:1-100,B (empty: all)
+    /// Reference fit selection, e.g. A:1-100,B (empty: all; see correspondence rules below)
     #[arg(short = 's', long, default_value_t = String::new())]
     superpose_residues: String,
 
-    /// Evaluation residues, e.g. A:101-120 (empty: all; independent of fit selection)
+    /// Reference evaluation selection, e.g. A:101-120 (empty: all; independent of fit selection)
     #[arg(short = 'r', long, default_value_t = String::new())]
     rmsd_residues: String,
 

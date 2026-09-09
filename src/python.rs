@@ -61,10 +61,21 @@ fn clustering_method(value: &str) -> PyResult<crate::ClusteringMethod> {
 impl crate::SeqAlignment {
     /// Format statistics and three alignment rows, optionally with position rulers.
     ///
-    /// width limits visible columns including labels; None detects terminal width
-    /// or uses 80. color is auto, always, or never. Auto inspects sys.stdout and
-    /// respects NO_COLOR. rulers=False hides ticks but retains start/end numbers.
-    /// Data fields always remain plain strings without ANSI escapes.
+    /// Args:
+    ///     width (int | None): Total visible columns including labels. None
+    ///         detects terminal width or uses 80 when unavailable.
+    ///     color (str): "auto", "always", or "never". Auto (default) inspects
+    ///         sys.stdout and respects NO_COLOR.
+    ///     rulers (bool): Show position rulers by default. False hides ticks
+    ///         but retains start/end numbers.
+    ///
+    /// Returns:
+    ///     str: Statistics and wrapped alignment text. Color escapes appear
+    ///         only when enabled; stored data fields always remain plain.
+    ///
+    /// Raises:
+    ///     ValueError: The width cannot fit labels and one residue, or the
+    ///         color policy is unsupported.
     #[pyo3(name = "format", signature = (width=None, color="auto", rulers=true))]
     fn format_python(
         &self,
@@ -117,20 +128,26 @@ impl crate::RmsdResult {
 
 /// Align two unaligned amino-acid strings and return a read-only SeqAlignment.
 ///
+/// Printing the result shows colored, wrapped sequences and position rulers when
+/// the terminal permits. Use result.format(width=60, color="never", rulers=False)
+/// for plain output without rulers. Data fields contain no color escapes.
+///
 /// Args:
-///     reference, query (str): First and second input sequences. Lowercase is
+///     reference (str): Reference input sequence. Lowercase is
 ///         normalized; standard amino acids and B/Z/X/U/O are accepted. Inputs
 ///         must be non-empty and contain no whitespace, gaps, or stop symbols.
+///     query (str): Query input sequence, with the same alphabet restrictions.
 ///     mode (str): "global" (default) consumes both inputs; "local" selects
 ///         best-scoring subsequences; "semi-global" consumes the entire query
 ///         sequence with free reference terminal overhangs.
-///     gap_open, gap_extend (float): Positive costs, default 10 and 0.5, with
-///         at most two decimals and opening >= extension. A gap of length L
-///         costs gap_open + (L - 1) * gap_extend.
-///
-///     reference_name, query_name (str): Keyword-only display labels, default
-///         "Reference" and "Query". Names are stored on the result and in JSON;
-///         they do not affect scoring or correspondence.
+///     gap_open (float): Positive opening cost, default 10, with at most two
+///         decimals and no smaller than gap_extend. A gap of length L costs
+///         gap_open + (L - 1) * gap_extend.
+///     gap_extend (float): Positive cost per additional gap residue, default
+///         0.5, with at most two decimals and no larger than gap_open.
+///     reference_name (str): Keyword-only reference display label, default
+///         "Reference". Stored on the result and in JSON; does not affect scoring.
+///     query_name (str): Keyword-only query display label, default "Query".
 ///
 /// Returns:
 ///     SeqAlignment: Plain gapped aligned_reference/aligned_query strings,
@@ -142,12 +159,7 @@ impl crate::RmsdResult {
 ///         Empty local results have score zero and None alignment-length ratios.
 ///         U/O score as C/K with a warning but retain distinct identity.
 ///
-/// Display:
-///     print(result) shows colored, wrapped sequences and position rulers when
-///     the terminal permits. result.format(width=60, color="never", rulers=False)
-///     gives plain output without rulers. Fields contain no color escapes.
-///
-/// Example:
+/// Examples:
 ///     >>> alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")
 ///     >>> alignment.reference_span
 ///     (2, 11)
@@ -183,15 +195,21 @@ fn align_seqs(
 /// Superpose two PDB/mmCIF structures; return a read-only RmsdResult in Ångströms.
 ///
 /// Args:
-///     reference, query (str): Paths to the two structures.
+///     reference (str): Path to the reference PDB/mmCIF structure.
+///     query (str): Path to the query PDB/mmCIF structure to superpose.
 ///     model_num (int): Model serial; 0 independently selects each first model.
-///     superpose_residues (str): Residues determining the fit. Empty selects all
-///         eligible residues. Use "A" for a whole chain or "A:1-100,A:110-120,B"
+///     superpose_residues (str): Fit selection on the reference structure, using
+///         reference chain IDs and author residue numbers. With align_seqs=True,
+///         corresponding query residues come from the sequence alignment. With
+///         align_seqs=False, apply the same selection to the query and require
+///         exact atom identities. Empty selects all eligible residues.
+///         Use "A" for a whole chain or "A:1-100,A:110-120,B"
 ///         for a union of inclusive author-number ranges and chains. Repeat the
 ///         chain in each clause. Negative numbers ("A:-5--1") and insertion
 ///         codes ("B:10A-20") are accepted; "A:10" includes all insertion variants.
-///     rmsd_residues (str): Residues evaluated under the fitted transform, with
-///         the same syntax. Empty independently means all; it does not inherit
+///     rmsd_residues (str): Evaluation selection on the reference structure,
+///         using the same syntax and query-correspondence rules as the fit
+///         selection. Empty independently means all; it does not inherit
 ///         superpose_residues. Evaluation never determines or refits the transform.
 ///     atoms (str): "ca" (default), "backbone" (N/CA/C/O/OXT), "heavy", or "all".
 ///     align_seqs (bool): Align complete observed chains before atom selection.
@@ -204,8 +222,10 @@ fn align_seqs(
 ///     alignment_mode (str): "global" (default), "local", or "semi-global" for
 ///         final chain alignment. Semi-global consumes the complete query chain.
 ///         Chain inference independently scores shorter against longer semi-globally.
-///     gap_open, gap_extend (float): Alignment costs, default 10 and 0.5; positive,
-///         at most two decimals, opening >= extension. Gap cost is open+(L-1)*extend.
+///     gap_open (float): Positive alignment opening cost, default 10; at most
+///         two decimals and no smaller than gap_extend. Gap cost is open+(L-1)*extend.
+///     gap_extend (float): Positive cost per additional gap residue, default 0.5;
+///         at most two decimals and no larger than gap_open.
 ///     refine_cycles (int): Maximum rejection/refit rounds after the initial fit;
 ///         0 (default) performs no rejection. Stops early when unchanged or exact.
 ///     refine_cutoff (float): Positive rejection multiplier (default 2) of current
@@ -220,12 +240,13 @@ fn align_seqs(
 ///         Sequence mismatches can pair backbone atoms; side chains require matching
 ///         residue types, atom names, and elements. Omitted endpoints emit warnings.
 ///
-/// Example:
+/// Examples:
 ///     >>> result = arpeggia.rmsd("reference.cif", "query.cif", align_seqs=True,
 ///     ...     superpose_residues="A:1-100", rmsd_residues="A:101-120")
 ///     >>> print(result.rmsd, result.core_rmsd)
 ///
-/// See docs/structure-comparison.md for selection examples and output schemas.
+/// Selection examples and output schemas:
+/// https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md
 #[pyfunction]
 #[pyo3(signature = (reference, query, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", *, align_seqs=false, chain_map=None, alignment_mode="global", gap_open=10.0, gap_extend=0.5, refine_cycles=0, refine_cutoff=2.0))]
 #[allow(clippy::too_many_arguments)]
@@ -279,14 +300,17 @@ fn rmsd(
 ///     input (str): Non-recursive PDB/mmCIF directory, or CSV, Parquet, or NDJSON
 ///         manifest. At least two structures are required. Directory IDs are
 ///         filename stems; manifest relative paths resolve against the manifest.
-///     id_col, path_col (str): Manifest columns, default "id" and "path".
-///         IDs and resolved file paths must be unique.
+///     id_col (str): Manifest ID column, default "id". IDs must be unique.
+///     path_col (str): Manifest path column, default "path". Resolved file paths
+///         must be unique.
 ///     model_num (int): Model serial; 0 selects each structure's first model.
-///     superpose_residues, rmsd_residues (str): Independent fitting and evaluation
-///         selections. Each defaults to all eligible residues. Use "A:1-100,B"
-///         for inclusive author-number ranges/whole chains; repeat chain IDs in
-///         each comma-separated clause. Insertion codes and negative numbers
-///         are supported. Empty evaluation does not inherit the fitting selection.
+///     superpose_residues (str): Fit selection, applied to every structure using
+///         chain IDs and author numbering. Empty selects all eligible residues.
+///         Use "A:1-100,B" for inclusive ranges/whole chains; repeat chain IDs in
+///         comma-separated clauses. Insertion codes and negative numbers are valid.
+///     rmsd_residues (str): Evaluation selection with the same syntax, applied
+///         to every structure. Empty independently selects all eligible residues;
+///         it does not inherit superpose_residues.
 ///     atoms (str): "ca" (default), "backbone" (N/CA/C/O/OXT), "heavy", or "all".
 ///     num_threads (int): Worker limit; 0 uses available processors.
 ///     bypass_mem_check (bool): Skip heuristic memory checks (default False).
@@ -298,7 +322,7 @@ fn rmsd(
 ///         one row per unordered pair. Atom identities must agree across the
 ///         collection; sequence alignment and refinement are not supported here.
 ///
-/// Example:
+/// Examples:
 ///     >>> pairs = arpeggia.pairwise_rmsd("structures/", superpose_residues="A",
 ///     ...     rmsd_residues="B", num_threads=8)
 #[pyfunction]
@@ -339,7 +363,8 @@ fn pairwise_rmsd(
 ///     input (str | None): Directory or manifest accepted by pairwise_rmsd().
 ///     pairwise_rmsd (polars.DataFrame | None): Complete unordered pair table with
 ///         id_1, id_2, rmsd columns. Supply exactly one of input or pairwise_rmsd.
-///     id_col, path_col (str): Manifest ID/path columns, default "id"/"path".
+///     id_col (str): Manifest ID column, default "id".
+///     path_col (str): Manifest path column, default "path".
 ///     method (str): "k-medoids", currently the only supported method.
 ///     num_clusters (int | None): Fixed count from 1 through the structure count.
 ///         Takes precedence over max_clusters with a warning when both are given.
@@ -348,11 +373,13 @@ fn pairwise_rmsd(
 ///         An effectively identical ensemble forms one cluster automatically.
 ///     max_iterations (int): Iteration budget, default 100; nonconvergence fails.
 ///     model_num (int): Model serial; 0 selects each first model for input structures.
-///     superpose_residues, rmsd_residues (str): Independent fit/evaluation selections
-///         for input structures, each defaulting to all. Syntax: "A:1-100,B",
-///         a comma union of inclusive author-number ranges or whole chains;
-///         insertion codes and negative numbers are supported. Empty evaluation
-///         does not inherit the fit selection. Exact atom correspondence is required.
+///     superpose_residues (str): Fit selection on every input structure. Empty
+///         selects all eligible residues. Use "A:1-100,B" for a comma union of
+///         inclusive author-number ranges/whole chains; insertion codes and
+///         negative numbers are valid. Exact atom correspondence is required.
+///     rmsd_residues (str): Evaluation selection on every input structure, using
+///         the same syntax. Empty independently selects all eligible residues;
+///         it does not inherit superpose_residues.
 ///     atoms (str): "ca" (default), "backbone" (N/CA/C/O/OXT), "heavy", or "all".
 ///     num_threads (int): Pairwise worker limit; 0 uses available processors.
 ///     bypass_mem_check (bool): Skip heuristic memory checks, default False.
@@ -362,10 +389,11 @@ fn pairwise_rmsd(
 ///     polars.DataFrame: id (String), cluster_id (UInt32, zero-based), medoid_id
 ///         (String), rmsd_to_medoid (Float64, Ångströms).
 ///
-/// Example:
+/// Examples:
 ///     >>> clusters = arpeggia.cluster_structs(input="structures/", num_clusters=3)
 ///
-/// See docs/structure-comparison.md for schemas, CLI cache behavior, and memory use.
+/// Schemas, CLI cache behavior, and memory use:
+/// https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md
 #[pyfunction]
 #[pyo3(signature = (input=None, pairwise_rmsd=None, id_col="id", path_col="path", method="k-medoids", num_clusters=None, max_clusters=None, max_iterations=100, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
 #[allow(clippy::too_many_arguments)]
@@ -471,7 +499,7 @@ fn cluster_structs(
 ///         - to_chain, to_resn, to_resi, to_insertion, to_altloc, to_atomn, to_atomi
 ///         - sc_centroid_dist, sc_dihedral, sc_centroid_angle
 ///
-/// Example:
+/// Examples:
 ///     >>> import arpeggia
 ///     >>> contacts = arpeggia.contacts("structure.pdb", groups="/", vdw_comp=0.1)
 ///     >>> print(f"Found {len(contacts)} contacts")
@@ -547,7 +575,7 @@ fn contacts(
 ///           hydrophobic_sasa, unclassified_sasa
 ///         - chain: chain, sasa, polar_sasa, hydrophobic_sasa, unclassified_sasa
 ///
-/// Example:
+/// Examples:
 ///     >>> import arpeggia
 ///     >>> # Atom-level SASA for all chains
 ///     >>> sasa_df = arpeggia.sasa("structure.pdb", level="atom")
@@ -616,7 +644,7 @@ fn sasa(
 /// Returns:
 ///     float: The buried surface area at the interface in square Ångströms.
 ///
-/// Example:
+/// Examples:
 ///     >>> import arpeggia
 ///     >>> bsa = arpeggia.dsasa("structure.pdb", groups="A,B/C,D")
 ///     >>> print(f"Buried surface area: {bsa:.2f} Å²")
@@ -653,9 +681,14 @@ fn dsasa(
 ///     model_num (int): Model serial, or 0 for the first model.
 ///     num_threads (int): Worker limit, default 1; 0 uses available processors.
 ///
-/// The total is SASA(group1) + SASA(group2) - SASA(complex); partitions sum to
-/// that total. Example: total, polar, hydrophobic, unknown =
-/// arpeggia.dsasa_components("complex.cif", groups="H,L/A").
+/// Returns:
+///     tuple[float, float, float, float]: (total, polar, hydrophobic, unclassified)
+///         areas in Å². Total is SASA(group1)+SASA(group2)-SASA(complex), and the
+///         partitions sum to that total.
+///
+/// Examples:
+///     >>> total, polar, hydrophobic, unknown = arpeggia.dsasa_components(
+///     ...     "complex.cif", groups="H,L/A")
 #[pyfunction]
 #[pyo3(signature = (input_file, groups, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
 fn dsasa_components(
@@ -695,7 +728,7 @@ fn dsasa_components(
 ///     list[tuple[str, str]]: (chain ID, observed protein sequence) tuples.
 ///         Declared residues without coordinates are absent; use seqres() for those.
 ///
-/// Example:
+/// Examples:
 ///     >>> import arpeggia
 ///     >>> sequences = arpeggia.seq("structure.pdb")
 ///     >>> for chain_id, seq in sequences:
@@ -720,11 +753,17 @@ fn seq(
 
 /// Return declared PDB SEQRES or mmCIF entity-polymer sequences by chain.
 ///
-/// input_file is a PDB/mmCIF path. Returns list[tuple[str, str]] of (chain ID,
-/// sequence), including declared residues without coordinates. No coordinate model
-/// is selected. Use seq() for coordinate-observed protein sequences instead.
+/// No coordinate model is selected. Use seq() for observed protein sequences.
 ///
-/// Example: declared = arpeggia.seqres("structure.cif").
+/// Args:
+///     input_file (str): Path to a PDB or mmCIF file.
+///
+/// Returns:
+///     list[tuple[str, str]]: (chain ID, declared sequence) tuples, including
+///         declared residues without coordinates.
+///
+/// Examples:
+///     >>> declared = arpeggia.seqres("structure.cif")
 #[pyfunction]
 fn seqres(py: Python<'_>, input_file: String) -> PyResult<Vec<(String, String)>> {
     let analysis = py
@@ -754,7 +793,7 @@ fn seqres(py: Python<'_>, input_file: String) -> PyResult<Vec<(String, String)>>
 ///         - chain, resn, resi, insertion, sasa, polar_sasa,
 ///           hydrophobic_sasa, unclassified_sasa, relative_sasa
 ///
-/// Example:
+/// Examples:
 ///     >>> import arpeggia
 ///     >>> # RSA for all chains
 ///     >>> rsa = arpeggia.relative_sasa("structure.pdb", probe_radius=1.4)
@@ -825,7 +864,7 @@ fn relative_sasa(
 ///         - residue: chain, resn, resi, insertion, sc_sasa, sap_score,
 ///           max_sc_asa, relative_sc_sasa
 ///
-/// Example:
+/// Examples:
 ///     >>> import arpeggia
 ///     >>> # Residue-level SAP scores for all chains
 ///     >>> residue_sap = arpeggia.sap_score("structure.pdb")
@@ -902,7 +941,7 @@ fn sap_score(
 /// Returns:
 ///     float: The shape complementarity score (approximately -1 to 1).
 ///
-/// Example:
+/// Examples:
 ///     >>> import arpeggia
 ///     >>> sc = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
 ///     >>> print(f"SC Score: {sc:.3f}")

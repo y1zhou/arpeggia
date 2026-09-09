@@ -124,6 +124,12 @@ pub struct RmsdResult {
 /// Consumes structures to select conformers. Evaluation pairs never participate
 /// in rejection unless they also belong to the fitting selection; even then they
 /// remain in evaluation after rejection from fitting.
+///
+/// Selections use reference chain IDs and author residue numbers. With sequence
+/// alignment enabled, corresponding query residues come from that alignment;
+/// otherwise the same selectors apply to the query with exact atom identities.
+/// Both selections independently default to all eligible residues.
+/// See <https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md>.
 pub fn get_rmsd(
     mut reference: PDB,
     mut query: PDB,

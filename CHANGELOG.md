@@ -30,16 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for full evaluation RMSD and `.core_rmsd` for retained fitting pairs. Rust
   `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`. CLI RMSD
   output reports details by default and supports structured `--json` output.
-- Expanded CLI help and Python/IDE documentation with selection syntax,
+- Expanded CLI help and Google-style Python/IDE docstrings with reference
+  selection syntax,
   independent defaults, units, result semantics, and examples. Consolidated
-  structure-comparison usage in a dedicated guide and clarified Python/CLI names
-  in README.
+  structure-comparison usage in a dedicated guide, linked repository files through
+  GitHub for installed-package users, and clarified Python/CLI names in README.
 
 ### Validation
 
 - Qualified Hyalite against 2,745 Biopython reference cases and checked structural
   correspondence, refinement, and terminal displays. See the
-  [alignment validation and benchmarks](docs/benchmarks/sequence-alignment.md).
+  [alignment validation and benchmarks](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md).
 
 ## [0.9.2] - 2026-09-08
 
@@ -67,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and benchmark evidence, and reorganized README features and usage guidance.
   Removed machine-specific paths, unavailable benchmark commands, and repeated prose.
   Scientific conventions now include a contact-identification decision diagram
-  in a dedicated [document](docs/scientific-conventions.md).
+  in a dedicated [document](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md).
 
 ### Fixed
 
@@ -89,8 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   threads and retained identical outputs. A synthetic 5,632-ring case reduced
   peak process RSS from about 249 MiB to 7 MiB. These are ring-classification
   measurements, not end-to-end contact-analysis speedups; details are in the
-  [cleanup audit](docs/research/v0.9.2-cleanup-audit.md#ring-ring-enumeration-benchmark).
-- The [5B8C benchmark and cleanup audit](docs/research/v0.9.2-cleanup-audit.md)
+  [cleanup audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md#ring-ring-enumeration-benchmark).
+- The [5B8C benchmark and cleanup audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md)
   records essentially unchanged contact generation (+0.8–1.2%) and unchanged
   or faster NDJSON loading on a 2,574-row contacts table after removing the
   lazy engine. These measurements do not establish performance for all inputs.

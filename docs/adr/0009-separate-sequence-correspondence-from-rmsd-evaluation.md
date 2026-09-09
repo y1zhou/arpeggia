@@ -1,6 +1,6 @@
 # Separate sequence correspondence from RMSD evaluation
 
-This decision extends [ADR 0008](0008-cluster-structures-with-kabsch-and-k-medoids.md)
+This decision extends [ADR 0008](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0008-cluster-structures-with-kabsch-and-k-medoids.md)
 with optional sequence correspondence while preserving independent fitting and
 evaluation populations.
 
@@ -163,13 +163,13 @@ Structural regressions cover renumbering, chain assignment and ambiguity,
 substitutions, missing atoms, independent fit/evaluation selections, refinement
 failure, and evaluation of pairs rejected from fitting. Exact-correspondence RMSD
 retains its numerical behavior despite the new result type. The
-[validation report](../benchmarks/sequence-alignment.md) records the checks and
+[validation report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md) records the checks and
 measured runtime and package sizes.
 
 Backend evidence: [Hyalite 0.4.0 source](https://docs.rs/crate/hyalite/0.4.0/source/)
 and [Rust-Bio manifest](https://docs.rs/crate/bio/4.0.1/source/Cargo.toml.orig).
 
-The [sequence research](../research/protein-sequence-alignment-methods.md)
+The [sequence research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/protein-sequence-alignment-methods.md)
 explains scoring and end-gap objectives; the
-[PyMOL audit](../research/pymol-superposition-and-rmsd.md) documents the relative
+[PyMOL audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/pymol-superposition-and-rmsd.md) documents the relative
 rejection rule and the distinction between core and full-pair evaluation.
