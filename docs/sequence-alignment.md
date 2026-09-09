@@ -36,8 +36,8 @@ do not establish a unique biological correspondence.
 half-open. `aligned_reference` and `aligned_query` contain the scored alignment
 with `-` for gaps; `operations` describes reference-to-query changes. These three
 plain strings have equal lengths. Clipped terminal segments remain in the original
-inputs, outside the spans and aligned strings. These fields replace `.columns`;
-input indices can be recovered by counting nongap residues from each span start.
+inputs, outside the spans and aligned strings. Input indices can be recovered
+by counting nongap residues from each span start.
 
 | Attribute | Meaning |
 | --- | --- |
@@ -49,7 +49,7 @@ input indices can be recovered by counting nongap residues from each span start.
 | `gap_residues`, `gap_runs` | Residues opposite gaps; contiguous gap runs |
 | `edit_distance` | Minimum full-input single-residue substitutions, insertions, and deletions |
 
-A local alignment without a positive match has score zero, empty columns,
+A local alignment without a positive match has score zero, empty aligned strings,
 `None` alignment-length ratios, and zero shorter-input ratios. Edit distance
 still compares the complete inputs. JSON represents undefined ratios as `null`.
 
@@ -146,9 +146,10 @@ Rejection is permanent and atom-wise. It also works without sequence alignment,
 using the existing exact correspondence; it does not infer structural matches
 as PyMOL `super` does.
 
-`rmsd()` now returns a read-only `RmsdResult`. Replace scalar uses with
+`rmsd()` returns a read-only `RmsdResult`. When migrating from the scalar API, use
 `result.rmsd`; Rust callers use `get_rmsd(reference, query, &RmsdOptions)` and
-read `analysis.value.rmsd`.
+read `analysis.value.rmsd`. Python callers using the old `mobile=` keyword
+should use `query=` for the second structure.
 
 - `rmsd`: all mapped evaluation pairs under the final retained-pair transform.
 - `core_rmsd`: retained fitting pairs under that transform.

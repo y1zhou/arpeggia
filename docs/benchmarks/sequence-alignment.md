@@ -44,7 +44,7 @@ A threshold that removes every fitting pair fails with the surviving count.
 
 ## Python performance and package size
 
-Release wheels for baseline `e3a1677` (v0.9.2) and API milestone `aded22f` used the same
+Release wheels for baseline `e3a1677` (v0.9.2) and measured feature build `aded22f` used the same
 Rust 1.96 toolchain and CPython 3.13 on Linux x86-64 (Ryzen 9 9950X3D).
 The table reports the median of five fresh-process medians, with three warm-up
 calls per process and alternating case order.
@@ -81,8 +81,9 @@ pre-commit checks.
 
 ## Gapped results and display validation
 
-The measurements above predate colored rendering and expanded help. The display
-follow-up passes 208 Rust tests and 18 Python tests against the rebuilt editable
+The artifact measurements above cover the alignment engine and API before display
+rendering and expanded help; they are not final release-size measurements.
+The complete feature passes 208 Rust tests and 18 Python tests against the rebuilt editable
 extension, with Python warnings treated as errors. Regressions cover gapped
 strings and recovered residue indices, insertion/deletion orientation, independent
 rulers across gaps, narrow wrapping, gray clipping, empty local results, and plain

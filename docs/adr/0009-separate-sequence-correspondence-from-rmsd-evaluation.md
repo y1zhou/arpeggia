@@ -1,7 +1,6 @@
 # Separate sequence correspondence from RMSD evaluation
 
-Accepted design; implementation and backend qualification follow these decisions.
-This extends [ADR 0008](0008-cluster-structures-with-kabsch-and-k-medoids.md)
+This decision extends [ADR 0008](0008-cluster-structures-with-kabsch-and-k-medoids.md)
 with optional sequence correspondence while preserving independent fitting and
 evaluation populations.
 
@@ -39,8 +38,8 @@ backend; structural RMSD is not used to break sequence-alignment ties.
 
 ## Structural correspondence
 
-The first implementation extends two-structure `rmsd`. Pairwise-table and
-clustering APIs are intended follow-ups: pair-specific correspondence must first
+Sequence correspondence applies to two-structure `rmsd`. Extending pairwise-table
+and clustering APIs requires further work: pair-specific correspondence must first
 be reconciled with their shared coordinate layouts and comparison semantics.
 Future antibody numbering can consume sequence correspondence but requires its
 own domain and numbering definitions.
@@ -110,8 +109,7 @@ for parameters, mappings, and statistics.
 
 ### Gapped sequences and display
 
-Accepted follow-up design.
-Replace public index-pair columns with equal-length `aligned_reference`,
+`SeqAlignment` exposes equal-length `aligned_reference`,
 `aligned_query`, and `operations` strings. Gapped strings make downstream use
 direct; original inputs and zero-based, half-open spans retain enough information
 to reconstruct index pairs internally. Strings contain only the scored alignment,
@@ -119,7 +117,7 @@ using `-` for gaps and no color escapes. Operations describe reference-to-query
 changes: space for match, `+` for insertion, `-` for deletion, and `x` for
 substitution.
 
-Render reference, query, and operations as three rows. Insertions are green,
+Render reference and query rows followed by an unlabeled operation row. Insertions are green,
 deletions red, and mismatches yellow, coloring both sequence cells and the marker;
 matches are uncolored. Clipped tails are gray with blank operation cells, with
 prefixes right-aligned against the scored alignment and suffixes left-aligned
@@ -149,25 +147,19 @@ with full displays available through its individual chain alignment objects.
 
 ## Backend qualification
 
-Prefer pinned Hyalite 0.4.0, conditional on independent validation. Its exact
-modes and deterministic traceback cover the required objectives without normal
-dependencies; its recent introduction warrants qualification rather than relying
-on feature claims. Rust-Bio remains an alternative if qualification fails.
-Arpeggia owns the public result types and scoring semantics.
-
-Check scores against an independently configured reference such as Biopython,
-reconstruct scores from traceback operations, and verify spans and consumed input
-indices. Compare exact residue maps where the optimum is unique; tied optima need
-determinism and equal scores, not identical paths across implementations. Include
-all three modes, terminal and internal gaps, repeats, substitutions, unusual
-residues, empty local results, and numeric boundaries. Record runtime and package
-impact before accepting the backend.
+Hyalite 0.4.0 provides exact alignment modes and deterministic traceback without
+normal dependencies. Arpeggia owns the public result types and scoring semantics.
+Its recent introduction warranted independent qualification before adoption:
+2,745 cases matched Biopython scores, with tracebacks checked for score and span
+consistency. Tied optima require deterministic results within the pinned backend,
+not identical paths across implementations.
 
 Structural regressions cover renumbering, chain assignment and ambiguity,
 substitutions, missing atoms, independent fit/evaluation selections, refinement
-failure, and preservation of evaluation pairs rejected from fitting. The default
-exact-correspondence calculation must retain its numerical result despite the
-new return type.
+failure, and evaluation of pairs rejected from fitting. Exact-correspondence RMSD
+retains its numerical behavior despite the new result type. The
+[validation report](../benchmarks/sequence-alignment.md) records the checks and
+measured runtime and package sizes.
 
 Backend evidence: [Hyalite 0.4.0 source](https://docs.rs/crate/hyalite/0.4.0/source/)
 and [Rust-Bio manifest](https://docs.rs/crate/bio/4.0.1/source/Cargo.toml.orig).

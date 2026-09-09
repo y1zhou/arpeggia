@@ -7,48 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Removed the operation-row label from CLI and Python alignment displays;
-  colored edit markers remain aligned below the sequences.
-
-- Renamed the second alignment/RMSD input from `mobile` to `query`, including
-  Python keywords, result fields, CLI labels, and reference-to-query mappings.
-
-- Expanded CLI help and Python/IDE documentation with residue selection syntax,
-  independent defaults, units, result semantics, and examples. Moved structure
-  comparison usage out of the benchmark document into a dedicated guide.
-
-- Replaced `SeqAlignment.columns` with plain gapped `aligned_reference`,
-  `aligned_query`, and `operations` strings; structural mapping derives indices
-  internally from the alignment spans.
-
-- Python `rmsd()` now returns a read-only `RmsdResult`; use `.rmsd` for full
-  evaluation RMSD and `.core_rmsd` for retained fitting pairs. The CLI reports
-  details by default and supports `--json` instead of printing one scalar.
-
-- Rust `get_rmsd` now accepts `RmsdOptions` and returns a detailed `RmsdResult`
-  inside `Analysis`. Evaluation RMSD remains separate from retained-core RMSD.
-
 ### Added
 
-- Added shared CLI/Python alignment displays with colored edits and clipped
-  tails, terminal-width wrapping, input position rulers, and explicit width,
-  color, and ruler-visibility controls.
-- Exposed `align_seqs()` and read-only alignment/result classes in Python, with
-  typed mappings and statistics. Added `align-seqs` and sequence/refinement flags
-  to the RMSD CLI; JSON includes parameters and correspondence.
-- Optional observed-sequence RMSD correspondence with reference-based selections,
-  explicit chain maps or unique maximum-score one-to-one inference, conservative
-  atom pairing across substitutions, and omission diagnostics.
-- Optional permanent atom-wise rejection and refitting. Evaluation retains every
-  mapped selected pair; degenerate surviving fitting sets fail explicitly.
-- Added exact pairwise protein sequence alignment with global, local, and
-  second-sequence-full semi-global modes, BLOSUM62 and configurable affine gap
-  costs. Results retain index mappings, aligned spans, gap statistics, both
-  identity/coverage normalizations, and independent full-input edit distance.
-- Qualified pinned Hyalite against 2,745 Biopython reference cases; see the
-  [sequence alignment validation](docs/benchmarks/sequence-alignment.md).
+- Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI
+  `align-seqs`: global, local, and query-full semi-global modes with BLOSUM62
+  and configurable affine gap costs. `SeqAlignment` includes gapped strings,
+  operations, input spans, identity/coverage ratios, gap statistics, and full-input
+  edit distance.
+- Shared CLI/Python alignment displays with colored edits and clipped tails,
+  terminal-width wrapping, position rulers, and width/color/ruler controls.
+- Optional observed-sequence correspondence before two-structure RMSD, with
+  reference-based selections, explicit chain maps or unique maximum-score
+  inference, and diagnostics for omitted atoms.
+- Optional atom-wise rejection and refitting. Final evaluation retains all mapped
+  selected pairs, including rejected fitting pairs; degenerate surviving fits fail.
+
+### Changed
+
+- Python `rmsd()` returns a read-only `RmsdResult` instead of a scalar; use `.rmsd`
+  for full evaluation RMSD and `.core_rmsd` for retained fitting pairs. Rust
+  `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`. CLI RMSD
+  output reports details by default and supports structured `--json` output.
+- Expanded CLI help and Python/IDE documentation with selection syntax,
+  independent defaults, units, result semantics, and examples. Consolidated
+  structure-comparison usage in a dedicated guide and clarified Python/CLI names
+  in README.
+
+### Validation
+
+- Qualified Hyalite against 2,745 Biopython reference cases and checked structural
+  correspondence, refinement, and terminal displays. See the
+  [alignment validation and benchmarks](docs/benchmarks/sequence-alignment.md).
 
 ## [0.9.2] - 2026-09-08
 
