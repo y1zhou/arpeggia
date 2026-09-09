@@ -75,7 +75,7 @@ Consequently, `super` is not merely `align` with additional rejection cycles. It
 
 ## 3. The exact outer refinement rule
 
-The decisive code is in `ExecutiveRMS`, in the audited file's approximately 10995–11065 region. For each current mobile coordinate, PyMOL applies the current trial transformation, calculates its distance from the corresponding target coordinate, and tests:
+The decisive code is in `ExecutiveRMS`, in the audited file's approximately 10995–11065 region. For each current query coordinate, PyMOL applies the current trial transformation, calculates its distance from the corresponding target coordinate, and tests:
 
 ```cpp
 if ((diff3f(v1, v2) / rms) > refine)
@@ -222,20 +222,23 @@ The Python defaults `mobile_state=0` and `target_state=0` are forwarded as negat
 
 For a single structure comparison, explicitly pass state 1 or another intended state. For ensembles, iterate the desired state pairs and define whether every model uses its own fit or a shared reference-frame fit. Record object transformation settings as well: PyMOL can represent movement through coordinates or object/state matrices.[^states][^output]
 
+PyMOL calls the query object `mobile`; upstream parameter names such as
+`mobile_state` and documented argument order retain PyMOL terminology.
+
 ## 7. A practical PyMOL audit pattern
 
-The following example assumes two clean, single-chain objects named `mobile` and `target`, one intended conformer per atom, and state 1. It is an example for execution inside PyMOL; it was not run against a PyMOL binary in this research session.
+The following example assumes two clean, single-chain objects named `query` and `target`, one intended conformer per atom, and state 1. It is an example for execution inside PyMOL; it was not run against a PyMOL binary in this research session.
 
 ```python
 from pymol import cmd
 import numpy as np
 
-mobile_selection = "mobile and polymer.protein and name CA"
+query_selection = "query and polymer.protein and name CA"
 target_selection = "target and polymer.protein and name CA"
 
 # Save the initial mapping without moving either object.
 initial = cmd.align(
-    mobile_selection, target_selection,
+    query_selection, target_selection,
     cycles=0, transform=0, object="all_pairs", reset=1,
     mobile_state=1, target_state=1,
 )
@@ -243,7 +246,7 @@ original_pairs = cmd.get_raw_alignment("all_pairs")
 
 # Fit and reject using the same sequence-alignment settings.
 refined = cmd.align(
-    mobile_selection, target_selection,
+    query_selection, target_selection,
     cutoff=2.0, cycles=5, transform=1,
     object="core_pairs", reset=1,
     mobile_state=1, target_state=1,
@@ -254,10 +257,10 @@ refined = cmd.align(
 squared_distances = []
 for column in original_pairs:
     pair = dict(column)  # raw alignment entries are (object_name, atom_index)
-    if "mobile" not in pair or "target" not in pair:
+    if "query" not in pair or "target" not in pair:
         continue
     x = np.asarray(cmd.get_atom_coords(
-        f"mobile and index {pair['mobile']}", state=1
+        f"query and index {pair['query']}", state=1
     ), dtype=float)
     y = np.asarray(cmd.get_atom_coords(
         f"target and index {pair['target']}", state=1

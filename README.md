@@ -136,7 +136,7 @@ declared_sequences = arpeggia.seqres("structure.pdb")
 # Superpose on chain A, measure chains B/C, and cluster a pairwise matrix
 result = arpeggia.rmsd(
     "reference.cif",
-    "mobile.cif",
+    "query.cif",
     superpose_residues="A",
     rmsd_residues="B,C",
     atoms="ca",
@@ -201,7 +201,7 @@ arpeggia seq structure.pdb
 arpeggia seqres structure.pdb
 
 # RMSD and fixed-count clustering; save the reusable long pair table
-arpeggia rmsd reference.cif mobile.cif --atoms backbone
+arpeggia rmsd reference.cif query.cif --atoms backbone
 arpeggia cluster-structs -i structures/ -o results/ \
   --num-clusters 5 --pairwise-rmsd --num-threads 8
 ```

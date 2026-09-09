@@ -70,7 +70,7 @@ pub struct SeqAlignment {
     /// Normalized first sequence (reference).
     pub reference: String,
     /// Normalized second sequence.
-    pub mobile: String,
+    pub query: String,
     /// Global, local, or semi-global objective.
     pub mode: String,
     /// Substitution matrix name.
@@ -84,12 +84,12 @@ pub struct SeqAlignment {
     /// Aligned first-sequence span, excluding clipping.
     pub reference_span: (usize, usize),
     /// Aligned second-sequence span, excluding clipping.
-    pub mobile_span: (usize, usize),
+    pub query_span: (usize, usize),
     /// Scored reference alignment, with `-` for gaps and without clipped tails.
     pub aligned_reference: String,
-    /// Scored mobile alignment, with `-` for gaps and without clipped tails.
-    pub aligned_mobile: String,
-    /// Reference-to-mobile operations: space (match), + (insertion), - (deletion), x (mismatch).
+    /// Scored query alignment, with `-` for gaps and without clipped tails.
+    pub aligned_query: String,
+    /// Reference-to-query operations: space (match), + (insertion), - (deletion), x (mismatch).
     pub operations: String,
     /// Number of columns, including gaps.
     pub alignment_length: usize,
@@ -121,10 +121,10 @@ impl SeqAlignment {
     // Normalized ASCII strings have equal aligned lengths. Recover correspondence
     // only when needed, without storing a second representation of the alignment.
     pub(crate) fn columns(&self) -> impl Iterator<Item = (Option<usize>, Option<usize>)> + '_ {
-        let (mut i, mut j) = (self.reference_span.0, self.mobile_span.0);
+        let (mut i, mut j) = (self.reference_span.0, self.query_span.0);
         self.aligned_reference
             .bytes()
-            .zip(self.aligned_mobile.bytes())
+            .zip(self.aligned_query.bytes())
             .map(move |(a, b)| {
                 let left = (a != b'-').then(|| {
                     let index = i;
@@ -191,14 +191,14 @@ pub(crate) fn backend_error(error: hyalite::Error) -> ArpeggiaError {
 /// empty alignment. U/O score as C/K with a diagnostic but retain their identity.
 pub fn align_seqs(
     reference: &str,
-    mobile: &str,
+    query: &str,
     options: &SeqAlignOptions,
 ) -> ArpeggiaResult<Analysis<SeqAlignment>> {
     let scoring = scoring(options)?;
     let first = encode(reference)?;
-    let second = encode(mobile)?;
+    let second = encode(query)?;
     let reference = reference.to_ascii_uppercase();
-    let mobile = mobile.to_ascii_uppercase();
+    let query = query.to_ascii_uppercase();
     // Limit the full-matrix working set; the backend recomputes checkpoints above
     // this budget without changing the optimum. Retry budget exhaustion with the
     // exact checkpoint requirement so this is not a sequence-length ceiling.
@@ -221,7 +221,7 @@ pub fn align_seqs(
     }
     .map_err(backend_error)?;
     let mut aligned_reference = String::with_capacity(alignment.ops.len());
-    let mut aligned_mobile = String::with_capacity(alignment.ops.len());
+    let mut aligned_query = String::with_capacity(alignment.ops.len());
     let mut operations = String::with_capacity(alignment.ops.len());
     let (mut i, mut j) = (alignment.query_start, alignment.target_start);
     let (mut matches, mut paired, mut gap_runs) = (0, 0, 0);
@@ -238,9 +238,9 @@ pub fn align_seqs(
         last_gap = gap;
         match op {
             hyalite::AlignOp::Match | hyalite::AlignOp::Mismatch => {
-                let same = reference.as_bytes()[i] == mobile.as_bytes()[j];
+                let same = reference.as_bytes()[i] == query.as_bytes()[j];
                 aligned_reference.push(reference.as_bytes()[i] as char);
-                aligned_mobile.push(mobile.as_bytes()[j] as char);
+                aligned_query.push(query.as_bytes()[j] as char);
                 operations.push(if same { ' ' } else { 'x' });
                 paired += 1;
                 matches += usize::from(same);
@@ -249,24 +249,24 @@ pub fn align_seqs(
             }
             hyalite::AlignOp::Ins => {
                 aligned_reference.push(reference.as_bytes()[i] as char);
-                aligned_mobile.push('-');
+                aligned_query.push('-');
                 operations.push('-');
                 i += 1;
             }
             hyalite::AlignOp::Del => {
                 aligned_reference.push('-');
-                aligned_mobile.push(mobile.as_bytes()[j] as char);
+                aligned_query.push(query.as_bytes()[j] as char);
                 operations.push('+');
                 j += 1;
             }
         }
     }
     let length = operations.len();
-    let shorter = reference.len().min(mobile.len());
+    let shorter = reference.len().min(query.len());
     let mut warnings = Vec::new();
     if reference
         .bytes()
-        .chain(mobile.bytes())
+        .chain(query.bytes())
         .any(|b| matches!(b, b'U' | b'O'))
     {
         warnings.push(AnalysisWarning::new(
@@ -274,20 +274,20 @@ pub fn align_seqs(
             "U/O score as C/K in BLOSUM62; identities retain the original symbols",
         ));
     }
-    let edit_distance = levenshtein(reference.as_bytes(), mobile.as_bytes());
+    let edit_distance = levenshtein(reference.as_bytes(), query.as_bytes());
     Ok(Analysis::new(
         SeqAlignment {
             reference,
-            mobile,
+            query,
             mode: options.mode.name().into(),
             matrix: "BLOSUM62".into(),
             gap_open: options.gap_open,
             gap_extend: options.gap_extend,
             score: f64::from(alignment.score) / 100.0,
             reference_span: (alignment.query_start, alignment.query_end),
-            mobile_span: (alignment.target_start, alignment.target_end),
+            query_span: (alignment.target_start, alignment.target_end),
             aligned_reference,
-            aligned_mobile,
+            aligned_query,
             operations,
             alignment_length: length,
             shorter_length: shorter,
@@ -344,13 +344,13 @@ mod tests {
             .unwrap()
             .value;
         assert_eq!(a.reference_span, (2, 11));
-        assert_eq!(a.mobile_span, (0, 9));
+        assert_eq!(a.query_span, (0, 9));
         assert_eq!(a.edit_distance, 4);
         assert_eq!(a.coverage_shorter, 1.0);
         let reverse = align_seqs("ACDEFGHIK", "GGACDEFGHIKGG", &opts)
             .unwrap()
             .value;
-        assert_eq!(reverse.mobile_span, (0, 13));
+        assert_eq!(reverse.query_span, (0, 13));
         assert!(reverse.gap_residues >= 4);
         assert!(reverse.score < a.score);
     }
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(a.coverage_alignment, Some(9.0 / 12.0));
         assert_eq!(a.coverage_shorter, 1.0);
         assert_eq!(a.aligned_reference, "ACD---EFGHIK");
-        assert_eq!(a.aligned_mobile, "ACDQQQEFGHIK");
+        assert_eq!(a.aligned_query, "ACDQQQEFGHIK");
         assert_eq!(a.operations, "   +++      ");
         assert_eq!(a.columns().nth(6), Some((Some(3), Some(6))));
         let reversed = align_seqs("ACDQQQEFGHIK", "ACDEFGHIK", &SeqAlignOptions::default())
@@ -382,9 +382,7 @@ mod tests {
         .value;
         assert_eq!(a.score, 0.0);
         assert!(
-            a.aligned_reference.is_empty()
-                && a.aligned_mobile.is_empty()
-                && a.operations.is_empty()
+            a.aligned_reference.is_empty() && a.aligned_query.is_empty() && a.operations.is_empty()
         );
         assert_eq!(a.identity_alignment, None);
         assert_eq!(a.coverage_alignment, None);

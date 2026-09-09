@@ -7,8 +7,8 @@ import arpeggia
 
 alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")
 print(alignment.score, alignment.identity_alignment, alignment.edit_distance)
-print(alignment.reference_span, alignment.mobile_span)  # (2, 11), (0, 9)
-print(alignment.aligned_reference, alignment.aligned_mobile)
+print(alignment.reference_span, alignment.query_span)  # (2, 11), (0, 9)
+print(alignment.aligned_reference, alignment.aligned_query)
 print(alignment.operations)  # spaces for matches; + insertion, - deletion, x mismatch
 ```
 
@@ -33,8 +33,8 @@ empty inputs are invalid. One deterministic optimum is returned; equal scores
 do not establish a unique biological correspondence.
 
 `SeqAlignment` has read-only Python attributes. Spans are zero-based and
-half-open. `aligned_reference` and `aligned_mobile` contain the scored alignment
-with `-` for gaps; `operations` describes reference-to-mobile changes. These three
+half-open. `aligned_reference` and `aligned_query` contain the scored alignment
+with `-` for gaps; `operations` describes reference-to-query changes. These three
 plain strings have equal lengths. Clipped terminal segments remain in the original
 inputs, outside the spans and aligned strings. These fields replace `.columns`;
 input indices can be recovered by counting nongap residues from each span start.
@@ -56,7 +56,7 @@ still compares the complete inputs. JSON represents undefined ratios as `null`.
 ## Display an alignment
 
 Evaluating or printing a Python `SeqAlignment` shows statistics followed by
-reference, mobile, and operation rows. The CLI uses the same layout, including
+reference, query, and operation rows. The CLI uses the same layout, including
 per-chain alignments from `rmsd --align-seqs`.
 
 ```python
@@ -69,7 +69,7 @@ print(alignment.format(width=60, color="never", rulers=False))
 arpeggia align-seqs ACDEFGHIKLMN ACDFGHIKLMN --width 60 --no-rulers
 ```
 
-Operations describe reference-to-mobile changes: deletions are red (`-`),
+Operations describe reference-to-query changes: deletions are red (`-`),
 insertions green (`+`), mismatches yellow (`x`), and matches uncolored (space).
 Both sequence cells and the operation marker share the color. Unaligned tails
 are gray with blank operation cells; they do not contribute to alignment
@@ -98,7 +98,7 @@ for insertion codes, negative numbers, and atom populations.
 
 ```python
 result = arpeggia.rmsd(
-    "reference.cif", "mobile.cif",
+    "reference.cif", "query.cif",
     align_seqs=True,
     chain_map={"A": "H", "B": "L"},
     superpose_residues="A:1-100",
@@ -110,7 +110,7 @@ print(result.rmsd, result.core_rmsd, result.retained_fit_atoms)
 ```
 
 ```bash
-arpeggia rmsd reference.cif mobile.cif \
+arpeggia rmsd reference.cif query.cif \
   --align-seqs --chain-map A=H --chain-map B=L \
   --superpose-residues A:1-100 --rmsd-residues B \
   --refine-cycles 2 --json
@@ -125,16 +125,16 @@ same normalized amino-acid type, atom name, and element. Missing counterparts
 are omitted with diagnostics; sequence alignment does not reconstruct atoms.
 
 An explicit chain map must cover exactly the reference chains used by either
-selection and assign unique mobile partners. Without a map, Arpeggia scores
-all relevant reference/mobile chain pairs semi-globally, consuming shorter against
+selection and assign unique query partners. Without a map, Arpeggia scores
+all relevant reference/query chain pairs semi-globally, consuming shorter against
 longer, and maximizes the total score of a one-to-one assignment. All inferred
 pair scores must be positive. An absent complete assignment or tied optimum
-requires an explicit map; unused mobile chains are allowed. Positive scores
+requires an explicit map; unused query chains are allowed. Positive scores
 alone do not establish homology: inspect the returned identity and coverage.
 
 Final residue alignments follow `alignment_mode` (default global), independently
 of the semi-global scoring used to infer chain partners. Reference remains first,
-mobile second, so final semi-global alignment consumes the full mobile chain.
+query second, so final semi-global alignment consumes the full query chain.
 
 ## Refinement and result migration
 
@@ -147,7 +147,7 @@ using the existing exact correspondence; it does not infer structural matches
 as PyMOL `super` does.
 
 `rmsd()` now returns a read-only `RmsdResult`. Replace scalar uses with
-`result.rmsd`; Rust callers use `get_rmsd(reference, mobile, &RmsdOptions)` and
+`result.rmsd`; Rust callers use `get_rmsd(reference, query, &RmsdOptions)` and
 read `analysis.value.rmsd`.
 
 - `rmsd`: all mapped evaluation pairs under the final retained-pair transform.

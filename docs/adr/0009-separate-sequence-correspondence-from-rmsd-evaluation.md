@@ -53,16 +53,16 @@ homomer chains, infer mappings from all-to-all semi-global alignments, consuming
 the shorter chain against the longer. Maximize summed raw scores over a
 one-to-one chain assignment. A tied optimum requires explicit mapping. Every
 reference chain used by either residue selection requires a partner; unused
-mobile chains are allowed. Inferred pair scores must be positive, with identity
+query chains are allowed. Inferred pair scores must be positive, with identity
 and coverage reported; no universal homology threshold is imposed. Explicit
 mapping can override score-based inference. Infer only for reference chains used
-by either selection, against all eligible mobile chains. Explicit maps cover all
-relevant reference chains, use unique mobile partners, and disable inference.
+by either selection, against all eligible query chains. Explicit maps cover all
+relevant reference chains, use unique query partners, and disable inference.
 
 Chain inference and final residue alignment are separate: inference uses
 shorter-against-longer semi-global scores, while final alignment uses the selected
-mode with reference first and mobile second. In alignment mode, both residue
-selectors address reference author numbering and map to mobile residues after
+mode with reference first and query second. In alignment mode, both residue
+selectors address reference author numbering and map to query residues after
 complete observed chains have been aligned. Without alignment, existing exact
 correspondence and selector behavior remain.
 
@@ -112,14 +112,14 @@ for parameters, mappings, and statistics.
 
 Accepted follow-up design.
 Replace public index-pair columns with equal-length `aligned_reference`,
-`aligned_mobile`, and `operations` strings. Gapped strings make downstream use
+`aligned_query`, and `operations` strings. Gapped strings make downstream use
 direct; original inputs and zero-based, half-open spans retain enough information
 to reconstruct index pairs internally. Strings contain only the scored alignment,
-using `-` for gaps and no color escapes. Operations describe reference-to-mobile
+using `-` for gaps and no color escapes. Operations describe reference-to-query
 changes: space for match, `+` for insertion, `-` for deletion, and `x` for
 substitution.
 
-Render reference, mobile, and operations as three rows. Insertions are green,
+Render reference, query, and operations as three rows. Insertions are green,
 deletions red, and mismatches yellow, coloring both sequence cells and the marker;
 matches are uncolored. Clipped tails are gray with blank operation cells, with
 prefixes right-aligned against the scored alignment and suffixes left-aligned

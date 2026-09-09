@@ -20,7 +20,7 @@ fn rmsd_rejects_selection_before_structure_io() {
         .args([
             "rmsd",
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             "--superpose-residues",
             "A:",
         ])
@@ -35,7 +35,7 @@ fn rmsd_rejects_selection_before_structure_io() {
         .args([
             "rmsd",
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             "--rmsd-residues",
             "A:",
         ])
@@ -437,7 +437,7 @@ fn alignment_display_flags_preserve_plain_json_and_wrapping() {
     );
     let json = run(&["--json", "--color", "always"]);
     let data: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
-    assert_eq!(data["aligned_mobile"], "ACD-FGHIKLMN");
+    assert_eq!(data["aligned_query"], "ACD-FGHIKLMN");
     assert_eq!(data["operations"], "   -        ");
     assert!(data.get("columns").is_none());
     assert!(!run(&["--width", "1"]).status.success());

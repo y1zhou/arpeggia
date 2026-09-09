@@ -11,7 +11,7 @@ pub(crate) struct Args {
     reference: PathBuf,
 
     /// Second PDB or mmCIF structure
-    mobile: PathBuf,
+    query: PathBuf,
 
     /// Model serial to select (0 independently selects the first model of each structure)
     #[arg(short = 'm', long = "model", default_value_t = 0)]
@@ -31,7 +31,7 @@ pub(crate) struct Args {
     /// Align observed sequences before applying reference residue selections
     #[arg(long)]
     align_seqs: bool,
-    /// Explicit reference=mobile chain pair; repeat for every selected chain
+    /// Explicit reference=query chain pair; repeat for every selected chain
     #[arg(long,requires="align_seqs",value_parser=parse_chain_pair)]
     chain_map: Vec<(String, String)>,
     #[command(flatten)]
@@ -52,7 +52,7 @@ pub(crate) struct Args {
 pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     validate_rmsd_selections(&args.superpose_residues, &args.rmsd_residues)?;
     let reference = super::load_input(&args.reference)?;
-    let mobile = super::load_input(&args.mobile)?;
+    let query = super::load_input(&args.query)?;
     let mut chain_map = std::collections::BTreeMap::new();
     for (a, b) in &args.chain_map {
         if chain_map.insert(a.clone(), b.clone()).is_some() {
@@ -72,7 +72,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         refine_cycles: args.refine_cycles,
         refine_cutoff: args.refine_cutoff,
     };
-    let analysis = get_rmsd(reference, mobile, &options)?;
+    let analysis = get_rmsd(reference, query, &options)?;
     for warning in analysis.warnings {
         tracing::warn!("{warning}");
     }
@@ -94,7 +94,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
         println!(
             "Chain {} -> {}: {} corresponding residues",
             chain.reference_chain,
-            chain.mobile_chain,
+            chain.query_chain,
             chain.residue_pairs.len()
         );
         if let Some(a) = chain.alignment {
@@ -109,5 +109,5 @@ fn parse_chain_pair(value: &str) -> Result<(String, String), String> {
         .split_once('=')
         .filter(|(_, b)| !b.contains('='))
         .map(|(a, b)| (a.to_owned(), b.to_owned()))
-        .ok_or_else(|| "chain mapping must be reference=mobile".into())
+        .ok_or_else(|| "chain mapping must be reference=query".into())
 }

@@ -15,12 +15,12 @@ pub struct ResiduePair {
     pub reference_insertion: String,
     /// Reference chemical residue name.
     pub reference_name: String,
-    /// Mobile author residue number.
-    pub mobile_number: isize,
-    /// Mobile insertion code.
-    pub mobile_insertion: String,
-    /// Mobile chemical residue name.
-    pub mobile_name: String,
+    /// Query author residue number.
+    pub query_number: isize,
+    /// Query insertion code.
+    pub query_insertion: String,
+    /// Query chemical residue name.
+    pub query_name: String,
 }
 
 /// One paired chain and its observed-sequence/residue correspondence.
@@ -32,8 +32,8 @@ pub struct ResiduePair {
 pub struct ChainAlignment {
     /// Reference chain ID.
     pub reference_chain: String,
-    /// Mobile chain ID.
-    pub mobile_chain: String,
+    /// Query chain ID.
+    pub query_chain: String,
     /// Final sequence alignment; None for exact atom correspondence.
     pub alignment: Option<crate::SeqAlignment>,
     /// Nongap coordinate-residue pairs in the final sequence alignment.
@@ -51,7 +51,7 @@ pub(super) fn exact_chains(keys: &[AtomIdentity]) -> Vec<ChainAlignment> {
             .entry(chain.clone())
             .or_insert_with(|| ChainAlignment {
                 reference_chain: chain.clone(),
-                mobile_chain: chain.clone(),
+                query_chain: chain.clone(),
                 alignment: None,
                 residue_pairs: Vec::new(),
             })
@@ -60,9 +60,9 @@ pub(super) fn exact_chains(keys: &[AtomIdentity]) -> Vec<ChainAlignment> {
                 reference_number: number,
                 reference_insertion: insertion.clone(),
                 reference_name: name.clone(),
-                mobile_number: number,
-                mobile_insertion: insertion.clone(),
-                mobile_name: name.clone(),
+                query_number: number,
+                query_insertion: insertion.clone(),
+                query_name: name.clone(),
             });
     }
     chains.into_values().collect()
@@ -215,7 +215,7 @@ fn chain_mapping(
                 })?;
                 if !used.insert(id) {
                     return Err(ArpeggiaError::InvalidArgument(
-                        "chain_map mobile partners must be unique".into(),
+                        "chain_map query partners must be unique".into(),
                     ));
                 }
                 second
@@ -223,7 +223,7 @@ fn chain_mapping(
                     .position(|chain| chain.chain.id() == id)
                     .ok_or_else(|| {
                         ArpeggiaError::InvalidArgument(format!(
-                            "unknown or nonprotein mobile chain {id}"
+                            "unknown or nonprotein query chain {id}"
                         ))
                     })
             })
@@ -277,9 +277,9 @@ fn residue_pair(a: &Residue, b: &Residue) -> ResiduePair {
         reference_number: a.serial_number(),
         reference_insertion: a.insertion_code().unwrap_or("").into(),
         reference_name: a.name().unwrap_or("").into(),
-        mobile_number: b.serial_number(),
-        mobile_insertion: b.insertion_code().unwrap_or("").into(),
-        mobile_name: b.name().unwrap_or("").into(),
+        query_number: b.serial_number(),
+        query_insertion: b.insertion_code().unwrap_or("").into(),
+        query_name: b.name().unwrap_or("").into(),
     }
 }
 
@@ -302,7 +302,7 @@ fn selected_atoms(residue: &Residue, subset: AtomSubset) -> ArpeggiaResult<BTree
 
 pub(super) fn aligned_coordinates(
     reference: &PDB,
-    mobile: &PDB,
+    query: &PDB,
     options: &RmsdOptions,
     fit: &ResidueSelector,
     eval: &ResidueSelector,
@@ -327,7 +327,7 @@ pub(super) fn aligned_coordinates(
             "no observed protein residues in selections".into(),
         ));
     }
-    let second = observed_chains(mobile, options.model_num)?;
+    let second = observed_chains(query, options.model_num)?;
     let map = chain_mapping(&first, &second, options)?;
     let mut selected = Vec::new();
     let mut chains = Vec::new();
@@ -403,7 +403,7 @@ pub(super) fn aligned_coordinates(
         }
         chains.push(ChainAlignment {
             reference_chain: a.chain.id().into(),
-            mobile_chain: b.chain.id().into(),
+            query_chain: b.chain.id().into(),
             alignment: Some(alignment),
             residue_pairs,
         });
@@ -411,7 +411,7 @@ pub(super) fn aligned_coordinates(
     if omitted > 0 {
         warnings.push(AnalysisWarning::new(WarningCode::IncompleteCorrespondence,format!("sequence correspondence omitted {omitted} selected atom endpoints; inspect alignment coverage")));
     }
-    for pdb in [reference, mobile] {
+    for pdb in [reference, query] {
         if options.model_num == 0 && pdb.model_count() > 1 {
             warnings.push(AnalysisWarning::new(
                 WarningCode::ModelSelected,
@@ -507,11 +507,11 @@ mod tests {
     #[test]
     fn renumbered_mutant_uses_reference_selections() {
         let reference = structure(&[("A", &["ALA", "CYS", "ASP", "GLU"], 1)]);
-        let mobile = structure(&[("H", &["ALA", "CYS", "ASN", "GLU"], 101)]);
-        assert!(get_rmsd(reference.clone(), mobile.clone(), &RmsdOptions::default()).is_err());
+        let query = structure(&[("H", &["ALA", "CYS", "ASN", "GLU"], 101)]);
+        assert!(get_rmsd(reference.clone(), query.clone(), &RmsdOptions::default()).is_err());
         let result = get_rmsd(
             reference,
-            mobile,
+            query,
             &RmsdOptions {
                 align_seqs: true,
                 superpose_residues: "A:1-3".into(),
@@ -524,8 +524,8 @@ mod tests {
         assert!(result.rmsd < 1e-12);
         assert_eq!((result.initial_fit_atoms, result.evaluation_atoms), (3, 1));
         let chain = &result.chain_alignments[0];
-        assert_eq!(chain.mobile_chain, "H");
-        assert_eq!(chain.residue_pairs[2].mobile_number, 103);
+        assert_eq!(chain.query_chain, "H");
+        assert_eq!(chain.residue_pairs[2].query_number, 103);
         assert_eq!(chain.alignment.as_ref().unwrap().mismatches, 1);
     }
     #[test]
@@ -553,7 +553,7 @@ mod tests {
             result
                 .chain_alignments
                 .iter()
-                .map(|c| (c.reference_chain.as_str(), c.mobile_chain.as_str()))
+                .map(|c| (c.reference_chain.as_str(), c.query_chain.as_str()))
                 .collect::<Vec<_>>(),
             vec![("A", "Y"), ("B", "X")]
         );
@@ -578,7 +578,7 @@ mod tests {
                 .unwrap()
                 .value
                 .chain_alignments[0]
-                .mobile_chain,
+                .query_chain,
             "Y"
         );
     }
@@ -646,7 +646,7 @@ mod tests {
             [1., 1., 1.],
         ];
         let mut reference = pdbtbx::Model::new(1);
-        let mut mobile = pdbtbx::Model::new(1);
+        let mut query = pdbtbx::Model::new(1);
         let mut serial = 1;
         for (i, direction) in directions.iter().enumerate() {
             let norm: f64 = direction.iter().map(|v| v * v).sum::<f64>().sqrt();
@@ -658,7 +658,7 @@ mod tests {
                 6.0
             };
             for sign in [-1., 1.] {
-                for (model, radius) in [(&mut reference, 10.0), (&mut mobile, 10.0 + delta)] {
+                for (model, radius) in [(&mut reference, 10.0), (&mut query, 10.0 + delta)] {
                     let p = direction.map(|v| v / norm * radius * sign);
                     model.add_atom(
                         Atom::new(false, serial, "CA", p[0], p[1], p[2], 1.0, 20.0, "C", 0)
@@ -674,7 +674,7 @@ mod tests {
         let mut a = PDB::new();
         a.add_model(reference);
         let mut b = PDB::new();
-        b.add_model(mobile);
+        b.add_model(query);
         let result = get_rmsd(
             a.clone(),
             b.clone(),

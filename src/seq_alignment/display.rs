@@ -47,12 +47,7 @@ impl SeqAlignment {
     }
 
     pub(crate) fn render(&self, width: usize, color: bool, rulers: bool) -> ArpeggiaResult<String> {
-        let digits = self
-            .reference
-            .len()
-            .max(self.mobile.len())
-            .to_string()
-            .len();
+        let digits = self.reference.len().max(self.query.len()).to_string().len();
         let prefix = 12 + digits; // label, start coordinate, spaces
         let overhead = prefix + 1 + digits;
         let block_width = width
@@ -97,9 +92,9 @@ impl SeqAlignment {
                 output.push('\n');
             }
         }
-        let leading = self.reference_span.0.max(self.mobile_span.0);
+        let leading = self.reference_span.0.max(self.query_span.0);
         let trailing = (self.reference.len() - self.reference_span.1)
-            .max(self.mobile.len() - self.mobile_span.1);
+            .max(self.query.len() - self.query_span.1);
         let padded = |sequence: &str, span: (usize, usize), aligned: &str| {
             format!(
                 "{}{}{}{}{}",
@@ -115,7 +110,7 @@ impl SeqAlignment {
             self.reference_span,
             &self.aligned_reference,
         );
-        let second = padded(&self.mobile, self.mobile_span, &self.aligned_mobile);
+        let second = padded(&self.query, self.query_span, &self.aligned_query);
         // Dot marks display-only clipping, never a public alignment operation.
         let operations = format!(
             "{}{}{}",
@@ -128,7 +123,7 @@ impl SeqAlignment {
             let end = start.saturating_add(block_width).min(operations.len());
             let ops = &operations.as_bytes()[start..end];
             output.push('\n');
-            for (row, (label, sequence)) in [("reference", &first), ("mobile", &second)]
+            for (row, (label, sequence)) in [("reference", &first), ("query", &second)]
                 .into_iter()
                 .enumerate()
             {
@@ -200,7 +195,7 @@ mod tests {
         .value;
         let text = a.render(80, false, true).unwrap();
         let lines: Vec<_> = text.lines().collect();
-        for label in ["reference", "mobile"] {
+        for label in ["reference", "query"] {
             let row = lines
                 .iter()
                 .position(|line| line.starts_with(label))
@@ -238,11 +233,11 @@ mod tests {
         assert!(colored.contains("\x1b[90mG\x1b[0m"));
         assert!(colored.contains("\x1b[33mx\x1b[0m"));
         assert!(!a.render(80, false, false).unwrap().contains('\x1b'));
-        for (reference, mobile, marker, escape) in [
+        for (reference, query, marker, escape) in [
             ("ACDEFGHIK", "ACDQQQEFGHIK", '+', "\x1b[32m"),
             ("ACDQQQEFGHIK", "ACDEFGHIK", '-', "\x1b[31m"),
         ] {
-            let a = align_seqs(reference, mobile, &SeqAlignOptions::default())
+            let a = align_seqs(reference, query, &SeqAlignOptions::default())
                 .unwrap()
                 .value;
             assert!(

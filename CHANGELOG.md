@@ -9,12 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed the second alignment/RMSD input from `mobile` to `query`, including
+  Python keywords, result fields, CLI labels, and reference-to-query mappings.
+
 - Expanded CLI help and Python/IDE documentation with residue selection syntax,
   independent defaults, units, result semantics, and examples. Moved structure
   comparison usage out of the benchmark document into a dedicated guide.
 
 - Replaced `SeqAlignment.columns` with plain gapped `aligned_reference`,
-  `aligned_mobile`, and `operations` strings; structural mapping derives indices
+  `aligned_query`, and `operations` strings; structural mapping derives indices
   internally from the alignment spans.
 
 - Python `rmsd()` now returns a read-only `RmsdResult`; use `.rmsd` for full

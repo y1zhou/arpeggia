@@ -36,7 +36,7 @@ A bare upper bound includes every insertion code at that author residue, so
 `A:10A-10` selects insertion 10A through the final insertion at residue 10.
 
 ```bash
-arpeggia rmsd reference.cif mobile.cif \
+arpeggia rmsd reference.cif query.cif \
   --superpose-residues "A" \
   --rmsd-residues "B,C" \
   --atoms backbone
@@ -53,7 +53,7 @@ import arpeggia
 
 result = arpeggia.rmsd(
     "reference.cif",
-    "mobile.cif",
+    "query.cif",
     superpose_residues="A",
     rmsd_residues="B,C",
     atoms="ca",

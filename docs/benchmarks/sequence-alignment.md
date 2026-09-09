@@ -34,7 +34,7 @@ The qualification harness and its Python environment are not production dependen
 A 4,096-matrix exhaustive check validates the assignment solver against all
 eligible two-chain assignments with negative, zero, and positive scores.
 Fixtures cover renumbering, substitutions, directional reference selections,
-unused mobile chains, ambiguous homomers, explicit overrides, gaps, and chemical
+unused query chains, ambiguous homomers, explicit overrides, gaps, and chemical
 side-chain exclusions. Existing exact-correspondence numerical tests still pass.
 
 The symmetric 20-pair refinement fixture from the PyMOL research retains 16

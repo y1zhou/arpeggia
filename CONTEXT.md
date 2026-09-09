@@ -219,7 +219,7 @@ _Avoid_: Symmetric overlap, local alignment
 
 **Alignment Operation**:
 A match, substitution, insertion, or deletion along a chosen alignment, directed
-from the reference sequence to the mobile sequence. Unaligned terminal segments
+from the reference sequence to the query sequence. Unaligned terminal segments
 are outside these operations.
 _Avoid_: Minimum edit script, sequence edit distance
 

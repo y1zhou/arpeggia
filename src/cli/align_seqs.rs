@@ -47,7 +47,7 @@ pub(crate) struct Args {
     /// First unaligned protein sequence
     reference: String,
     /// Second unaligned protein sequence
-    mobile: String,
+    query: String,
     #[command(flatten)]
     alignment: AlignmentArgs,
     #[command(flatten)]
@@ -64,7 +64,7 @@ pub(crate) fn print_json(value: &impl serde::Serialize) -> ArpeggiaResult<()> {
     Ok(())
 }
 pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
-    let analysis = arpeggia::align_seqs(&args.reference, &args.mobile, &args.alignment.options())?;
+    let analysis = arpeggia::align_seqs(&args.reference, &args.query, &args.alignment.options())?;
     for warning in analysis.warnings {
         tracing::warn!("{warning}");
     }

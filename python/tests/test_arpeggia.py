@@ -58,7 +58,7 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
     with pytest.raises(ValueError, match="RMSD Selection"):
         arpeggia.rmsd(
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             rmsd_residues="A:",
         )
 
@@ -109,7 +109,7 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
     with pytest.raises(ValueError, match="atoms must be"):
         arpeggia.rmsd(
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             atoms=cast(Any, "invalid"),
         )
 
@@ -409,10 +409,12 @@ def test_sequence_alignment_results():
     """Expose mappings, defined denominators, alias warnings, and frozen fields."""
     import arpeggia
 
-    alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")
+    alignment = arpeggia.align_seqs(
+        reference="GGACDEFGHIKGG", query="ACDEFGHIK", mode="semi-global"
+    )
     assert isinstance(alignment, arpeggia.SeqAlignment)
     assert alignment.reference_span == (2, 11)
-    assert alignment.aligned_reference == alignment.aligned_mobile == "ACDEFGHIK"
+    assert alignment.aligned_reference == alignment.aligned_query == "ACDEFGHIK"
     assert alignment.operations == " " * 9
     assert alignment.edit_distance == 4
     assert alignment.identity_alignment == alignment.identity_shorter == 1.0
@@ -435,7 +437,7 @@ def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
     """Map changed chain IDs and author numbering through the Python API."""
     import arpeggia
 
-    mobile = tmp_path / "renumbered.pdb"
+    query = tmp_path / "renumbered.pdb"
     lines = []
     for line in Path(test_pdb_file).read_text().splitlines():
         if line.startswith(("ATOM  ", "HETATM")):
@@ -443,10 +445,10 @@ def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
         elif line.startswith(("TER", "CONECT", "SSBOND", "LINK")):
             continue
         lines.append(line)
-    mobile.write_text("\n".join(lines) + "\n")
+    query.write_text("\n".join(lines) + "\n")
     result = arpeggia.rmsd(
         test_pdb_file,
-        str(mobile),
+        query=str(query),
         align_seqs=True,
         chain_map={"A": "H"},
         superpose_residues="A:1-20",
@@ -459,7 +461,7 @@ def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
     assert result.initial_fit_atoms == result.retained_fit_atoms == 20
     assert result.evaluation_atoms == 20
     assert result.cycles == 0
-    assert result.chain_alignments[0].residue_pairs[0].mobile_number == 101
+    assert result.chain_alignments[0].residue_pairs[0].query_number == 101
     assert result.chain_alignments[0].alignment is not None
     with pytest.raises(AttributeError):
         result.rmsd = 5  # ty: ignore[invalid-assignment] -- verify runtime immutability

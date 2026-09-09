@@ -27,17 +27,17 @@ pub enum AtomSubset {
 /// Calculate optimally superposed RMSD between equal-sized coordinate arrays.
 ///
 /// Coordinates are uniformly weighted. Reflection and scaling are forbidden.
-pub fn kabsch_rmsd(reference: &[[f64; 3]], mobile: &[[f64; 3]]) -> ArpeggiaResult<f64> {
-    if reference.len() != mobile.len() {
+pub fn kabsch_rmsd(reference: &[[f64; 3]], query: &[[f64; 3]]) -> ArpeggiaResult<f64> {
+    if reference.len() != query.len() {
         return Err(ArpeggiaError::InvalidArgument(format!(
             "coordinate arrays must have equal lengths, got {} and {}",
             reference.len(),
-            mobile.len()
+            query.len()
         )));
     }
     let reference = prepare_coordinates(reference)?;
-    let mobile = prepare_coordinates(mobile)?;
-    kabsch_prepared_rmsd(&reference, &mobile)
+    let query = prepare_coordinates(query)?;
+    kabsch_prepared_rmsd(&reference, &query)
 }
 
 /// Options for correspondence, rigid fitting, and independent RMSD evaluation.
@@ -53,7 +53,7 @@ pub struct RmsdOptions {
     pub atoms: AtomSubset,
     /// Establish residue correspondence through observed sequences.
     pub align_seqs: bool,
-    /// Complete explicit reference-to-mobile chain map; empty enables inference.
+    /// Complete explicit reference-to-query chain map; empty enables inference.
     pub chain_map: BTreeMap<String, String>,
     /// Final residue alignment settings; inference always uses semi-global scores.
     pub alignment: crate::SeqAlignOptions,
@@ -113,8 +113,8 @@ pub struct RmsdResult {
     pub rmsd_residues: String,
     /// Selected reference model serial.
     pub reference_model: usize,
-    /// Selected mobile model serial.
-    pub mobile_model: usize,
+    /// Selected query model serial.
+    pub query_model: usize,
     /// Chain and residue correspondence; sequence results are absent in exact mode.
     pub chain_alignments: Vec<ChainAlignment>,
 }
@@ -126,7 +126,7 @@ pub struct RmsdResult {
 /// remain in evaluation after rejection from fitting.
 pub fn get_rmsd(
     mut reference: PDB,
-    mut mobile: PDB,
+    mut query: PDB,
     options: &RmsdOptions,
 ) -> ArpeggiaResult<Analysis<RmsdResult>> {
     if !options.refine_cutoff.is_finite() || options.refine_cutoff <= 0.0 {
@@ -141,15 +141,15 @@ pub fn get_rmsd(
     }
     crate::seq_alignment::scoring(&options.alignment)?;
     let mut warnings = select_conformers(&mut reference);
-    warnings.extend(select_conformers(&mut mobile));
+    warnings.extend(select_conformers(&mut query));
     let superpose_selector = ResidueSelector::parse(&options.superpose_residues)?;
     let rmsd_selector = ResidueSelector::parse(&options.rmsd_residues)?;
     let reference_model = selected_model(&reference, options.model_num)?.serial_number();
-    let mobile_model = selected_model(&mobile, options.model_num)?.serial_number();
-    let (reference, mobile, chains) = if options.align_seqs {
+    let query_model = selected_model(&query, options.model_num)?.serial_number();
+    let (reference, query, chains) = if options.align_seqs {
         correspondence::aligned_coordinates(
             &reference,
-            &mobile,
+            &query,
             options,
             &superpose_selector,
             &rmsd_selector,
@@ -164,7 +164,7 @@ pub fn get_rmsd(
             options.atoms,
         )?;
         let second = select_coordinate_union(
-            &mobile,
+            &query,
             options.model_num,
             &superpose_selector,
             &rmsd_selector,
@@ -175,16 +175,15 @@ pub fn get_rmsd(
         (first, second, chains)
     };
     warnings.extend(reference.warnings.iter().cloned());
-    warnings.extend(mobile.warnings.iter().cloned());
+    warnings.extend(query.warnings.iter().cloned());
     let initial_count = reference.superpose_end;
     let eval_count = reference.coordinates.len() - reference.rmsd_start;
     let eval_reference = &reference.coordinates[reference.rmsd_start..];
-    let eval_mobile = &mobile.coordinates[mobile.rmsd_start..];
+    let eval_query = &query.coordinates[query.rmsd_start..];
     let mut retained: Vec<_> = (0..initial_count).collect();
     let mut first =
         prepare_coordinate_union(&reference.coordinates, initial_count, reference.rmsd_start)?;
-    let mut second =
-        prepare_coordinate_union(&mobile.coordinates, initial_count, mobile.rmsd_start)?;
+    let mut second = prepare_coordinate_union(&query.coordinates, initial_count, query.rmsd_start)?;
     let initial_rmsd = kabsch_prepared_rmsd(&first, &second)?;
     let mut core_rmsd = initial_rmsd;
     let mut cycles = 0;
@@ -198,7 +197,7 @@ pub fn get_rmsd(
             let residual = na::Vector3::from(first.points[position]) * transform.reference_factor
                 - transform.rotation
                     * na::Vector3::from(second.points[position])
-                    * transform.mobile_factor
+                    * transform.query_factor
                 - transform.residual_centroid;
             // Compare normalized residuals to avoid overflow in cutoff * RMSD.
             let distance = residual.iter().fold(0.0_f64, |n, v| n.hypot(*v));
@@ -222,7 +221,7 @@ pub fn get_rmsd(
             })
         };
         first = pack(&reference.coordinates, eval_reference)?;
-        second = pack(&mobile.coordinates, eval_mobile)?;
+        second = pack(&query.coordinates, eval_query)?;
         retained = survivors;
         core_rmsd = kabsch_prepared_rmsd(&first, &second)?;
     }
@@ -254,7 +253,7 @@ pub fn get_rmsd(
             superpose_residues: options.superpose_residues.clone(),
             rmsd_residues: options.rmsd_residues.clone(),
             reference_model,
-            mobile_model,
+            query_model,
             chain_alignments: chains,
         },
         warnings,
@@ -438,18 +437,18 @@ fn is_hydrogen_atom_name(name: &str) -> bool {
 
 pub(crate) fn validate_correspondence(
     reference: &[AtomIdentity],
-    mobile: &[AtomIdentity],
+    query: &[AtomIdentity],
 ) -> ArpeggiaResult<()> {
-    if reference.len() != mobile.len() {
+    if reference.len() != query.len() {
         return Err(ArpeggiaError::Calculation(format!(
-            "atom correspondence mismatch: reference has {} selected atoms but mobile has {}",
+            "atom correspondence mismatch: reference has {} selected atoms but query has {}",
             reference.len(),
-            mobile.len()
+            query.len()
         )));
     }
     if let Some((index, (left, right))) = reference
         .iter()
-        .zip(mobile)
+        .zip(query)
         .enumerate()
         .find(|(_, (left, right))| left != right)
     {
@@ -462,15 +461,15 @@ pub(crate) fn validate_correspondence(
 
 pub(crate) fn validate_selection_correspondence(
     reference: &SelectedCoordinateUnion,
-    mobile: &SelectedCoordinateUnion,
+    query: &SelectedCoordinateUnion,
 ) -> ArpeggiaResult<()> {
     validate_selection_keys(
         &reference.keys,
         reference.superpose_end,
         reference.rmsd_start,
-        &mobile.keys,
-        mobile.superpose_end,
-        mobile.rmsd_start,
+        &query.keys,
+        query.superpose_end,
+        query.rmsd_start,
     )
 }
 
@@ -478,18 +477,18 @@ pub(crate) fn validate_selection_keys(
     reference: &[AtomIdentity],
     reference_superpose_end: usize,
     reference_rmsd_start: usize,
-    mobile: &[AtomIdentity],
-    mobile_superpose_end: usize,
-    mobile_rmsd_start: usize,
+    query: &[AtomIdentity],
+    query_superpose_end: usize,
+    query_rmsd_start: usize,
 ) -> ArpeggiaResult<()> {
     validate_correspondence(
         &reference[..reference_superpose_end],
-        &mobile[..mobile_superpose_end],
+        &query[..query_superpose_end],
     )
     .map_err(|error| selection_error("Superposition Selection", error))?;
     validate_correspondence(
         &reference[reference_rmsd_start..],
-        &mobile[mobile_rmsd_start..],
+        &query[query_rmsd_start..],
     )
     .map_err(|error| selection_error("RMSD Selection", error))
 }
@@ -652,12 +651,12 @@ fn normalized_displacements(
 
 pub(crate) fn kabsch_prepared_rmsd(
     reference: &PreparedCoordinates,
-    mobile: &PreparedCoordinates,
+    query: &PreparedCoordinates,
 ) -> ArpeggiaResult<f64> {
-    if reference.scale == mobile.scale && reference.points == mobile.points {
+    if reference.scale == query.scale && reference.points == query.points {
         return Ok(0.0);
     }
-    let transform = fit_prepared_transform(reference, mobile)?;
+    let transform = fit_prepared_transform(reference, query)?;
     finish_rmsd(
         transform.fit_residual_norm,
         transform.scale,
@@ -667,30 +666,30 @@ pub(crate) fn kabsch_prepared_rmsd(
 
 pub(crate) fn kabsch_prepared_selected_rmsd(
     reference: &PreparedCoordinates,
-    mobile: &PreparedCoordinates,
+    query: &PreparedCoordinates,
 ) -> ArpeggiaResult<f64> {
-    if reference.scale == mobile.scale && reference.points == mobile.points {
+    if reference.scale == query.scale && reference.points == query.points {
         return Ok(0.0);
     }
-    let transform = fit_prepared_transform(reference, mobile)?;
+    let transform = fit_prepared_transform(reference, query)?;
     let reference_rmsd = &reference.points[reference.rmsd_start..];
-    let mobile_rmsd = &mobile.points[mobile.rmsd_start..];
-    if reference_rmsd.len() != mobile_rmsd.len() {
+    let query_rmsd = &query.points[query.rmsd_start..];
+    if reference_rmsd.len() != query_rmsd.len() {
         return Err(ArpeggiaError::Calculation(format!(
-            "RMSD Selection coordinate mismatch: reference has {} atoms but mobile has {}",
+            "RMSD Selection coordinate mismatch: reference has {} atoms but query has {}",
             reference_rmsd.len(),
-            mobile_rmsd.len()
+            query_rmsd.len()
         )));
     }
     let residual_norm = fixed_transform_residual_norm(
         reference_rmsd,
         transform.reference_factor,
-        mobile_rmsd,
-        transform.mobile_factor,
+        query_rmsd,
+        transform.query_factor,
         &transform.rotation,
         &transform.residual_centroid,
     );
-    let scoring_radius = mobile.rmsd_radius;
+    let scoring_radius = query.rmsd_radius;
     if scoring_radius > 0.0
         && (!transform.angular_error_bound.is_finite()
             || transform.angular_error_bound * scoring_radius > 1e-6)
@@ -706,7 +705,7 @@ struct PreparedTransform {
     rotation: na::Matrix3<f64>,
     residual_centroid: na::Vector3<f64>,
     reference_factor: f64,
-    mobile_factor: f64,
+    query_factor: f64,
     scale: f64,
     fit_residual_norm: f64,
     angular_error_bound: f64,
@@ -714,27 +713,27 @@ struct PreparedTransform {
 
 fn fit_prepared_transform(
     reference: &PreparedCoordinates,
-    mobile: &PreparedCoordinates,
+    query: &PreparedCoordinates,
 ) -> ArpeggiaResult<PreparedTransform> {
     let reference_points = &reference.points[..reference.superpose_end];
-    let mobile_points = &mobile.points[..mobile.superpose_end];
-    if reference_points.len() != mobile_points.len() {
+    let query_points = &query.points[..query.superpose_end];
+    if reference_points.len() != query_points.len() {
         return Err(ArpeggiaError::Calculation(format!(
-            "Superposition Selection coordinate mismatch: reference has {} atoms but mobile has {}",
+            "Superposition Selection coordinate mismatch: reference has {} atoms but query has {}",
             reference_points.len(),
-            mobile_points.len()
+            query_points.len()
         )));
     }
-    let scale = reference.scale.max(mobile.scale);
+    let scale = reference.scale.max(query.scale);
     let reference_factor = reference.scale / scale;
-    let mobile_factor = mobile.scale / scale;
+    let query_factor = query.scale / scale;
     let reference_centroid = na::Vector3::from(reference.centroid) * reference_factor;
-    let mobile_centroid = na::Vector3::from(mobile.centroid) * mobile_factor;
+    let query_centroid = na::Vector3::from(query.centroid) * query_factor;
     let mut covariance = na::Matrix3::zeros();
-    for (reference, mobile) in reference_points.iter().zip(mobile_points) {
+    for (reference, query) in reference_points.iter().zip(query_points) {
         let reference = na::Vector3::from(*reference) * reference_factor - reference_centroid;
-        let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
-        covariance += mobile * reference.transpose();
+        let query = na::Vector3::from(*query) * query_factor - query_centroid;
+        covariance += query * reference.transpose();
     }
     let svd = covariance
         .try_svd(true, true, f64::EPSILON * 5.0, 100)
@@ -757,16 +756,16 @@ fn fit_prepared_transform(
     let (fitted_residual, fitted_centroid) = aligned_residual_norm(
         reference_points,
         reference_factor,
-        mobile_points,
-        mobile_factor,
+        query_points,
+        query_factor,
         &rotation,
     );
     let identity = na::Matrix3::identity();
     let (identity_residual, identity_centroid) = aligned_residual_norm(
         reference_points,
         reference_factor,
-        mobile_points,
-        mobile_factor,
+        query_points,
+        query_factor,
         &identity,
     );
     let (residual_norm, fitted, rotation, residual_centroid) =
@@ -784,9 +783,9 @@ fn fit_prepared_transform(
         identity_rotational_residual(
             reference_points,
             reference_factor,
-            mobile_points,
-            mobile.centroid,
-            mobile_factor,
+            query_points,
+            query.centroid,
+            query_factor,
             identity_centroid,
         )
     };
@@ -813,7 +812,7 @@ fn fit_prepared_transform(
         rotation,
         residual_centroid,
         reference_factor,
-        mobile_factor,
+        query_factor,
         scale,
         fit_residual_norm: residual_norm,
         angular_error_bound,
@@ -852,25 +851,25 @@ fn scaled_rmsd(residual_norm: f64, scale: f64, count: usize) -> f64 {
 fn aligned_residual_norm(
     reference: &[[f64; 3]],
     reference_factor: f64,
-    mobile: &[[f64; 3]],
-    mobile_factor: f64,
+    query: &[[f64; 3]],
+    query_factor: f64,
     rotation: &na::Matrix3<f64>,
 ) -> (f64, na::Vector3<f64>) {
     let n = reference.len() as f64;
     let residual_centroid =
         reference
             .iter()
-            .zip(mobile)
-            .fold(na::Vector3::zeros(), |sum, (reference, mobile)| {
+            .zip(query)
+            .fold(na::Vector3::zeros(), |sum, (reference, query)| {
                 let reference = na::Vector3::from(*reference) * reference_factor;
-                let mobile = na::Vector3::from(*mobile) * mobile_factor;
-                sum + (reference - rotation * mobile) / n
+                let query = na::Vector3::from(*query) * query_factor;
+                sum + (reference - rotation * query) / n
             });
     let norm = fixed_transform_residual_norm(
         reference,
         reference_factor,
-        mobile,
-        mobile_factor,
+        query,
+        query_factor,
         rotation,
         &residual_centroid,
     );
@@ -880,18 +879,18 @@ fn aligned_residual_norm(
 fn fixed_transform_residual_norm(
     reference: &[[f64; 3]],
     reference_factor: f64,
-    mobile: &[[f64; 3]],
-    mobile_factor: f64,
+    query: &[[f64; 3]],
+    query_factor: f64,
     rotation: &na::Matrix3<f64>,
     residual_centroid: &na::Vector3<f64>,
 ) -> f64 {
     reference
         .iter()
-        .zip(mobile)
-        .fold(0.0_f64, |norm, (reference, mobile)| {
+        .zip(query)
+        .fold(0.0_f64, |norm, (reference, query)| {
             let reference = na::Vector3::from(*reference) * reference_factor;
-            let mobile = na::Vector3::from(*mobile) * mobile_factor;
-            let delta = reference - rotation * mobile - residual_centroid;
+            let query = na::Vector3::from(*query) * query_factor;
+            let delta = reference - rotation * query - residual_centroid;
             delta.iter().fold(norm, |norm, value| norm.hypot(*value))
         })
 }
@@ -899,31 +898,31 @@ fn fixed_transform_residual_norm(
 fn identity_rotational_residual(
     reference: &[[f64; 3]],
     reference_factor: f64,
-    mobile: &[[f64; 3]],
-    mobile_centroid: [f64; 3],
-    mobile_factor: f64,
+    query: &[[f64; 3]],
+    query_centroid: [f64; 3],
+    query_factor: f64,
     residual_centroid: na::Vector3<f64>,
 ) -> Option<(f64, f64)> {
-    let mobile_centroid = na::Vector3::from(mobile_centroid) * mobile_factor;
-    let (inertia, torque) = reference.iter().zip(mobile).fold(
+    let query_centroid = na::Vector3::from(query_centroid) * query_factor;
+    let (inertia, torque) = reference.iter().zip(query).fold(
         (na::Matrix3::zeros(), na::Vector3::zeros()),
-        |(inertia, torque), (reference, mobile)| {
+        |(inertia, torque), (reference, query)| {
             let reference = na::Vector3::from(*reference) * reference_factor;
-            let mobile = na::Vector3::from(*mobile) * mobile_factor;
-            let centered_mobile = mobile - mobile_centroid;
-            let residual = reference - mobile - residual_centroid;
+            let query = na::Vector3::from(*query) * query_factor;
+            let centered_query = query - query_centroid;
+            let residual = reference - query - residual_centroid;
             (
-                inertia + na::Matrix3::identity() * centered_mobile.norm_squared()
-                    - centered_mobile * centered_mobile.transpose(),
-                torque + centered_mobile.cross(&residual),
+                inertia + na::Matrix3::identity() * centered_query.norm_squared()
+                    - centered_query * centered_query.transpose(),
+                torque + centered_query.cross(&residual),
             )
         },
     );
     let rotation = inertia.lu().solve(&torque)?;
-    let residual_norm = mobile.iter().fold(0.0_f64, |norm, mobile| {
-        let mobile = na::Vector3::from(*mobile) * mobile_factor - mobile_centroid;
+    let residual_norm = query.iter().fold(0.0_f64, |norm, query| {
+        let query = na::Vector3::from(*query) * query_factor - query_centroid;
         rotation
-            .cross(&mobile)
+            .cross(&query)
             .iter()
             .fold(norm, |norm, value| norm.hypot(*value))
     });
@@ -1174,9 +1173,9 @@ mod tests {
             [0.0, 2.0, 0.0],
             [0.0, 0.0, 3.0],
         ];
-        let mobile = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
-        let forward = kabsch_rmsd(&reference, &mobile).unwrap();
-        let reverse = kabsch_rmsd(&mobile, &reference).unwrap();
+        let query = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
+        let forward = kabsch_rmsd(&reference, &query).unwrap();
+        let reverse = kabsch_rmsd(&query, &reference).unwrap();
         assert!(forward < 1e-12);
         assert!((forward - reverse).abs() < 1e-12);
     }
@@ -1189,15 +1188,15 @@ mod tests {
             [0.0, 2.0, 0.0],
             [0.0, 0.0, 3.0],
         ];
-        let mut mobile = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
-        mobile[3][0] += 0.125;
+        let mut query = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
+        query[3][0] += 0.125;
         let reference = prepare_coordinates(&reference).unwrap();
-        let mobile = prepare_coordinates(&mobile).unwrap();
+        let query = prepare_coordinates(&query).unwrap();
         assert_eq!(
-            kabsch_prepared_selected_rmsd(&reference, &mobile)
+            kabsch_prepared_selected_rmsd(&reference, &query)
                 .unwrap()
                 .to_bits(),
-            kabsch_prepared_rmsd(&reference, &mobile).unwrap().to_bits()
+            kabsch_prepared_rmsd(&reference, &query).unwrap().to_bits()
         );
     }
 
@@ -1209,16 +1208,16 @@ mod tests {
             [0.0, 1.0, 0.0],
             [0.0, 0.0, 1.0],
         ];
-        let mobile = [
+        let query = [
             [10.0, -4.0, 2.0],
             [10.0, -3.0, 2.0],
             [9.0, -4.0, 2.0],
             [10.0, -4.0, 5.0],
         ];
         let reference = prepare_coordinate_union(&reference, 3, 3).unwrap();
-        let mobile = prepare_coordinate_union(&mobile, 3, 3).unwrap();
-        let rmsd = kabsch_prepared_selected_rmsd(&reference, &mobile).unwrap();
-        let reverse = kabsch_prepared_selected_rmsd(&mobile, &reference).unwrap();
+        let query = prepare_coordinate_union(&query, 3, 3).unwrap();
+        let rmsd = kabsch_prepared_selected_rmsd(&reference, &query).unwrap();
+        let reverse = kabsch_prepared_selected_rmsd(&query, &reference).unwrap();
         assert!((rmsd - 2.0).abs() < 1e-12);
         assert!((rmsd - reverse).abs() < 1e-12);
     }
@@ -1233,11 +1232,11 @@ mod tests {
             [0.0, 0.0, 3.0],
             [distance, 0.3 * distance, -0.2 * distance],
         ];
-        let mobile = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
+        let query = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
         let reference = prepare_coordinate_union(&reference, 4, 4).unwrap();
-        let mobile = prepare_coordinate_union(&mobile, 4, 4).unwrap();
+        let query = prepare_coordinate_union(&query, 4, 4).unwrap();
         assert!(matches!(
-            kabsch_prepared_selected_rmsd(&reference, &mobile),
+            kabsch_prepared_selected_rmsd(&reference, &query),
             Err(ArpeggiaError::Calculation(message))
                 if message.contains("reliable Kabsch residual")
         ));
@@ -1254,14 +1253,13 @@ mod tests {
             [0.0, 0.0, 3.0],
             [distance, 0.0, 0.0],
         ];
-        let mobile =
-            reference.map(|[x, y, z]| [x - angle * y + 10.0, angle * x + y - 4.0, z + 2.0]);
+        let query = reference.map(|[x, y, z]| [x - angle * y + 10.0, angle * x + y - 4.0, z + 2.0]);
         let reference = prepare_coordinate_union(&reference, 4, 4).unwrap();
-        let mobile = prepare_coordinate_union(&mobile, 4, 4).unwrap();
-        let transform = fit_prepared_transform(&reference, &mobile).unwrap();
+        let query = prepare_coordinate_union(&query, 4, 4).unwrap();
+        let transform = fit_prepared_transform(&reference, &query).unwrap();
         assert_eq!(transform.rotation, na::Matrix3::identity());
         assert!(matches!(
-            kabsch_prepared_selected_rmsd(&reference, &mobile),
+            kabsch_prepared_selected_rmsd(&reference, &query),
             Err(ArpeggiaError::Calculation(message))
                 if message.contains("reliable Kabsch residual")
         ));
@@ -1277,15 +1275,15 @@ mod tests {
             [0.0, 0.0, 3.0],
             [distance, 0.3 * distance, -0.2 * distance],
         ];
-        let mut mobile = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
-        mobile[3][0] += 0.01;
+        let mut query = reference.map(|[x, y, z]| [-y + 10.0, x - 4.0, z + 2.0]);
+        query[3][0] += 0.01;
         let reference = prepare_coordinate_union(&reference, 4, 4).unwrap();
-        let mobile = prepare_coordinate_union(&mobile, 4, 4).unwrap();
-        let transform = fit_prepared_transform(&reference, &mobile).unwrap();
+        let query = prepare_coordinate_union(&query, 4, 4).unwrap();
+        let transform = fit_prepared_transform(&reference, &query).unwrap();
         let solver_tolerance = f64::EPSILON * 4.0_f64.sqrt() * 64.0;
         assert!(transform.fit_residual_norm > solver_tolerance);
         assert!(matches!(
-            kabsch_prepared_selected_rmsd(&reference, &mobile),
+            kabsch_prepared_selected_rmsd(&reference, &query),
             Err(ArpeggiaError::Calculation(message))
                 if message.contains("reliable Kabsch residual")
         ));
@@ -1343,8 +1341,8 @@ mod tests {
             [1_000_000.0, -1_999_998.0, 3_000_000.0],
             [1_000_002.0, -1_999_997.0, 3_000_000.0],
         ];
-        let mobile = reference.map(|[x, y, z]| [-y + 7.0, x - 11.0, z + 5.0]);
-        assert!(kabsch_rmsd(&reference, &mobile).unwrap() < 1e-9);
+        let query = reference.map(|[x, y, z]| [-y + 7.0, x - 11.0, z + 5.0]);
+        assert!(kabsch_rmsd(&reference, &query).unwrap() < 1e-9);
     }
 
     #[test]
@@ -1356,9 +1354,9 @@ mod tests {
             [0.0, 0.0, 3.0],
         ];
         for translation in [1e6, 1e15] {
-            let mobile =
+            let query =
                 reference.map(|[x, y, z]| [-y + translation, x + translation, z + translation]);
-            assert!(kabsch_rmsd(&reference, &mobile).unwrap() < 1e-12);
+            assert!(kabsch_rmsd(&reference, &query).unwrap() < 1e-12);
         }
     }
 
@@ -1366,8 +1364,8 @@ mod tests {
     fn kabsch_keeps_extreme_finite_coordinates_finite() {
         for scale in [1e-200, 1e200] {
             let reference = [[0.0, 0.0, 0.0], [scale, 0.0, 0.0], [0.0, scale, 0.0]];
-            let mobile = reference.map(|[x, y, z]| [-y, x, z]);
-            let rmsd = kabsch_rmsd(&reference, &mobile).unwrap();
+            let query = reference.map(|[x, y, z]| [-y, x, z]);
+            let rmsd = kabsch_rmsd(&reference, &query).unwrap();
             assert!(rmsd.is_finite());
             assert!(rmsd / scale < 1e-12);
         }
@@ -1424,16 +1422,16 @@ mod tests {
             [0.0, magnitude, 0.0],
             [0.0, 0.0, magnitude],
         ];
-        let mut mobile = reference;
-        mobile[1][1] = 1.0;
-        mobile[1][2] = 1.0;
-        mobile[2][0] = 1.0;
-        mobile[2][2] = 1.0;
-        mobile[3][0] = 1.0;
-        mobile[3][1] = 1.0;
+        let mut query = reference;
+        query[1][1] = 1.0;
+        query[1][2] = 1.0;
+        query[2][0] = 1.0;
+        query[2][2] = 1.0;
+        query[3][0] = 1.0;
+        query[3][1] = 1.0;
         let expected = (3.0_f64 / 4.0).sqrt();
-        let forward = kabsch_rmsd(&reference, &mobile).unwrap();
-        let reverse = kabsch_rmsd(&mobile, &reference).unwrap();
+        let forward = kabsch_rmsd(&reference, &query).unwrap();
+        let reverse = kabsch_rmsd(&query, &reference).unwrap();
         assert!(
             (forward - expected).abs() < 1e-12,
             "{forward} != {expected}"
@@ -1466,9 +1464,9 @@ mod tests {
             [1.0, magnitude, 0.0],
             [0.0, 0.0, magnitude],
         ];
-        for mobile in [rotated, infinitesimally_rotated, mixed_strain_and_rotation] {
+        for query in [rotated, infinitesimally_rotated, mixed_strain_and_rotation] {
             assert!(matches!(
-                kabsch_rmsd(&reference, &mobile),
+                kabsch_rmsd(&reference, &query),
                 Err(ArpeggiaError::Calculation(message)) if message.contains("reliable Kabsch residual")
             ));
         }
@@ -1694,7 +1692,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&directory).unwrap();
         let reference_path = directory.join("reference.pdb");
-        let mobile_path = directory.join("mobile.pdb");
+        let query_path = directory.join("query.pdb");
         std::fs::write(
             &reference_path,
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
@@ -1706,7 +1704,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(
-            &mobile_path,
+            &query_path,
             "ATOM      1  CA  ALA A   1      10.000  -4.000   2.000  1.00 20.00           C  \n\
              ATOM      2  CA  ALA A   2      10.000  -3.000   2.000  1.00 20.00           C  \n\
              ATOM      3  CA  ALA A   3       9.000  -4.000   2.000  1.00 20.00           C  \n\
@@ -1718,12 +1716,12 @@ mod tests {
         let reference = crate::load_model(reference_path.to_str().unwrap())
             .unwrap()
             .value;
-        let mobile = crate::load_model(mobile_path.to_str().unwrap())
+        let query = crate::load_model(query_path.to_str().unwrap())
             .unwrap()
             .value;
         let selected = get_rmsd(
             reference.clone(),
-            mobile.clone(),
+            query.clone(),
             &RmsdOptions {
                 superpose_residues: "A".into(),
                 rmsd_residues: "B,C".into(),
@@ -1736,7 +1734,7 @@ mod tests {
 
         let default_all = get_rmsd(
             reference,
-            mobile,
+            query,
             &RmsdOptions {
                 superpose_residues: "A".into(),
                 ..Default::default()
@@ -1766,8 +1764,8 @@ mod tests {
             .read(input.to_str().unwrap())
             .unwrap()
             .0;
-        let mobile = reference.clone();
-        let analysis = get_rmsd(reference, mobile, &RmsdOptions::default()).unwrap();
+        let query = reference.clone();
+        let analysis = get_rmsd(reference, query, &RmsdOptions::default()).unwrap();
         assert_eq!(analysis.value.rmsd, 0.0);
         assert_eq!(
             analysis

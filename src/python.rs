@@ -118,19 +118,19 @@ impl crate::RmsdResult {
 /// Align two unaligned amino-acid strings and return a read-only SeqAlignment.
 ///
 /// Args:
-///     reference, mobile (str): First and second input sequences. Lowercase is
+///     reference, query (str): First and second input sequences. Lowercase is
 ///         normalized; standard amino acids and B/Z/X/U/O are accepted. Inputs
 ///         must be non-empty and contain no whitespace, gaps, or stop symbols.
 ///     mode (str): "global" (default) consumes both inputs; "local" selects
-///         best-scoring subsequences; "semi-global" consumes the entire mobile
+///         best-scoring subsequences; "semi-global" consumes the entire query
 ///         sequence with free reference terminal overhangs.
 ///     gap_open, gap_extend (float): Positive costs, default 10 and 0.5, with
 ///         at most two decimals and opening >= extension. A gap of length L
 ///         costs gap_open + (L - 1) * gap_extend.
 ///
 /// Returns:
-///     SeqAlignment: Plain gapped aligned_reference/aligned_mobile strings,
-///         reference-to-mobile operations (space, +, -, x), zero-based half-open
+///     SeqAlignment: Plain gapped aligned_reference/aligned_query strings,
+///         reference-to-query operations (space, +, -, x), zero-based half-open
 ///         input spans, score, matches, mismatches, gap_residues, and gap_runs.
 ///         identity_alignment/identity_shorter and coverage_alignment/coverage_shorter
 ///         are ratios using alignment-column and shorter-full-input denominators.
@@ -148,11 +148,11 @@ impl crate::RmsdResult {
 ///     >>> alignment.reference_span
 ///     (2, 11)
 #[pyfunction]
-#[pyo3(signature = (reference, mobile, mode="global", gap_open=10.0, gap_extend=0.5))]
+#[pyo3(signature = (reference, query, mode="global", gap_open=10.0, gap_extend=0.5))]
 fn align_seqs(
     py: Python<'_>,
     reference: &str,
-    mobile: &str,
+    query: &str,
     mode: &str,
     gap_open: f64,
     gap_extend: f64,
@@ -163,7 +163,7 @@ fn align_seqs(
         gap_extend,
     };
     let analysis = py
-        .detach(|| crate::align_seqs(reference, mobile, &options))
+        .detach(|| crate::align_seqs(reference, query, &options))
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(analysis.value)
@@ -172,7 +172,7 @@ fn align_seqs(
 /// Superpose two PDB/mmCIF structures; return a read-only RmsdResult in Ångströms.
 ///
 /// Args:
-///     reference, mobile (str): Paths to the two structures.
+///     reference, query (str): Paths to the two structures.
 ///     model_num (int): Model serial; 0 independently selects each first model.
 ///     superpose_residues (str): Residues determining the fit. Empty selects all
 ///         eligible residues. Use "A" for a whole chain or "A:1-100,A:110-120,B"
@@ -186,12 +186,12 @@ fn align_seqs(
 ///     align_seqs (bool): Align complete observed chains before atom selection.
 ///         When True, both residue selectors use reference author numbering;
 ///         otherwise selections apply to both structures with exact correspondence.
-///     chain_map (dict[str, str] | None): Explicit reference-to-mobile chain IDs,
+///     chain_map (dict[str, str] | None): Explicit reference-to-query chain IDs,
 ///         e.g. {"A": "H"}. Requires align_seqs=True, covers exactly selected
-///         reference chains, and assigns unique mobile chains. None infers a
+///         reference chains, and assigns unique query chains. None infers a
 ///         unique maximum-score assignment; ambiguous homomers require a map.
 ///     alignment_mode (str): "global" (default), "local", or "semi-global" for
-///         final chain alignment. Semi-global consumes the complete mobile chain.
+///         final chain alignment. Semi-global consumes the complete query chain.
 ///         Chain inference independently scores shorter against longer semi-globally.
 ///     gap_open, gap_extend (float): Alignment costs, default 10 and 0.5; positive,
 ///         at most two decimals, opening >= extension. Gap cost is open+(L-1)*extend.
@@ -210,18 +210,18 @@ fn align_seqs(
 ///         residue types, atom names, and elements. Omitted endpoints emit warnings.
 ///
 /// Example:
-///     >>> result = arpeggia.rmsd("reference.cif", "mobile.cif", align_seqs=True,
+///     >>> result = arpeggia.rmsd("reference.cif", "query.cif", align_seqs=True,
 ///     ...     superpose_residues="A:1-100", rmsd_residues="A:101-120")
 ///     >>> print(result.rmsd, result.core_rmsd)
 ///
 /// See docs/structure-comparison.md for selection examples and output schemas.
 #[pyfunction]
-#[pyo3(signature = (reference, mobile, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", *, align_seqs=false, chain_map=None, alignment_mode="global", gap_open=10.0, gap_extend=0.5, refine_cycles=0, refine_cutoff=2.0))]
+#[pyo3(signature = (reference, query, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", *, align_seqs=false, chain_map=None, alignment_mode="global", gap_open=10.0, gap_extend=0.5, refine_cycles=0, refine_cutoff=2.0))]
 #[allow(clippy::too_many_arguments)]
 fn rmsd(
     py: Python<'_>,
     reference: String,
-    mobile: String,
+    query: String,
     model_num: usize,
     superpose_residues: &str,
     rmsd_residues: &str,
@@ -254,9 +254,9 @@ fn rmsd(
     };
     crate::validate_rmsd_selections(superpose_residues, rmsd_residues).map_err(python_error)?;
     let reference = load_for_python(py, &reference)?;
-    let mobile = load_for_python(py, &mobile)?;
+    let query = load_for_python(py, &query)?;
     let analysis = py
-        .detach(move || crate::get_rmsd(reference, mobile, &options))
+        .detach(move || crate::get_rmsd(reference, query, &options))
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
     Ok(analysis.value)

@@ -17,14 +17,14 @@ from ._contract import (
 
 def align_seqs(
     reference: str,
-    mobile: str,
+    query: str,
     mode: AlignmentMode = ...,
     gap_open: float = ...,
     gap_extend: float = ...,
 ) -> SeqAlignment:
     """Align two non-empty unaligned protein strings with BLOSUM62.
 
-    mode is global (both complete), local, or semi-global (mobile complete,
+    mode is global (both complete), local, or semi-global (query complete,
     reference tails free). Gap costs are positive, at most two decimals, with
     open >= extend; a gap costs open + (length-1)*extend. Returns read-only
     gapped strings, operations, zero-based half-open spans, counts and ratios.
@@ -34,7 +34,7 @@ def align_seqs(
 
 def rmsd(
     reference: str,
-    mobile: str,
+    query: str,
     model_num: int = ...,
     superpose_residues: str = ...,
     rmsd_residues: str = ...,
@@ -59,7 +59,7 @@ def rmsd(
 
     align_seqs=True establishes observed-chain correspondence before selection,
     using reference numbering. chain_map={"A": "H"} explicitly maps every
-    selected reference chain to a unique mobile chain; otherwise infer a unique
+    selected reference chain to a unique query chain; otherwise infer a unique
     maximum-score assignment. alignment_mode/gap costs follow align_seqs().
     refine_cycles=0 means no rejection; positive values reject/refit at most N
     times using refine_cutoff (default 2) times current fit RMSD.
@@ -259,7 +259,7 @@ class SeqAlignment:
     @property
     def reference(self) -> str: ...
     @property
-    def mobile(self) -> str: ...
+    def query(self) -> str: ...
     @property
     def mode(self) -> str: ...
     @property
@@ -273,11 +273,11 @@ class SeqAlignment:
     @property
     def reference_span(self) -> tuple[int, int]: ...
     @property
-    def mobile_span(self) -> tuple[int, int]: ...
+    def query_span(self) -> tuple[int, int]: ...
     @property
     def aligned_reference(self) -> str: ...
     @property
-    def aligned_mobile(self) -> str: ...
+    def aligned_query(self) -> str: ...
     @property
     def operations(self) -> str: ...
     @property
@@ -314,18 +314,18 @@ class ResiduePair:
     @property
     def reference_name(self) -> str: ...
     @property
-    def mobile_number(self) -> int: ...
+    def query_number(self) -> int: ...
     @property
-    def mobile_insertion(self) -> str: ...
+    def query_insertion(self) -> str: ...
     @property
-    def mobile_name(self) -> str: ...
+    def query_name(self) -> str: ...
 
 class ChainAlignment:
-    """Reference/mobile chain IDs, optional sequence alignment and residue pairs."""
+    """Reference/query chain IDs, optional sequence alignment and residue pairs."""
     @property
     def reference_chain(self) -> str: ...
     @property
-    def mobile_chain(self) -> str: ...
+    def query_chain(self) -> str: ...
     @property
     def alignment(self) -> SeqAlignment | None: ...
     @property
@@ -336,7 +336,7 @@ class RmsdResult:
 
     Counts refer to atom pairs. cycles counts rejection inspections, including an
     unchanged final pass; refine_cycles is the requested maximum. chain_alignments
-    records correspondence. reference_model/mobile_model are selected serials.
+    records correspondence. reference_model/query_model are selected serials.
     """
     @property
     def rmsd(self) -> float: ...
@@ -359,7 +359,7 @@ class RmsdResult:
     @property
     def reference_model(self) -> int: ...
     @property
-    def mobile_model(self) -> int: ...
+    def query_model(self) -> int: ...
     @property
     def align_seqs(self) -> bool: ...
     @property
