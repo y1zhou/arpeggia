@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added exact pairwise protein sequence alignment with global, local, and
+  second-sequence-full semi-global modes, BLOSUM62 and configurable affine gap
+  costs. Results retain index mappings, aligned spans, gap statistics, both
+  identity/coverage normalizations, and independent full-input edit distance.
+- Qualified pinned Hyalite against 2,745 Biopython reference cases; see the
+  [sequence alignment validation](docs/benchmarks/sequence-alignment.md).
+
 ## [0.9.2] - 2026-09-08
 
 ### Changed

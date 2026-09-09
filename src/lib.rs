@@ -20,6 +20,7 @@ mod rmsd;
 mod sap;
 mod sasa;
 mod sc;
+mod seq_alignment;
 mod sequences;
 mod structure;
 mod utils;
@@ -45,6 +46,7 @@ pub use sasa::{
     get_relative_sasa, get_residue_sasa,
 };
 pub use sc::{ScResult, get_sc_details};
+pub use seq_alignment::{AlignmentMode, SeqAlignOptions, SeqAlignment, align_seqs};
 pub use sequences::get_sequences;
 
 // Python bindings module (only compiled when python feature is enabled)
