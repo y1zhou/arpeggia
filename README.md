@@ -9,20 +9,26 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 
 ## Features
 
-| Arpeggia module | Description |
-| --- | --- |
-| `contacts` | Atomic and aromatic contacts, including clashes, hydrogen bonds, ionic interactions, and explicit or potential covalent bonds. See [Scientific conventions](docs/scientific-conventions.md) for analysis assumptions, geometry rules, and the contact-identification decision path. |
-| `sasa` | Solvent accessible surface area at atom, residue, or chain level. |
-| `relative-sasa` | Residue SASA normalized by reference maximum areas. |
-| `sap` | Spatial Aggregation Propensity scores at atom or residue level. |
-| `dsasa`, `dsasa_components` | Two-sided buried interface area, including Rosetta-style polarity components. |
-| `sc` | Shape complementarity between chain groups. |
-| `seq` | Coordinate-observed protein sequences by chain. |
-| `seqres` | Declared polymer sequences, including residues without coordinates. |
-| `align_seqs` | Exact pairwise protein alignment, residue mappings, identity, gaps, and edit distance. See [Sequence alignment](docs/sequence-alignment.md). |
-| `rmsd` | Kabsch fitting and evaluation with optional sequence correspondence and outlier rejection; returns detailed RMSD results. |
-| `pairwise_rmsd` | Pairwise structure RMSDs using data in a folder or from a table. |
-| `cluster_structs` | Group conformations with k-medoids and select representative structures. See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection grammar, exact-correspondence requirements, output schemas, cache semantics, memory estimates, and threading behavior. |
+| Python API | CLI command | Purpose |
+| --- | --- | --- |
+| `contacts()` | `contacts` | Atomic and aromatic contacts. |
+| `sasa()` | `sasa` | Solvent accessible area per atom, residue, or chain. |
+| `relative_sasa()` | `relative-sasa` | Residue SASA normalized by reference maximum areas. |
+| `sap_score()` | `sap` | Spatial Aggregation Propensity per atom or residue. |
+| `dsasa()`, `dsasa_components()` | `dsasa` | Two-sided buried interface area and polarity components. |
+| `sc()` | `sc` | Shape complementarity between chain groups. |
+| `seq()` | `seq` | Coordinate-observed protein sequences. |
+| `seqres()` | `seqres` | Declared sequences, including residues without coordinates. |
+| `align_seqs()` | `align-seqs` | Gapped pairwise alignment, identity, score, and edit distance. |
+| `rmsd()` | `rmsd` | Structural fit/evaluation with optional sequence alignment and rejection. |
+| `pairwise_rmsd()` | `cluster-structs --pairwise-rmsd`¹ | Pairwise RMSD table for exactly corresponding structures. |
+| `cluster_structs()` | `cluster-structs` | K-medoids clustering and representative structures. |
+
+¹ The CLI writes the pair table as part of clustering; Python can calculate it independently.
+
+See [sequence alignment](docs/sequence-alignment.md),
+[structure comparison](docs/structure-comparison.md), and
+[scientific conventions](docs/scientific-conventions.md) for usage and assumptions.
 
 Analyses accept PDB and mmCIF files with chain selections. Tabular Python
 results are Polars DataFrames; CLI tables support CSV, Parquet, and NDJSON.
@@ -46,7 +52,7 @@ Or install from source using maturin:
 git clone https://github.com/y1zhou/arpeggia.git
 cd arpeggia
 uv sync --frozen --all-extras
-uv run maturin develop --uv --release --features python --locked
+uv run --extra dev maturin develop --uv --release --features python --locked
 ```
 
 ### Rust Binary

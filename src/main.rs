@@ -25,7 +25,7 @@ enum Commands {
     ClusterStructs(crate::cli::cluster_structs::Args),
     /// Analyze atomic and ring contacts in a PDB or mmCIF file
     Contacts(crate::cli::contacts::Args),
-    /// Calculate the solvent accessible surface area (SASA) of each atom in a PDB or mmCIF file
+    /// Calculate solvent accessible surface area (Å²) per atom, residue, or chain
     Sasa(crate::cli::sasa::Args),
     /// Calculate the buried surface area (dSASA) at the interface between chain groups
     Dsasa(crate::cli::dsasa::Args),
@@ -35,7 +35,7 @@ enum Commands {
     Sap(crate::cli::sap::Args),
     /// Calculate Shape Complementarity (SC) between two chain groups
     Sc(crate::cli::sc::Args),
-    /// Print the sequences of all chains in a PDB or mmCIF file
+    /// Print coordinate-observed protein sequences by chain
     Seq(crate::cli::pdb2seq::Args),
     /// Print declared SEQRES/entity-polymer sequences
     Seqres(crate::cli::pdb2seq::DeclaredArgs),

@@ -115,7 +115,38 @@ impl crate::RmsdResult {
     }
 }
 
-/// Align two unaligned protein sequences using exact BLOSUM62 affine scoring.
+/// Align two unaligned amino-acid strings and return a read-only SeqAlignment.
+///
+/// Args:
+///     reference, mobile (str): First and second input sequences. Lowercase is
+///         normalized; standard amino acids and B/Z/X/U/O are accepted. Inputs
+///         must be non-empty and contain no whitespace, gaps, or stop symbols.
+///     mode (str): "global" (default) consumes both inputs; "local" selects
+///         best-scoring subsequences; "semi-global" consumes the entire mobile
+///         sequence with free reference terminal overhangs.
+///     gap_open, gap_extend (float): Positive costs, default 10 and 0.5, with
+///         at most two decimals and opening >= extension. A gap of length L
+///         costs gap_open + (L - 1) * gap_extend.
+///
+/// Returns:
+///     SeqAlignment: Plain gapped aligned_reference/aligned_mobile strings,
+///         reference-to-mobile operations (space, +, -, x), zero-based half-open
+///         input spans, score, matches, mismatches, gap_residues, and gap_runs.
+///         identity_alignment/identity_shorter and coverage_alignment/coverage_shorter
+///         are ratios using alignment-column and shorter-full-input denominators.
+///         edit_distance is full-input Levenshtein distance, independent of score.
+///         Empty local results have score zero and None alignment-length ratios.
+///         U/O score as C/K with a warning but retain distinct identity.
+///
+/// Display:
+///     print(result) shows colored, wrapped sequences and position rulers when
+///     the terminal permits. result.format(width=60, color="never", rulers=False)
+///     gives plain output without rulers. Fields contain no color escapes.
+///
+/// Example:
+///     >>> alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")
+///     >>> alignment.reference_span
+///     (2, 11)
 #[pyfunction]
 #[pyo3(signature = (reference, mobile, mode="global", gap_open=10.0, gap_extend=0.5))]
 fn align_seqs(
@@ -138,7 +169,52 @@ fn align_seqs(
     Ok(analysis.value)
 }
 
-/// Superpose two structures and return fitting and evaluation statistics.
+/// Superpose two PDB/mmCIF structures; return a read-only RmsdResult in Ångströms.
+///
+/// Args:
+///     reference, mobile (str): Paths to the two structures.
+///     model_num (int): Model serial; 0 independently selects each first model.
+///     superpose_residues (str): Residues determining the fit. Empty selects all
+///         eligible residues. Use "A" for a whole chain or "A:1-100,A:110-120,B"
+///         for a union of inclusive author-number ranges and chains. Repeat the
+///         chain in each clause. Negative numbers ("A:-5--1") and insertion
+///         codes ("B:10A-20") are accepted; "A:10" includes all insertion variants.
+///     rmsd_residues (str): Residues evaluated under the fitted transform, with
+///         the same syntax. Empty independently means all; it does not inherit
+///         superpose_residues. Evaluation never determines or refits the transform.
+///     atoms (str): "ca" (default), "backbone" (N/CA/C/O/OXT), "heavy", or "all".
+///     align_seqs (bool): Align complete observed chains before atom selection.
+///         When True, both residue selectors use reference author numbering;
+///         otherwise selections apply to both structures with exact correspondence.
+///     chain_map (dict[str, str] | None): Explicit reference-to-mobile chain IDs,
+///         e.g. {"A": "H"}. Requires align_seqs=True, covers exactly selected
+///         reference chains, and assigns unique mobile chains. None infers a
+///         unique maximum-score assignment; ambiguous homomers require a map.
+///     alignment_mode (str): "global" (default), "local", or "semi-global" for
+///         final chain alignment. Semi-global consumes the complete mobile chain.
+///         Chain inference independently scores shorter against longer semi-globally.
+///     gap_open, gap_extend (float): Alignment costs, default 10 and 0.5; positive,
+///         at most two decimals, opening >= extension. Gap cost is open+(L-1)*extend.
+///     refine_cycles (int): Maximum rejection/refit rounds after the initial fit;
+///         0 (default) performs no rejection. Stops early when unchanged or exact.
+///     refine_cutoff (float): Positive rejection multiplier (default 2) of current
+///         fitting RMSD. Rejection is permanent and works with or without alignment.
+///
+/// Returns:
+///     RmsdResult: rmsd evaluates every mapped selected evaluation pair, including
+///         rejected fitting pairs. core_rmsd measures surviving fitting pairs;
+///         initial_rmsd is before rejection. Counts, cycles, parameters, and
+///         chain_alignments retain correspondence. Fitting needs at least three
+///         non-collinear atom pairs; evaluation needs one. Invalid survivors fail.
+///         Sequence mismatches can pair backbone atoms; side chains require matching
+///         residue types, atom names, and elements. Omitted endpoints emit warnings.
+///
+/// Example:
+///     >>> result = arpeggia.rmsd("reference.cif", "mobile.cif", align_seqs=True,
+///     ...     superpose_residues="A:1-100", rmsd_residues="A:101-120")
+///     >>> print(result.rmsd, result.core_rmsd)
+///
+/// See docs/structure-comparison.md for selection examples and output schemas.
 #[pyfunction]
 #[pyo3(signature = (reference, mobile, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", *, align_seqs=false, chain_map=None, alignment_mode="global", gap_open=10.0, gap_extend=0.5, refine_cycles=0, refine_cutoff=2.0))]
 #[allow(clippy::too_many_arguments)]
@@ -186,7 +262,34 @@ fn rmsd(
     Ok(analysis.value)
 }
 
-/// Calculate every unordered RMSD pair in a structure ensemble.
+/// Calculate every unordered pairwise RMSD using exact atom correspondence.
+///
+/// Args:
+///     input (str): Non-recursive PDB/mmCIF directory, or CSV, Parquet, or NDJSON
+///         manifest. At least two structures are required. Directory IDs are
+///         filename stems; manifest relative paths resolve against the manifest.
+///     id_col, path_col (str): Manifest columns, default "id" and "path".
+///         IDs and resolved file paths must be unique.
+///     model_num (int): Model serial; 0 selects each structure's first model.
+///     superpose_residues, rmsd_residues (str): Independent fitting and evaluation
+///         selections. Each defaults to all eligible residues. Use "A:1-100,B"
+///         for inclusive author-number ranges/whole chains; repeat chain IDs in
+///         each comma-separated clause. Insertion codes and negative numbers
+///         are supported. Empty evaluation does not inherit the fitting selection.
+///     atoms (str): "ca" (default), "backbone" (N/CA/C/O/OXT), "heavy", or "all".
+///     num_threads (int): Worker limit; 0 uses available processors.
+///     bypass_mem_check (bool): Skip heuristic memory checks (default False).
+///         Pair storage is quadratic in structure count. Checks are estimates,
+///         not a guarantee against running out of memory.
+///
+/// Returns:
+///     polars.DataFrame: id_1 (String), id_2 (String), rmsd (Float64, Ångströms),
+///         one row per unordered pair. Atom identities must agree across the
+///         collection; sequence alignment and refinement are not supported here.
+///
+/// Example:
+///     >>> pairs = arpeggia.pairwise_rmsd("structures/", superpose_residues="A",
+///     ...     rmsd_residues="B", num_threads=8)
 #[pyfunction]
 #[pyo3(signature = (input, id_col="id", path_col="path", model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
 #[allow(clippy::too_many_arguments)]
@@ -219,7 +322,39 @@ fn pairwise_rmsd(
     Ok(PyDataFrame(analysis.value))
 }
 
-/// Cluster structures from an ensemble input or a complete pairwise RMSD table.
+/// Cluster at least three structures with k-medoids and return representatives.
+///
+/// Args:
+///     input (str | None): Directory or manifest accepted by pairwise_rmsd().
+///     pairwise_rmsd (polars.DataFrame | None): Complete unordered pair table with
+///         id_1, id_2, rmsd columns. Supply exactly one of input or pairwise_rmsd.
+///     id_col, path_col (str): Manifest ID/path columns, default "id"/"path".
+///     method (str): "k-medoids", currently the only supported method.
+///     num_clusters (int | None): Fixed count from 1 through the structure count.
+///         Takes precedence over max_clusters with a warning when both are given.
+///     max_clusters (int | None): Upper bound for automatic selection, at least 2
+///         and less than the structure count. Supply this or num_clusters.
+///         An effectively identical ensemble forms one cluster automatically.
+///     max_iterations (int): Iteration budget, default 100; nonconvergence fails.
+///     model_num (int): Model serial; 0 selects each first model for input structures.
+///     superpose_residues, rmsd_residues (str): Independent fit/evaluation selections
+///         for input structures, each defaulting to all. Syntax: "A:1-100,B",
+///         a comma union of inclusive author-number ranges or whole chains;
+///         insertion codes and negative numbers are supported. Empty evaluation
+///         does not inherit the fit selection. Exact atom correspondence is required.
+///     atoms (str): "ca" (default), "backbone" (N/CA/C/O/OXT), "heavy", or "all".
+///     num_threads (int): Pairwise worker limit; 0 uses available processors.
+///     bypass_mem_check (bool): Skip heuristic memory checks, default False.
+///         Structure-selection options do not alter a supplied pairwise table.
+///
+/// Returns:
+///     polars.DataFrame: id (String), cluster_id (UInt32, zero-based), medoid_id
+///         (String), rmsd_to_medoid (Float64, Ångströms).
+///
+/// Example:
+///     >>> clusters = arpeggia.cluster_structs(input="structures/", num_clusters=3)
+///
+/// See docs/structure-comparison.md for schemas, CLI cache behavior, and memory use.
 #[pyfunction]
 #[pyo3(signature = (input=None, pairwise_rmsd=None, id_col="id", path_col="path", method="k-medoids", num_clusters=None, max_clusters=None, max_iterations=100, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", num_threads=0, bypass_mem_check=false))]
 #[allow(clippy::too_many_arguments)]
@@ -310,7 +445,7 @@ fn cluster_structs(
 ///     input_file (str): Path to the PDB or mmCIF file
 ///     groups (str, optional): Chain groups specification. Defaults to "/" (all-to-all).
 ///         Examples: "A,B/C,D" for chains A,B vs C,D; "A/" for chain A vs all others.
-///     vdw_comp (float, optional): VdW radii compensation factor. Defaults to 0.1.
+///     vdw_comp (float, optional): VdW distance tolerance in Ångströms. Defaults to 0.1.
 ///     dist_cutoff (float, optional): Distance cutoff for neighbor searches in Ångströms. Defaults to 6.5.
 ///     ignore_zero_occupancy (bool, optional): If True, ignore atoms with zero occupancy. Defaults to False.
 ///     protonation (str, optional): Histidine policy: "all-charged" (default),
@@ -389,13 +524,13 @@ fn contacts(
 ///         - "chain": Aggregate SASA by chain
 ///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
 ///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
-///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
 ///     chains (str, optional): Comma-separated chain IDs to include (e.g., "A,B,C").
 ///         If empty, includes all chains. Defaults to "".
 ///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
 ///
 /// Returns:
-///     polars.DataFrame: A DataFrame with SASA values. Columns depend on the level:
+///     polars.DataFrame: A DataFrame with SASA areas in Å². Columns depend on the level:
 ///         - atom: atomi, sasa, polarity, chain, resn, resi, insertion, altloc, atomn
 ///         - residue: chain, resn, resi, insertion, sasa, polar_sasa,
 ///           hydrophobic_sasa, unclassified_sasa
@@ -460,10 +595,11 @@ fn sasa(
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
 ///     groups (str): Chain groups specification for interface calculation.
-///         Format: "A,B/C,D" where chains A,B form one side and C,D form the other side.
+///         Format: "A,B/C,D" where chains A,B form one side and C,D form the other.
+///         Groups must be disjoint and non-empty; "A/" selects A vs all remaining chains.
 ///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
 ///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
-///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
 ///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
 ///
 /// Returns:
@@ -496,7 +632,19 @@ fn dsasa(
     .0)
 }
 
-/// Return two-sided dSASA and polar, hydrophobic, and unclassified partitions.
+/// Return (total, polar, hydrophobic, unclassified) two-sided dSASA in Å².
+///
+/// Args:
+///     input_file (str): PDB or mmCIF path.
+///     groups (str): Disjoint non-empty groups, e.g. "A,B/C" or "A/" (A vs rest).
+///     probe_radius (float): Solvent probe radius in Å, default 1.4.
+///     n_points (int): Positive surface sample count per sphere, default 100.
+///     model_num (int): Model serial, or 0 for the first model.
+///     num_threads (int): Worker limit, default 1; 0 uses available processors.
+///
+/// The total is SASA(group1) + SASA(group2) - SASA(complex); partitions sum to
+/// that total. Example: total, polar, hydrophobic, unknown =
+/// arpeggia.dsasa_components("complex.cif", groups="H,L/A").
 #[pyfunction]
 #[pyo3(signature = (input_file, groups, probe_radius=1.4, n_points=100, model_num=0, num_threads=1))]
 fn dsasa_components(
@@ -526,13 +674,15 @@ fn dsasa_components(
     ))
 }
 
-/// Load a PDB or mmCIF file and extract sequences for all chains.
+/// Extract coordinate-observed protein sequences for all chains in a selected model.
 ///
 /// Args:
-///     input_file (str): Path to the PDB or mmCIF file
+///     input_file (str): Path to the PDB or mmCIF file.
+///     model_num (int): Model serial; 0 selects the first model (default).
 ///
 /// Returns:
-///     list[tuple[str, str]]: A list of (chain ID, sequence) tuples
+///     list[tuple[str, str]]: (chain ID, observed protein sequence) tuples.
+///         Declared residues without coordinates are absent; use seqres() for those.
 ///
 /// Example:
 ///     >>> import arpeggia
@@ -558,6 +708,12 @@ fn seq(
 }
 
 /// Return declared PDB SEQRES or mmCIF entity-polymer sequences by chain.
+///
+/// input_file is a PDB/mmCIF path. Returns list[tuple[str, str]] of (chain ID,
+/// sequence), including declared residues without coordinates. No coordinate model
+/// is selected. Use seq() for coordinate-observed protein sequences instead.
+///
+/// Example: declared = arpeggia.seqres("structure.cif").
 #[pyfunction]
 fn seqres(py: Python<'_>, input_file: String) -> PyResult<Vec<(String, String)>> {
     let analysis = py
@@ -576,13 +732,14 @@ fn seqres(py: Python<'_>, input_file: String) -> PyResult<Vec<(String, String)>>
 ///     input_file (str): Path to the PDB or mmCIF file
 ///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
 ///     n_points (int, optional): Number of points for surface calculation. Defaults to 100.
-///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
 ///     chains (str, optional): Comma-separated chain IDs to include (e.g., "A,B,C").
 ///         If empty, includes all chains. Defaults to "".
 ///     num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
 ///
 /// Returns:
-///     polars.DataFrame: A DataFrame with relative SASA values for each residue with columns:
+///     polars.DataFrame: A DataFrame with areas in Å² and dimensionless relative_sasa ratios
+///         (not percentages), with columns:
 ///         - chain, resn, resi, insertion, sasa, polar_sasa,
 ///           hydrophobic_sasa, unclassified_sasa, relative_sasa
 ///
@@ -645,7 +802,7 @@ fn relative_sasa(
 ///         - "residue": Aggregate SAP by residue (default)
 ///     probe_radius (float, optional): Probe radius in Ångströms for SASA calculation. Defaults to 1.1.
 ///     n_points (int, optional): Number of points for SASA surface calculation. Defaults to 100.
-///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///     model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
 ///     sap_radius (float, optional): Radius in Ångströms for neighbor search. Defaults to 5.0.
 ///     chains (str, optional): Comma-separated chain IDs to include (e.g., "H,L").
 ///         If empty, includes all chains. Defaults to "".
@@ -726,8 +883,9 @@ fn sap_score(
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
 ///     groups (str): Chain groups specification, e.g., "H,L/A" for chains H,L vs chain A.
-///         Both groups must be specified separated by "/".
-///     model_num (int, optional): Model number to analyze (0 for first model). Defaults to 0.
+///         Groups must be disjoint and non-empty, separated by "/"; "H,L/"
+///         compares H,L against all remaining chains.
+///     model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
 ///     num_threads (int, optional): Number of threads for parallel calculations (0 for auto). Defaults to 0.
 ///
 /// Returns:

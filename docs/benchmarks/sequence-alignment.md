@@ -44,7 +44,7 @@ A threshold that removes every fitting pair fails with the surviving count.
 
 ## Python performance and package size
 
-Release wheels for baseline `e3a1677` (v0.9.2) and this feature used the same
+Release wheels for baseline `e3a1677` (v0.9.2) and API milestone `aded22f` used the same
 Rust 1.96 toolchain and CPython 3.13 on Linux x86-64 (Ryzen 9 9950X3D).
 The table reports the median of five fresh-process medians, with three warm-up
 calls per process and alternating case order.
@@ -78,3 +78,13 @@ Growth includes the complete feature, bindings, and serialization. Validation
 passed 205 Rust tests (including CLI and doctests), 17 Python tests against the
 fresh wheel with warnings treated as errors, Python type checking, and all
 pre-commit checks.
+
+## Gapped results and display validation
+
+The measurements above predate colored rendering and expanded help. The display
+follow-up passes 208 Rust tests and 18 Python tests against the rebuilt editable
+extension, with Python warnings treated as errors. Regressions cover gapped
+strings and recovered residue indices, insertion/deletion orientation, independent
+rulers across gaps, narrow wrapping, gray clipping, empty local results, and plain
+JSON. CLI and Python were also checked in a 40-column pseudo-terminal: both
+detected width, enabled color automatically, and respected `NO_COLOR`.

@@ -5,7 +5,7 @@ Research date: 2026-08-28
 Alternative methods and crate evidence as of the research date. Accepted choices
 are in [ADR 0008](../adr/0008-cluster-structures-with-kabsch-and-k-medoids.md);
 arguments, schemas, and measurements are in the
-[usage guide](../benchmarks/structure-clustering.md).
+[usage guide](../structure-comparison.md).
 
 ## K-medoids and automatic-count evidence
 

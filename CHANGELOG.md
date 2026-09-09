@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Expanded CLI help and Python/IDE documentation with residue selection syntax,
+  independent defaults, units, result semantics, and examples. Moved structure
+  comparison usage out of the benchmark document into a dedicated guide.
+
 - Replaced `SeqAlignment.columns` with plain gapped `aligned_reference`,
   `aligned_mobile`, and `operations` strings; structural mapping derives indices
   internally from the alignment spans.

@@ -90,6 +90,12 @@ forces ANSI color. Fields and JSON always contain plain data.
 
 ## Establish structural correspondence
 
+Residue selectors use comma-separated chains and inclusive author-number ranges,
+e.g. `A:1-100,A:110-120,B`. Repeat the chain in each clause. Empty selectors
+independently mean all eligible residues; an empty evaluation selection never
+inherits the fitting selection. See the [selection guide](structure-comparison.md#rmsd)
+for insertion codes, negative numbers, and atom populations.
+
 ```python
 result = arpeggia.rmsd(
     "reference.cif", "mobile.cif",

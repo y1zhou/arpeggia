@@ -3,7 +3,7 @@
 Arpeggia uses a serial `f64` Kabsch kernel and a packed pairwise RMSD matrix
 with k-medoids clustering. The public selection grammar, table schemas, input
 formats, cache behavior, and measured performance are documented in the
-[structure-clustering guide](../benchmarks/structure-clustering.md).
+[structure-clustering guide](../structure-comparison.md).
 
 [ADR 0009](0009-separate-sequence-correspondence-from-rmsd-evaluation.md) extends
 two-structure RMSD with optional sequence correspondence and refinement; the

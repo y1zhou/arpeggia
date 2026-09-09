@@ -6,10 +6,10 @@ pub(crate) struct AlignmentArgs {
     /// Sequence alignment objective (semi-global consumes the second sequence)
     #[arg(long, alias = "mode", value_enum, default_value = "global")]
     alignment_mode: AlignmentMode,
-    /// Positive gap opening cost, at most two decimal places
+    /// Positive first-gap-residue cost, at most two decimals; gap cost = open + (length-1)*extend
     #[arg(long, default_value_t = 10.0)]
     gap_open: f64,
-    /// Positive extension cost, no larger than opening
+    /// Positive cost per additional gap residue, at most two decimals and no larger than opening
     #[arg(long, default_value_t = 0.5)]
     gap_extend: f64,
 }
@@ -40,6 +40,9 @@ impl DisplayArgs {
     }
 }
 #[derive(Parser, Debug, Clone)]
+#[command(
+    after_help = "Example: arpeggia align-seqs GGACDEFGHIKGG ACDEFGHIK --mode semi-global\nInputs are amino-acid strings, without whitespace, gaps, or stop symbols.\nSemi-global consumes the complete second sequence with free first-sequence tails.\nIdentity/coverage are ratios, reported using alignment and shorter-input lengths.\nUse --json for plain structured data; display controls do not affect alignment."
+)]
 pub(crate) struct Args {
     /// First unaligned protein sequence
     reference: String,

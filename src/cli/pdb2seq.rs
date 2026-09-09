@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 #[derive(Parser, Debug, Clone)]
 #[command(version, about)]
 pub(crate) struct Args {
-    /// Model number to select (0 selects the first model)
+    /// Model serial to select (0 selects the first model)
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 

@@ -10,27 +10,24 @@ pub(crate) struct Args {
     #[arg(short, long)]
     input: PathBuf,
 
-    /// Group chains for interface calculation:
-    /// e.g. A,B/C,D
-    /// where chains A and B form one side and C and D form the other side.
-    /// The buried surface area is calculated as the difference between the
-    /// combined SASA and the sum of individual group SASAs.
+    /// Disjoint, non-empty interface groups, e.g. A,B/C,D or A/ (A vs remaining chains).
+    /// Two-sided area in Å² = SASA(group1) + SASA(group2) - SASA(complex).
     #[arg(short, long)]
     groups: String,
 
-    /// Model number to analyze (default: 0, the first model)
+    /// Model serial to analyze (0 selects the first model)
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Probe radius r (smaller r detects more surface details and reports a larger surface)
+    /// Solvent probe radius in Ångströms
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
     probe_radius: f32,
 
-    /// Number of points on the sphere for sampling
+    /// Positive number of sample points per atomic sphere
     #[arg(short = 'n', long = "num-points", default_value_t = 100)]
     n_points: usize,
 
-    /// Number of threads to use for parallel processing
+    /// Worker count (0 uses available processors)
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
 }
