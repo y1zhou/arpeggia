@@ -57,9 +57,33 @@ fn clustering_method(value: &str) -> PyResult<crate::ClusteringMethod> {
     value_enum(value, "method must be 'k-medoids'")
 }
 
-/// Superpose two structures and return RMSD in Angstroms.
+/// Align two unaligned protein sequences using exact BLOSUM62 affine scoring.
 #[pyfunction]
-#[pyo3(signature = (reference, mobile, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca"))]
+#[pyo3(signature = (reference, mobile, mode="global", gap_open=10.0, gap_extend=0.5))]
+fn align_seqs(
+    py: Python<'_>,
+    reference: &str,
+    mobile: &str,
+    mode: &str,
+    gap_open: f64,
+    gap_extend: f64,
+) -> PyResult<crate::SeqAlignment> {
+    let options = crate::SeqAlignOptions {
+        mode: value_enum(mode, "mode must be 'global', 'local', or 'semi-global'")?,
+        gap_open,
+        gap_extend,
+    };
+    let analysis = py
+        .detach(|| crate::align_seqs(reference, mobile, &options))
+        .map_err(python_error)?;
+    emit_python_warnings(py, analysis.warnings)?;
+    Ok(analysis.value)
+}
+
+/// Superpose two structures and return fitting and evaluation statistics.
+#[pyfunction]
+#[pyo3(signature = (reference, mobile, model_num=0, superpose_residues="", rmsd_residues="", atoms="ca", *, align_seqs=false, chain_map=None, alignment_mode="global", gap_open=10.0, gap_extend=0.5, refine_cycles=0, refine_cutoff=2.0))]
+#[allow(clippy::too_many_arguments)]
 fn rmsd(
     py: Python<'_>,
     reference: String,
@@ -68,28 +92,40 @@ fn rmsd(
     superpose_residues: &str,
     rmsd_residues: &str,
     atoms: &str,
-) -> PyResult<f64> {
-    let atoms = atom_subset(atoms)?;
+    align_seqs: bool,
+    chain_map: Option<std::collections::BTreeMap<String, String>>,
+    alignment_mode: &str,
+    gap_open: f64,
+    gap_extend: f64,
+    refine_cycles: usize,
+    refine_cutoff: f64,
+) -> PyResult<crate::RmsdResult> {
+    let options = crate::RmsdOptions {
+        model_num,
+        superpose_residues: superpose_residues.into(),
+        rmsd_residues: rmsd_residues.into(),
+        atoms: atom_subset(atoms)?,
+        align_seqs,
+        chain_map: chain_map.unwrap_or_default(),
+        alignment: crate::SeqAlignOptions {
+            mode: value_enum(
+                alignment_mode,
+                "alignment_mode must be 'global', 'local', or 'semi-global'",
+            )?,
+            gap_open,
+            gap_extend,
+        },
+        refine_cycles,
+        refine_cutoff,
+    };
     crate::validate_rmsd_selections(superpose_residues, rmsd_residues).map_err(python_error)?;
     let reference = load_for_python(py, &reference)?;
     let mobile = load_for_python(py, &mobile)?;
     let analysis = py
-        .detach(move || {
-            crate::get_rmsd(
-                reference,
-                mobile,
-                &crate::RmsdOptions {
-                    model_num,
-                    superpose_residues: superpose_residues.into(),
-                    rmsd_residues: rmsd_residues.into(),
-                    atoms,
-                    ..Default::default()
-                },
-            )
-        })
+        .detach(move || crate::get_rmsd(reference, mobile, &options))
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
-    Ok(analysis.value.rmsd)
+    Ok(analysis.value)
 }
 
 /// Calculate every unordered RMSD pair in a structure ensemble.
@@ -673,6 +709,11 @@ fn sc(
 /// including contact detection, SASA calculation, SAP score calculation, and sequence extraction.
 #[pymodule]
 fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<crate::SeqAlignment>()?;
+    m.add_class::<crate::RmsdResult>()?;
+    m.add_class::<crate::ChainAlignment>()?;
+    m.add_class::<crate::ResiduePair>()?;
+    m.add_function(wrap_pyfunction!(align_seqs, m)?)?;
     m.add_function(wrap_pyfunction!(rmsd, m)?)?;
     m.add_function(wrap_pyfunction!(pairwise_rmsd, m)?)?;
     m.add_function(wrap_pyfunction!(cluster_structs, m)?)?;

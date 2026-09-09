@@ -1,6 +1,9 @@
 """Shared Python exposure contract for arpeggia."""
 
+EXPORTED_CLASSES = ("SeqAlignment", "RmsdResult", "ChainAlignment", "ResiduePair")
+
 EXPORTED_FUNCTIONS = (
+    "align_seqs",
     "rmsd",
     "pairwise_rmsd",
     "cluster_structs",

@@ -58,8 +58,13 @@ Example:
 
 from importlib.metadata import version
 
-from arpeggia._contract import EXPORTED_FUNCTIONS
+from arpeggia._contract import EXPORTED_CLASSES, EXPORTED_FUNCTIONS
 from arpeggia.arpeggia import (  # noqa: F401
+    ChainAlignment,
+    ResiduePair,
+    RmsdResult,
+    SeqAlignment,
+    align_seqs,
     cluster_structs,
     contacts,
     dsasa,
@@ -75,4 +80,4 @@ from arpeggia.arpeggia import (  # noqa: F401
 )
 
 __version__ = version("arpeggia")
-__all__ = list(EXPORTED_FUNCTIONS)
+__all__ = list(EXPORTED_FUNCTIONS + EXPORTED_CLASSES)

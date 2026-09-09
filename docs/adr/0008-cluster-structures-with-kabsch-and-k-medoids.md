@@ -5,6 +5,10 @@ with k-medoids clustering. The public selection grammar, table schemas, input
 formats, cache behavior, and measured performance are documented in the
 [structure-clustering guide](../benchmarks/structure-clustering.md).
 
+[ADR 0009](0009-separate-sequence-correspondence-from-rmsd-evaluation.md) extends
+two-structure RMSD with optional sequence correspondence and refinement; the
+exact-correspondence collection behavior below remains unchanged.
+
 ## Correspondence and superposition
 
 Selected atoms must correspond exactly after model and conformer selection.

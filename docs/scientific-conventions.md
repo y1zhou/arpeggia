@@ -28,7 +28,9 @@
   direct Rosetta comparison requires the same caller-prepared full-atom input.
   Monomers without a Rosetta calibration are omitted with a warning.
 - RMSD uses uniform-weight Kabsch superposition with proper rotations and exact
-  selected-atom correspondence. Structure clustering uses the resulting
+  selected-atom correspondence by default. Optional [sequence correspondence and
+  refinement](sequence-alignment.md) preserve a separate evaluation population.
+  Structure clustering uses the resulting
   pairwise RMSD matrix and observed medoid structures; it does not perform
   sequence alignment or add missing atoms.
 

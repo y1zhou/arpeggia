@@ -17,7 +17,9 @@ struct Cli {
 
 #[derive(Subcommand, Clone)]
 enum Commands {
-    /// Superpose two structures and print their RMSD in Angstroms
+    /// Align two unaligned protein sequences
+    AlignSeqs(crate::cli::align_seqs::Args),
+    /// Superpose two structures and report fitting and evaluation RMSD
     Rmsd(crate::cli::rmsd::Args),
     /// Cluster a directory of exactly corresponding protein structures
     ClusterStructs(crate::cli::cluster_structs::Args),
@@ -53,6 +55,7 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
     let result: ArpeggiaResult<()> = match &cli.command {
+        Commands::AlignSeqs(args) => crate::cli::align_seqs::run(args),
         Commands::Rmsd(args) => crate::cli::rmsd::run(args),
         Commands::ClusterStructs(args) => crate::cli::cluster_structs::run(args),
         Commands::Contacts(args) => crate::cli::contacts::run(args),

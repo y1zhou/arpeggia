@@ -19,7 +19,8 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 | `sc` | Shape complementarity between chain groups. |
 | `seq` | Coordinate-observed protein sequences by chain. |
 | `seqres` | Declared polymer sequences, including residues without coordinates. |
-| `rmsd` | Kabsch superposition with separate fitting and measurement selections. |
+| `align_seqs` | Exact pairwise protein alignment, residue mappings, identity, gaps, and edit distance. See [Sequence alignment](docs/sequence-alignment.md). |
+| `rmsd` | Kabsch fitting and evaluation with optional sequence correspondence and outlier rejection; returns detailed RMSD results. |
 | `pairwise_rmsd` | Pairwise structure RMSDs using data in a folder or from a table. |
 | `cluster_structs` | Group conformations with k-medoids and select representative structures. See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for selection grammar, exact-correspondence requirements, output schemas, cache semantics, memory estimates, and threading behavior. |
 
@@ -127,13 +128,15 @@ for chain_id, seq in sequences:
 declared_sequences = arpeggia.seqres("structure.pdb")
 
 # Superpose on chain A, measure chains B/C, and cluster a pairwise matrix
-rmsd = arpeggia.rmsd(
+result = arpeggia.rmsd(
     "reference.cif",
     "mobile.cif",
     superpose_residues="A",
     rmsd_residues="B,C",
     atoms="ca",
 )
+print(result.rmsd, result.core_rmsd)
+alignment = arpeggia.align_seqs("ACDEFGHIK", "ACDEYGHIK")
 pairs = arpeggia.pairwise_rmsd("structures/", num_threads=8)
 clusters = arpeggia.cluster_structs(pairwise_rmsd=pairs, max_clusters=10)
 ```

@@ -27,7 +27,9 @@ def test_import():
     assert hasattr(arpeggia, "seq")
     assert hasattr(arpeggia, "rmsd")
     assert hasattr(arpeggia, "cluster_structs")
-    assert arpeggia.__all__ == list(_contract.EXPORTED_FUNCTIONS)
+    assert arpeggia.__all__ == list(
+        _contract.EXPORTED_FUNCTIONS + _contract.EXPORTED_CLASSES
+    )
 
 
 def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
@@ -42,7 +44,7 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
             test_pdb_file,
             superpose_residues="A:1-20",
             rmsd_residues="A:1-20",
-        )
+        ).rmsd
         < 1e-12
     )
     assert (
@@ -50,7 +52,7 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
             test_pdb_file,
             test_pdb_file,
             superpose_residues="A:1-20",
-        )
+        ).rmsd
         < 1e-12
     )
     with pytest.raises(ValueError, match="RMSD Selection"):
@@ -401,3 +403,62 @@ def test_dsasa_matches_components(tmp_path):
     assert arpeggia.dsasa(str(structure), groups="A/B") == components[0]
     assert components[0] > 0
     assert components[0] == pytest.approx(sum(components[1:]))
+
+
+def test_sequence_alignment_results():
+    """Expose mappings, defined denominators, alias warnings, and frozen fields."""
+    import arpeggia
+
+    alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")
+    assert isinstance(alignment, arpeggia.SeqAlignment)
+    assert alignment.reference_span == (2, 11)
+    assert alignment.columns[0] == (2, 0)
+    assert alignment.edit_distance == 4
+    assert alignment.identity_alignment == alignment.identity_shorter == 1.0
+    with pytest.raises(AttributeError):
+        alignment.score = 0
+    empty = arpeggia.align_seqs("AAAA", "WWWW", mode="local")
+    assert empty.identity_alignment is None
+    assert empty.coverage_alignment is None
+    assert empty.coverage_shorter == 0.0
+    with pytest.warns(UserWarning, match="SEQUENCE_SCORING_ALIAS"):
+        aliases = arpeggia.align_seqs("UO", "CK")
+    assert aliases.matches == 0
+    with pytest.raises(ValueError):
+        arpeggia.align_seqs("ACD", "ACD", gap_open=0.001)
+    with pytest.raises(ValueError):
+        arpeggia.align_seqs("ACD", "ACD", gap_extend=11.0)
+
+
+def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
+    """Map changed chain IDs and author numbering through the Python API."""
+    import arpeggia
+
+    mobile = tmp_path / "renumbered.pdb"
+    lines = []
+    for line in Path(test_pdb_file).read_text().splitlines():
+        if line.startswith(("ATOM  ", "HETATM")):
+            line = line[:21] + "H" + f"{int(line[22:26]) + 100:4d}" + line[26:]
+        elif line.startswith(("TER", "CONECT", "SSBOND", "LINK")):
+            continue
+        lines.append(line)
+    mobile.write_text("\n".join(lines) + "\n")
+    result = arpeggia.rmsd(
+        test_pdb_file,
+        str(mobile),
+        align_seqs=True,
+        chain_map={"A": "H"},
+        superpose_residues="A:1-20",
+        rmsd_residues="A:21-40",
+        refine_cycles=2,
+    )
+    assert isinstance(result, arpeggia.RmsdResult)
+    assert result.rmsd < 1e-12
+    assert result.core_rmsd < 1e-12
+    assert result.initial_fit_atoms == result.retained_fit_atoms == 20
+    assert result.evaluation_atoms == 20
+    assert result.cycles == 0
+    assert result.chain_alignments[0].residue_pairs[0].mobile_number == 101
+    assert result.chain_alignments[0].alignment is not None
+    with pytest.raises(AttributeError):
+        result.rmsd = 5

@@ -209,7 +209,7 @@ fn sc_calculation_failure_exits_without_a_score() {
 }
 
 #[test]
-fn rmsd_prints_one_scalar() {
+fn rmsd_reports_detailed_json() {
     let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
     let output = arpeggia()
         .args([
@@ -220,6 +220,7 @@ fn rmsd_prints_one_scalar() {
             "A:1-20",
             "--rmsd-residues",
             "A:1-20",
+            "--json",
         ])
         .output()
         .unwrap();
@@ -228,12 +229,11 @@ fn rmsd_prints_one_scalar() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let value = String::from_utf8(output.stdout)
-        .unwrap()
-        .trim()
-        .parse::<f64>()
-        .unwrap();
-    assert!(value < 1e-12);
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(result["rmsd"].as_f64().unwrap() < 1e-12);
+    assert_eq!(result["core_rmsd"], 0.0);
+    assert_eq!(result["evaluation_atoms"], 20);
+    assert_eq!(result["retained_fit_atoms"], 20);
 }
 
 #[test]
@@ -375,4 +375,36 @@ fn cluster_structs_preserves_pairwise_work_and_rejects_bad_cache() {
         .unwrap();
     assert!(!malformed.status.success());
     assert!(String::from_utf8_lossy(&malformed.stderr).contains("remove it to recalculate"));
+}
+
+#[test]
+fn sequence_cli_reports_metrics_and_empty_local_json() {
+    let result = arpeggia()
+        .args([
+            "align-seqs",
+            "GGACDEFGHIKGG",
+            "ACDEFGHIK",
+            "--mode",
+            "semi-global",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let data: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(data["reference_span"], serde_json::json!([2, 11]));
+    assert_eq!(data["identity_shorter"], 1.0);
+    assert_eq!(data["edit_distance"], 4);
+    let result = arpeggia()
+        .args(["align-seqs", "AAAA", "WWWW", "--mode", "local", "--json"])
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    let data: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(data["identity_alignment"], serde_json::Value::Null);
+    assert_eq!(data["coverage_shorter"], 0.0);
 }

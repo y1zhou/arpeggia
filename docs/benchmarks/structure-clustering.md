@@ -1,9 +1,9 @@
 # Structure RMSD and clustering
 
 Arpeggia superposes exactly corresponding protein atoms with the Kabsch
-algorithm and clusters the resulting pairwise RMSD matrix with k-medoids. It
-does not align sequences or infer missing-atom correspondence: selected
-chain IDs, residue identities, and atom names must match exactly.
+algorithm and clusters the resulting pairwise RMSD matrix with k-medoids.
+Collection APIs require exact selected atom correspondence. Two-structure `rmsd`
+also supports optional [sequence correspondence and refinement](../sequence-alignment.md).
 
 ## RMSD
 
@@ -38,19 +38,20 @@ arpeggia rmsd reference.cif mobile.cif \
 This example establishes the coordinate frame from chain A and reports the
 motion of chains B and C relative to it. Superposition requires at least three
 non-collinear atom pairs; RMSD evaluation requires at least one atom pair. The
-CLI prints one RMSD in Ångströms. Python provides the scalar operation and the
-complete unordered pair table:
+CLI reports fitting and evaluation statistics in Ångströms. Python returns a
+`RmsdResult` for two structures and a DataFrame for the complete unordered pair table:
 
 ```python
 import arpeggia
 
-value = arpeggia.rmsd(
+result = arpeggia.rmsd(
     "reference.cif",
     "mobile.cif",
     superpose_residues="A",
     rmsd_residues="B,C",
     atoms="ca",
 )
+print(result.rmsd, result.core_rmsd)
 pairs = arpeggia.pairwise_rmsd(
     "structures/",
     superpose_residues="A",

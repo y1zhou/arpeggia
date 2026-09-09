@@ -9,11 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Python `rmsd()` now returns a read-only `RmsdResult`; use `.rmsd` for full
+  evaluation RMSD and `.core_rmsd` for retained fitting pairs. The CLI reports
+  details by default and supports `--json` instead of printing one scalar.
+
 - Rust `get_rmsd` now accepts `RmsdOptions` and returns a detailed `RmsdResult`
   inside `Analysis`. Evaluation RMSD remains separate from retained-core RMSD.
 
 ### Added
 
+- Exposed `align_seqs()` and read-only alignment/result classes in Python, with
+  typed mappings and statistics. Added `align-seqs` and sequence/refinement flags
+  to the RMSD CLI; JSON includes parameters and correspondence.
 - Optional observed-sequence RMSD correspondence with reference-based selections,
   explicit chain maps or unique maximum-score one-to-one inference, conservative
   atom pairing across substitutions, and omission diagnostics.
