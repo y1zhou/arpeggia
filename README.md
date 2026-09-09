@@ -225,9 +225,13 @@ To build the Python package in development mode:
 
 ```bash
 uv sync --frozen --all-extras
-uv run maturin develop --uv --features python --locked
-uv run pytest
+uv run --extra dev maturin develop --uv --features python --locked
+uv run --extra dev pytest
 ```
+
+Rerun `maturin develop` after changing Rust code or switching branches with
+native API changes. Editable installs expose Python edits immediately but retain
+the compiled Rust extension until rebuilt.
 
 To run Rust tests:
 
