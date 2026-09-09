@@ -1,0 +1,139 @@
+# Separate sequence correspondence from RMSD evaluation
+
+Accepted design; implementation and backend qualification follow these decisions.
+This extends [ADR 0008](0008-cluster-structures-with-kabsch-and-k-medoids.md)
+with optional sequence correspondence while preserving independent fitting and
+evaluation populations.
+
+## Sequence alignment
+
+`align_seqs()` returns a `SeqAlignment` for two unaligned amino-acid strings
+for Rust, Python, and CLI use. Global alignment is the default; local and
+semi-global modes are selectable. Semi-global consumes the entire second
+sequence and permits free terminal overhangs of the first. Alignment uses exact
+affine-gap optimization with BLOSUM62. Configurable positive gap costs default
+to opening 10 and extension 0.5, with cost `open + (length - 1) * extend`.
+Costs have at most two decimal places and opening cost must be at least extension
+cost. Unsupported precision is rejected rather than rounded. Matrix entries and
+gap costs are scaled consistently for exact integer scoring; reported scores are
+unscaled. Nonfinite costs and unrepresentable score ranges fail explicitly.
+FASTA parsing and multiple sequence alignment are outside this feature.
+
+Identity and paired-residue coverage each have two normalizations. For `M`
+identical pairs, `P` nongap pairs, `A` alignment columns including gaps, and `S`
+the shorter full input length, identity is `M/A` and `M/S`; coverage is `P/A`
+and `P/S`. Retain the underlying counts. Unaligned terminal segments do not count
+toward `A`; substitutions count toward `P` but not `M`. Empty local alignments
+have undefined alignment-length ratios and zero shorter-input ratios.
+
+Gap-residue and gap-run counts are distinct. Edit distance is full-input
+Levenshtein distance, independent of the protein-scored alignment; local clipping
+does not shorten its inputs.
+
+Lowercase is normalized. Standard amino acids and `B/Z/X` are accepted. `U/O`
+remain distinct input symbols for identity but score as `C/K`, with a diagnostic.
+Input gaps, stop symbols, unsupported characters, and empty strings are rejected.
+A local alignment without a positive-scoring match returns an empty alignment:
+score zero, the empty-alignment ratios defined above, and full-input edit distance. One deterministic optimal traceback is returned for the pinned
+backend; structural RMSD is not used to break sequence-alignment ties.
+
+## Structural correspondence
+
+The first implementation extends two-structure `rmsd`. Pairwise-table and
+clustering APIs are intended follow-ups: pair-specific correspondence must first
+be reconciled with their shared coordinate layouts and comparison semantics.
+Future antibody numbering can consume sequence correspondence but requires its
+own domain and numbering definitions.
+
+With `--align-seqs`, structural mapping uses observed sequences, retaining their
+links to coordinate residues. Declared residues without coordinates cannot
+participate in superposition. Single-chain inputs are paired automatically;
+explicit chain mappings are supported. For multi-chain inputs without identical
+homomer chains, infer mappings from all-to-all semi-global alignments, consuming
+the shorter chain against the longer. Maximize summed raw scores over a
+one-to-one chain assignment. A tied optimum requires explicit mapping. Every
+reference chain used by either residue selection requires a partner; unused
+mobile chains are allowed. Inferred pair scores must be positive, with identity
+and coverage reported; no universal homology threshold is imposed. Explicit
+mapping can override score-based inference. Infer only for reference chains used
+by either selection, against all eligible mobile chains. Explicit maps cover all
+relevant reference chains, use unique mobile partners, and disable inference.
+
+Chain inference and final residue alignment are separate: inference uses
+shorter-against-longer semi-global scores, while final alignment uses the selected
+mode with reference first and mobile second. In alignment mode, both residue
+selectors address reference author numbering and map to mobile residues after
+complete observed chains have been aligned. Without alignment, existing exact
+correspondence and selector behavior remain.
+
+Nongap residue pairs include substitutions. Available backbone atoms pair across
+substitutions; side-chain pairing requires the same normalized amino-acid
+identity, followed by matching atom names and elements. The `U/O` scoring aliases
+do not establish chemical equivalence with `C/K`. Omitted
+atoms are reported, and caps lacking sequence correspondence are excluded.
+Geometric refinement cannot establish chemical equivalence or guarantee rejection
+of a poor sequence match.
+
+## Refinement and evaluation
+
+Refinement is independent of sequence alignment and can use exact atom
+correspondence. It does not infer structural correspondence as PyMOL `super` does.
+`refine_cycles=0` preserves one initial fit without rejection. A positive value
+allows that many subsequent rejection/refit cycles. Rejection is permanent and
+atom-wise, using a configurable multiplier of the current fitting RMSD, initially
+2. Sequence correspondence is established once, before refinement. Stop early
+when no pairs are rejected or fitting RMSD is effectively zero. If rejection
+leaves fewer than three non-collinear fitting pairs, fail with the surviving count
+rather than silently falling back to the preceding fit.
+
+The final RMSD evaluates all mapped pairs selected by `rmsd_residues`, including
+pairs rejected from fitting, under the final retained-pair transform. Evaluation
+never triggers another fit. This preserves flexible-region deviations rather
+than reporting only a favorable surviving-core RMSD.
+
+## Result contract
+
+`rmsd()` returns a `RmsdResult` instead of a scalar, accepting the breaking API
+change. Its `rmsd` is final evaluation RMSD; `core_rmsd` is the RMSD of retained
+fitting pairs after rejection. It also records initial fitting RMSD, initial and
+retained fitting counts, evaluation count, performed cycles, and chain/residue
+correspondence. These populations can differ when fit and evaluation selections
+differ.
+
+Both result types expose read-only Python attributes; Python continues emitting
+scientific warnings. `SeqAlignment` retains normalized inputs, scoring settings,
+aligned spans, residue mapping, and statistics. Per-atom residuals, atom-pair
+records, and the final transformation are omitted to keep results compact.
+
+The CLI returns a concise detailed summary by default, with explicit JSON output
+for parameters, mappings, and statistics. Visual alignment styling is deferred.
+
+## Backend qualification
+
+Prefer pinned Hyalite 0.4.0, conditional on independent validation. Its exact
+modes and deterministic traceback cover the required objectives without normal
+dependencies; its recent introduction warrants qualification rather than relying
+on feature claims. Rust-Bio remains an alternative if qualification fails.
+Arpeggia owns the public result types and scoring semantics.
+
+Check scores against an independently configured reference such as Biopython,
+reconstruct scores from traceback operations, and verify spans and consumed input
+indices. Compare exact residue maps where the optimum is unique; tied optima need
+determinism and equal scores, not identical paths across implementations. Include
+all three modes, terminal and internal gaps, repeats, substitutions, unusual
+residues, empty local results, and numeric boundaries. Record runtime and package
+impact before accepting the backend.
+
+Structural regressions cover renumbering, chain assignment and ambiguity,
+substitutions, missing atoms, independent fit/evaluation selections, refinement
+failure, and preservation of evaluation pairs rejected from fitting. The default
+exact-correspondence calculation must retain its numerical result despite the
+new return type.
+
+Backend evidence: [Hyalite 0.4.0 source](https://docs.rs/crate/hyalite/0.4.0/source/)
+and [Rust-Bio manifest](https://docs.rs/crate/bio/4.0.1/source/Cargo.toml.orig).
+
+The [sequence research](../research/protein-sequence-alignment-methods.md)
+explains scoring and end-gap objectives; the
+[PyMOL audit](../research/pymol-superposition-and-rmsd.md) documents the relative
+rejection rule and the distinction between core and full-pair evaluation.

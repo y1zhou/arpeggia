@@ -1,8 +1,8 @@
 # PyMOL superposition, iterative atom rejection, and RMSD
 
-**Research cutoff:** 8 September 2026  
-**Scope:** Open-source PyMOL; source audit plus scientific context.  
-**Audited revision:** `5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69` (24 July 2026), the latest default-branch commit returned by the repository API before the cutoff.[^revision]  
+**Research cutoff:** 8 September 2026
+**Scope:** Open-source PyMOL; source audit plus scientific context.
+**Audited revision:** `5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69` (24 July 2026), the latest default-branch commit returned by the repository API before the cutoff.[^revision]
 **Validation status:** The relevant Python and C++ source paths were inspected. PyMOL itself was not installed or executed in this research session. An independent NumPy demonstration of the rejection rule was executed; it is not a binary-level PyMOL regression test.
 
 ## Executive findings
@@ -294,17 +294,17 @@ The audit covers the stated open-source revision. It does not establish that eve
 
 [^revision]: Schrödinger, **PyMOL open-source repository**, cutoff-constrained commit query: <https://api.github.com/repos/schrodinger/pymol-open-source/commits?until=2026-09-08T23:59:59Z&per_page=1>. Returned revision: <https://github.com/schrodinger/pymol-open-source/commit/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69>.
 [^wrapper-align]: PyMOL, pinned `modules/pymol/fitting.py`, `align` defaults, docstring, and argument forwarding: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/modules/pymol/fitting.py#L370-L463>. In particular, the docstring calls the cutoff an Å value, whereas the rejection source below normalizes by RMSD.
-[^wrapper-super]: PyMOL, pinned `modules/pymol/fitting.py`, `cealign`, `usalign`, and `super`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/modules/pymol/fitting.py#L27-L373>.
-[^wrapper-other]: PyMOL, pinned `modules/pymol/fitting.py`, `fit`, `rms`, `rms_cur`, and `pair_fit`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/modules/pymol/fitting.py#L610-L825>.
-[^executive]: PyMOL, pinned `layer3/Executive.cpp`, especially `ExecutiveAlign` and its calls to `MatchAlign`, `SelectorCreateAlignments`, and `ExecutiveRMS`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Executive.cpp>.
-[^match]: PyMOL, pinned `layer0/Match.cpp`, `MatchAlign`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer0/Match.cpp#L370-L660>.
-[^selector]: PyMOL, pinned `layer3/Selector.cpp`, `SelectorCreateAlignments`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Selector.cpp>.
 [^rejection]: PyMOL, pinned `layer3/Executive.cpp`, initial fit and normalized-distance rejection: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Executive.cpp#L10990-L11090>.
-[^output]: PyMOL, pinned `layer3/Executive.cpp`, survivor alignment object and final transformation handling: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Executive.cpp#L11075-L11230>.
-[^states]: PyMOL, pinned `layer3/Executive.cpp`, `ExecutiveRMS` coordinate acquisition and state averaging: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Executive.cpp#L10580-L10730>.
+[^executive]: PyMOL, pinned `layer3/Executive.cpp`, especially `ExecutiveAlign` and its calls to `MatchAlign`, `SelectorCreateAlignments`, and `ExecutiveRMS`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Executive.cpp>.
+[^selector]: PyMOL, pinned `layer3/Selector.cpp`, `SelectorCreateAlignments`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Selector.cpp>.
+[^kabsch]: Kabsch W. **A solution for the best rotation to relate two sets of vectors.** *Acta Crystallographica A* 32, 922–923 (1976). DOI: <https://doi.org/10.1107/S0567739476001873>.
 [^matrix]: PyMOL, pinned `layer0/Matrix.cpp`, `MatrixFitRMSTTTf`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer0/Matrix.cpp>.
 [^settings]: PyMOL, pinned `layer1/SettingInfo.h`, `fit_kabsch` default, and setting documentation: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer1/SettingInfo.h>; <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/data/setting_help.csv>.
+[^match]: PyMOL, pinned `layer0/Match.cpp`, `MatchAlign`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer0/Match.cpp#L370-L660>.
 [^binding]: PyMOL, pinned `layer4/Cmd.cpp`, construction of the result using `final_rms`, `final_n_atom`, `n_cycles_run`, `initial_rms`, `initial_n_atom`, `raw_alignment_score`, and `n_residues_aligned`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer4/Cmd.cpp>.
-[^kabsch]: Kabsch W. **A solution for the best rotation to relate two sets of vectors.** *Acta Crystallographica A* 32, 922–923 (1976). DOI: <https://doi.org/10.1107/S0567739476001873>.
+[^wrapper-super]: PyMOL, pinned `modules/pymol/fitting.py`, `cealign`, `usalign`, and `super`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/modules/pymol/fitting.py#L27-L373>.
+[^output]: PyMOL, pinned `layer3/Executive.cpp`, survivor alignment object and final transformation handling: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Executive.cpp#L11075-L11230>.
+[^wrapper-other]: PyMOL, pinned `modules/pymol/fitting.py`, `fit`, `rms`, `rms_cur`, and `pair_fit`: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/modules/pymol/fitting.py#L610-L825>.
 [^ce]: Shindyalov IN, Bourne PE. **Protein structure alignment by incremental combinatorial extension (CE) of the optimal path.** *Protein Engineering* 11, 739–747 (1998). DOI: <https://doi.org/10.1093/protein/11.9.739>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/9796821/>.
 [^usalign]: Zhang C, Shine M, Pyle AM, Zhang Y. **US-align: universal structure alignments of proteins, nucleic acids, and macromolecular complexes.** *Nature Methods* 19, 1109–1115 (2022). DOI: <https://doi.org/10.1038/s41592-022-01585-1>.
+[^states]: PyMOL, pinned `layer3/Executive.cpp`, `ExecutiveRMS` coordinate acquisition and state averaging: <https://github.com/schrodinger/pymol-open-source/blob/5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69/layer3/Executive.cpp#L10580-L10730>.

@@ -191,19 +191,70 @@ chain-residue ranges and atom subset.
 _Avoid_: Atom filter, alignment
 
 **Superposition Selection**:
-The exactly corresponding atoms used to determine the rigid-body Kabsch
-transform between two Structure Observations.
+The paired atoms eligible to determine the rigid-body transform between two
+Structure Observations. Refinement may exclude outlying pairs from fitting.
 _Avoid_: Fit selection, alignment selection, sequence alignment
 
 **RMSD Selection**:
-The exactly corresponding atoms whose residual distances are evaluated after
-applying a transform determined solely by the Superposition Selection.
+The paired atoms whose residual distances are evaluated under the transform
+determined by the Superposition Selection and any refinement. Rejection from
+fitting does not remove a pair from this evaluation set.
 _Avoid_: Fit selection, superposition selection
 
 **Exact Atom Correspondence**:
 A one-to-one pairing in which two Structure Selections contain the same atom
-identities. It is the required correspondence for the current RMSD method.
+identities, including chain, author residue number, insertion code, residue
+name, and atom name.
 _Avoid_: Common atoms, atom intersection
+
+**Sequence Alignment**:
+A scored correspondence between two amino-acid sequences, including paired
+residues, gaps, and any unaligned terminal segments.
+_Avoid_: Superposition, antibody numbering
+
+**Semi-Global Sequence Alignment**:
+An alignment consuming the entire second sequence while allowing unaligned
+terminal segments of the first sequence without penalty.
+_Avoid_: Symmetric overlap, local alignment
+
+**Sequence Identity**:
+The identical-residue pair count divided by either alignment-column count
+(including gaps) or shorter full input length, with the denominator named.
+_Avoid_: Substitution score, sequence coverage
+
+**Paired-Residue Coverage**:
+The nongap residue-pair count, including substitutions, divided by either
+alignment-column count or shorter full input length, with the denominator named.
+_Avoid_: Sequence identity, aligned span
+
+**Sequence Edit Distance**:
+The minimum number of single-residue substitutions, insertions, and deletions
+needed to convert one complete input sequence into the other.
+_Avoid_: Protein alignment score, edits along a chosen alignment
+
+**Chain Correspondence**:
+The pairing of chains between two Structure Observations within which residue
+correspondence is established.
+_Avoid_: Chain order, equal chain identifiers
+
+**Sequence-Derived Residue Correspondence**:
+Nongap residue pairs from an alignment of observed chain sequences, including
+substitutions. Author numbering can differ between paired residues.
+_Avoid_: Identical residues, equal residue numbers, antibody numbering
+
+**Core RMSD**:
+The RMSD of retained fitting pairs under their final fitted transform.
+_Avoid_: Full-selection RMSD, final evaluation RMSD
+
+**Evaluation RMSD**:
+The RMSD of the RMSD Selection under the final fitting transform, including
+selected pairs rejected from fitting.
+_Avoid_: Core RMSD, refitted evaluation region
+
+**Refinement Cycle**:
+One inspection of current fitting-pair residuals, rejection of outliers, and
+refitting of survivors. The initial fit precedes all refinement cycles.
+_Avoid_: Initial fit, sequence realignment, numerical solver iteration
 
 **Medoid Structure**:
 An observed structure selected as a cluster representative because it minimizes

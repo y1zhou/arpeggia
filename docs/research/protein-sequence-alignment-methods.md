@@ -1,8 +1,8 @@
 # Pairwise and multiple protein sequence alignment: accepted methods and developments through September 2026
 
-**Research cutoff:** 8 September 2026  
-**Scope:** Amino-acid sequence alignment, with distinctions between exact pairwise optimization, database search, multiple alignment, and structure-informed correspondence.  
-**Evidence:** Primary publications and official software documentation. Recommendations below are a task-based synthesis, not a measured ranking of software market share.  
+**Research cutoff:** 8 September 2026
+**Scope:** Amino-acid sequence alignment, with distinctions between exact pairwise optimization, database search, multiple alignment, and structure-informed correspondence.
+**Evidence:** Primary publications and official software documentation. Recommendations below are a task-based synthesis, not a measured ranking of software market share.
 **Execution:** The core Biopython example was checked with Biopython 1.86. No comparative performance benchmark was run in this session.
 
 ## Executive answer
@@ -281,17 +281,17 @@ The overarching answer is therefore **yes, there have been substantial improveme
 [^gotoh]: Gotoh O. **An improved algorithm for matching biological sequences.** *Journal of Molecular Biology* 162, 705–708 (1982). DOI: <https://doi.org/10.1016/0022-2836(82)90398-9>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/7166760/>.
 [^biopython]: Biopython, **Pairwise sequence alignment**, official tutorial: <https://biopython.org/docs/latest/Tutorial/chapter_pairwise.html>. Documentation checked at the research cutoff; local API example checked with Biopython 1.86.
 [^parasail]: Daily J. **Parasail: SIMD C library for global, semi-global, and local pairwise sequence alignments.** *BMC Bioinformatics* 17, 81 (2016). DOI: <https://doi.org/10.1186/s12859-016-0930-z>. Official implementation: <https://github.com/jeffdaily/parasail>.
-[^block]: Liu D, Steinegger M. **Block Aligner: an adaptive SIMD-accelerated aligner for sequences and position-specific scoring matrices.** *Bioinformatics* 39, btad487 (2023). DOI: <https://doi.org/10.1093/bioinformatics/btad487>. Full text: <https://pmc.ncbi.nlm.nih.gov/articles/PMC10457662/>.
-[^wfa]: Marco-Sola S et al. **Fast gap-affine pairwise alignment using the wavefront algorithm.** *Bioinformatics* (2021). Full text: <https://pmc.ncbi.nlm.nih.gov/articles/PMC8355039/>.
-[^biwfa]: Marco-Sola S et al. **Optimal gap-affine alignment in O(s) space.** *Bioinformatics* 39, btad074 (2023). DOI: <https://doi.org/10.1093/bioinformatics/btad074>. Full text: <https://pmc.ncbi.nlm.nih.gov/articles/PMC9940620/>.
-[^mmseqsgpu]: **GPU-accelerated homology search with MMseqs2.** *Nature Methods* 22, 2024–2027 (2025). DOI: <https://doi.org/10.1038/s41592-025-02819-8>.
-[^dedal]: Llinares-López F et al. **Deep embedding and alignment of protein sequences.** *Nature Methods* 20, 104–111 (2023; online 15 December 2022). DOI: <https://doi.org/10.1038/s41592-022-01700-2>.
 [^mafft]: Katoh K, Standley DM. **MAFFT multiple sequence alignment software version 7: improvements in performance and usability.** *Molecular Biology and Evolution* 30, 772–780 (2013). DOI: <https://doi.org/10.1093/molbev/mst010>.
-[^mafft-doc]: MAFFT, **official software site and usage documentation**: <https://mafft.cbrc.jp/alignment/software/>; <https://mafft.cbrc.jp/alignment/software/manual/manual.html>.
 [^muscle5]: Edgar RC. **Muscle5: High-accuracy alignment ensembles enable unbiased assessments of sequence homology and phylogeny.** *Nature Communications* 13, 6968 (2022). DOI: <https://doi.org/10.1038/s41467-022-34630-w>.
 [^clustalo]: Sievers F et al. **Fast, scalable generation of high-quality protein multiple sequence alignments using Clustal Omega.** *Molecular Systems Biology* 7, 539 (2011). DOI: <https://doi.org/10.1038/msb.2011.75>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/21988835/>.
-[^tcoffee]: Notredame C, Higgins DG, Heringa J. **T-Coffee: A novel method for fast and accurate multiple sequence alignment.** *Journal of Molecular Biology* 302, 205–217 (2000). DOI: <https://doi.org/10.1006/jmbi.2000.4042>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/10964570/>.
 [^famsa2]: Gudyś A, Zielezinski A, Notredame C, Deorowicz S. **Fast and accurate multiple-protein-sequence alignment at scale with FAMSA2.** *Nature Biotechnology*, published 14 April 2026. DOI: <https://doi.org/10.1038/s41587-026-03095-3>. Official implementation: <https://github.com/refresh-bio/FAMSA>. The quoted speedup is author-reported and dataset-dependent.
 [^upp2]: **UPP2: fast and accurate alignment of datasets with fragmentary sequences.** *Bioinformatics* 39, btad007 (2023). DOI: <https://doi.org/10.1093/bioinformatics/btad007>.
-[^aries]: Hoang M, Armour-Garb I, Singh M. **Fast, accurate construction of multiple sequence alignments from protein language embeddings.** ARIES; 2026 preprint. DOI: <https://doi.org/10.64898/2026.01.02.697423>. Primary record: <https://www.biorxiv.org/content/10.64898/2026.01.02.697423v1>; full-text record: <https://pmc.ncbi.nlm.nih.gov/articles/PMC13060855/>. First posted 2 January 2026; the indexed full-text record includes a later March revision.
+[^mmseqsgpu]: **GPU-accelerated homology search with MMseqs2.** *Nature Methods* 22, 2024–2027 (2025). DOI: <https://doi.org/10.1038/s41592-025-02819-8>.
+[^dedal]: Llinares-López F et al. **Deep embedding and alignment of protein sequences.** *Nature Methods* 20, 104–111 (2023; online 15 December 2022). DOI: <https://doi.org/10.1038/s41592-022-01700-2>.
+[^wfa]: Marco-Sola S et al. **Fast gap-affine pairwise alignment using the wavefront algorithm.** *Bioinformatics* (2021). Full text: <https://pmc.ncbi.nlm.nih.gov/articles/PMC8355039/>.
+[^biwfa]: Marco-Sola S et al. **Optimal gap-affine alignment in O(s) space.** *Bioinformatics* 39, btad074 (2023). DOI: <https://doi.org/10.1093/bioinformatics/btad074>. Full text: <https://pmc.ncbi.nlm.nih.gov/articles/PMC9940620/>.
+[^block]: Liu D, Steinegger M. **Block Aligner: an adaptive SIMD-accelerated aligner for sequences and position-specific scoring matrices.** *Bioinformatics* 39, btad487 (2023). DOI: <https://doi.org/10.1093/bioinformatics/btad487>. Full text: <https://pmc.ncbi.nlm.nih.gov/articles/PMC10457662/>.
 [^foldmason]: Gilchrist CLM, Mirdita M, Steinegger M. **Multiple protein structure alignment at scale with FoldMason.** *Science* 391, 485–488 (2026). DOI: <https://doi.org/10.1126/science.ads6733>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/41610233/>.
+[^tcoffee]: Notredame C, Higgins DG, Heringa J. **T-Coffee: A novel method for fast and accurate multiple sequence alignment.** *Journal of Molecular Biology* 302, 205–217 (2000). DOI: <https://doi.org/10.1006/jmbi.2000.4042>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/10964570/>.
+[^mafft-doc]: MAFFT, **official software site and usage documentation**: <https://mafft.cbrc.jp/alignment/software/>; <https://mafft.cbrc.jp/alignment/software/manual/manual.html>.
+[^aries]: Hoang M, Armour-Garb I, Singh M. **Fast, accurate construction of multiple sequence alignments from protein language embeddings.** ARIES; 2026 preprint. DOI: <https://doi.org/10.64898/2026.01.02.697423>. Primary record: <https://www.biorxiv.org/content/10.64898/2026.01.02.697423v1>; full-text record: <https://pmc.ncbi.nlm.nih.gov/articles/PMC13060855/>. First posted 2 January 2026; the indexed full-text record includes a later March revision.
