@@ -48,6 +48,12 @@ pub(crate) struct Args {
     reference: String,
     /// Second unaligned protein sequence
     query: String,
+    /// Display name of the reference sequence
+    #[arg(long, default_value = "Reference")]
+    reference_name: String,
+    /// Display name of the query sequence
+    #[arg(long, default_value = "Query")]
+    query_name: String,
     #[command(flatten)]
     alignment: AlignmentArgs,
     #[command(flatten)]
@@ -68,7 +74,11 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     for warning in analysis.warnings {
         tracing::warn!("{warning}");
     }
-    let a = analysis.value;
+    let a = arpeggia::SeqAlignment {
+        reference_name: args.reference_name.clone(),
+        query_name: args.query_name.clone(),
+        ..analysis.value
+    };
     if args.json {
         return print_json(&a);
     }

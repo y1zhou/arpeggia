@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   operations, input spans, identity/coverage ratios, gap statistics, and full-input
   edit distance.
 - Shared CLI/Python alignment displays with colored edits and clipped tails,
-  terminal-width wrapping, position rulers, and width/color/ruler controls.
+  custom sequence names, terminal-width wrapping, position rulers, and
+  width/color/ruler controls.
 - Optional observed-sequence correspondence before two-structure RMSD, with
   reference-based selections, explicit chain maps or unique maximum-score
   inference, and diagnostics for omitted atoms.

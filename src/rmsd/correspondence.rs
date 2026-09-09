@@ -336,7 +336,11 @@ pub(super) fn aligned_coordinates(
         let b = &second[j];
         let analysis = crate::align_seqs(&a.sequence, &b.sequence, &options.alignment)?;
         warnings.extend(analysis.warnings);
-        let alignment = analysis.value;
+        let alignment = crate::SeqAlignment {
+            reference_name: format!("Reference {}", a.chain.id()),
+            query_name: format!("Query {}", b.chain.id()),
+            ..analysis.value
+        };
         let mut residue_pairs = Vec::new();
         for (i, j) in alignment.columns() {
             let (Some(i), Some(j)) = (i, j) else {

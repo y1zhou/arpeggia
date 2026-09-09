@@ -128,6 +128,10 @@ impl crate::RmsdResult {
 ///         at most two decimals and opening >= extension. A gap of length L
 ///         costs gap_open + (L - 1) * gap_extend.
 ///
+///     reference_name, query_name (str): Keyword-only display labels, default
+///         "Reference" and "Query". Names are stored on the result and in JSON;
+///         they do not affect scoring or correspondence.
+///
 /// Returns:
 ///     SeqAlignment: Plain gapped aligned_reference/aligned_query strings,
 ///         reference-to-query operations (space, +, -, x), zero-based half-open
@@ -148,7 +152,8 @@ impl crate::RmsdResult {
 ///     >>> alignment.reference_span
 ///     (2, 11)
 #[pyfunction]
-#[pyo3(signature = (reference, query, mode="global", gap_open=10.0, gap_extend=0.5))]
+#[pyo3(signature = (reference, query, mode="global", gap_open=10.0, gap_extend=0.5, *, reference_name="Reference", query_name="Query"))]
+#[allow(clippy::too_many_arguments)]
 fn align_seqs(
     py: Python<'_>,
     reference: &str,
@@ -156,6 +161,8 @@ fn align_seqs(
     mode: &str,
     gap_open: f64,
     gap_extend: f64,
+    reference_name: &str,
+    query_name: &str,
 ) -> PyResult<crate::SeqAlignment> {
     let options = crate::SeqAlignOptions {
         mode: value_enum(mode, "mode must be 'global', 'local', or 'semi-global'")?,
@@ -166,7 +173,11 @@ fn align_seqs(
         .detach(|| crate::align_seqs(reference, query, &options))
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
-    Ok(analysis.value)
+    Ok(crate::SeqAlignment {
+        reference_name: reference_name.into(),
+        query_name: query_name.into(),
+        ..analysis.value
+    })
 }
 
 /// Superpose two PDB/mmCIF structures; return a read-only RmsdResult in Ångströms.

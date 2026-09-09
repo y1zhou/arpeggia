@@ -109,6 +109,11 @@ for parameters, mappings, and statistics.
 
 ### Gapped sequences and display
 
+Sequence names are display metadata, separate from sequence data and residue
+correspondence. `reference_name` and `query_name` default to "Reference" and
+"Query"; structural alignments append their chain IDs. Names are included in
+results and JSON, with label padding based on visible terminal width.
+
 `SeqAlignment` exposes equal-length `aligned_reference`,
 `aligned_query`, and `operations` strings. Gapped strings make downstream use
 direct; original inputs and zero-based, half-open spans retain enough information

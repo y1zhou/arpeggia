@@ -2,6 +2,7 @@
 use super::SeqAlignment;
 use crate::{ArpeggiaError, ArpeggiaResult};
 use std::io::IsTerminal;
+use unicode_width::UnicodeWidthStr;
 
 /// Color policy for human-readable sequence alignments.
 #[derive(Clone, Copy, Debug, Default, clap::ValueEnum)]
@@ -48,7 +49,12 @@ impl SeqAlignment {
 
     pub(crate) fn render(&self, width: usize, color: bool, rulers: bool) -> ArpeggiaResult<String> {
         let digits = self.reference.len().max(self.query.len()).to_string().len();
-        let prefix = 12 + digits; // label, start coordinate, spaces
+        let names = [
+            display_name(&self.reference_name),
+            display_name(&self.query_name),
+        ];
+        let label_width = names.iter().map(|n| n.width()).max().unwrap_or(0);
+        let prefix = label_width + 2 + digits; // label, start coordinate, spaces
         let overhead = prefix + 1 + digits;
         let block_width = width
             .checked_sub(overhead)
@@ -123,9 +129,10 @@ impl SeqAlignment {
             let end = start.saturating_add(block_width).min(operations.len());
             let ops = &operations.as_bytes()[start..end];
             output.push('\n');
-            for (row, (label, sequence)) in [("reference", &first), ("query", &second)]
-                .into_iter()
-                .enumerate()
+            for (row, (label, sequence)) in
+                [(names[0].as_str(), &first), (names[1].as_str(), &second)]
+                    .into_iter()
+                    .enumerate()
             {
                 let cells = &sequence.as_bytes()[start..end];
                 let mut ruler = vec![b' '; prefix + cells.len()];
@@ -148,7 +155,9 @@ impl SeqAlignment {
                 }
                 let first_number = begin.map_or_else(String::new, |n| n.to_string());
                 let last_number = begin.map_or_else(String::new, |_| positions[row].to_string());
-                output.push_str(&format!("{label:<10} {first_number:>digits$} "));
+                output.push_str(label);
+                output.push_str(&" ".repeat(label_width - label.width()));
+                output.push_str(&format!(" {first_number:>digits$} "));
                 for (&cell, &op) in cells.iter().zip(ops) {
                     paint(&mut output, cell, op, color);
                 }
@@ -162,6 +171,19 @@ impl SeqAlignment {
         }
         Ok(output.trim_end_matches('\n').into())
     }
+}
+
+// Labels are metadata; escape controls only in the human-readable rendering.
+fn display_name(name: &str) -> String {
+    let mut label = String::new();
+    for c in name.chars() {
+        if c.is_control() {
+            label.extend(c.escape_default());
+        } else {
+            label.push(c);
+        }
+    }
+    label
 }
 
 fn paint(output: &mut String, cell: u8, operation: u8, color: bool) {
@@ -184,6 +206,25 @@ fn paint(output: &mut String, cell: u8, operation: u8, color: bool) {
 #[cfg(test)]
 mod tests {
     use crate::{AlignmentMode, SeqAlignOptions, align_seqs};
+    use unicode_width::UnicodeWidthStr;
+    #[test]
+    fn custom_names_preserve_unicode_width_and_escape_controls() {
+        let mut a = align_seqs("ACDEFGHIKLMN", "ACDFGHIKLMN", &SeqAlignOptions::default())
+            .unwrap()
+            .value;
+        a.reference_name = "野生型".into();
+        a.query_name = "Mutant\nβ".into();
+        let text = a.render(40, false, true).unwrap();
+        assert!(text.contains("野生型"));
+        assert!(text.contains("Mutant\\nβ"));
+        assert!(text.lines().all(|line| line.width() <= 40));
+        let lines: Vec<_> = text.lines().collect();
+        let row = lines.iter().position(|l| l.starts_with("野生型")).unwrap();
+        let tenth = lines[row][..lines[row].find('L').unwrap()].width();
+        assert_eq!(&lines[row - 1][tenth - 1..=tenth], "10");
+        assert_eq!(a.query_name, "Mutant\nβ");
+        assert!(a.render(10, false, true).is_err());
+    }
     #[test]
     fn wraps_and_numbers_residues_across_gaps() {
         let a = align_seqs(
@@ -195,13 +236,13 @@ mod tests {
         .value;
         let text = a.render(80, false, true).unwrap();
         let lines: Vec<_> = text.lines().collect();
-        for label in ["reference", "query"] {
+        for label in ["Reference", "Query"] {
             let row = lines
                 .iter()
                 .position(|line| line.starts_with(label))
                 .unwrap();
             let tenth = lines[row]
-                .find(if label == "reference" { 'L' } else { 'M' })
+                .find(if label == "Reference" { 'L' } else { 'M' })
                 .unwrap();
             assert_eq!(&lines[row - 1][tenth - 1..=tenth], "10");
         }
@@ -210,7 +251,7 @@ mod tests {
             assert!(text.lines().all(|line| line.len() <= width));
             let recovered: String = text
                 .lines()
-                .filter(|l| l.starts_with("reference"))
+                .filter(|l| l.starts_with("Reference"))
                 .map(|l| l.split_whitespace().nth(2).unwrap())
                 .collect();
             assert_eq!(recovered, a.aligned_reference);

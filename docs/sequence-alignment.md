@@ -60,14 +60,24 @@ reference and query rows followed by an unlabeled operation row. The CLI uses th
 per-chain alignments from `rmsd --align-seqs`.
 
 ```python
-alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDFGHIKLMN")
+alignment = arpeggia.align_seqs(
+    "ACDEFGHIKLMN", "ACDFGHIKLMN",
+    reference_name="Wild type", query_name="Mutant",
+)
 print(alignment)  # terminal width and automatic color
 print(alignment.format(width=60, color="never", rulers=False))
 ```
 
 ```bash
-arpeggia align-seqs ACDEFGHIKLMN ACDFGHIKLMN --width 60 --no-rulers
+arpeggia align-seqs ACDEFGHIKLMN ACDFGHIKLMN \
+  --reference-name "Wild type" --query-name "Mutant" --width 60 --no-rulers
 ```
+
+`reference_name` and `query_name` are optional keyword-only display names,
+defaulting to "Reference" and "Query". Both are read-only result fields and appear
+in JSON. They do not change sequence data, scores, or correspondence. Labels
+are padded to their visible widths; control characters are escaped for display.
+RMSD chain alignments use names such as "Reference A" and "Query H".
 
 Operations describe reference-to-query changes: deletions are red (`-`),
 insertions green (`+`), mismatches yellow (`x`), and matches uncolored (space).

@@ -463,6 +463,8 @@ def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
     assert result.cycles == 0
     assert result.chain_alignments[0].residue_pairs[0].query_number == 101
     assert result.chain_alignments[0].alignment is not None
+    assert result.chain_alignments[0].alignment.reference_name == "Reference A"
+    assert result.chain_alignments[0].alignment.query_name == "Query H"
     with pytest.raises(AttributeError):
         result.rmsd = 5  # ty: ignore[invalid-assignment] -- verify runtime immutability
 
@@ -474,6 +476,15 @@ def test_alignment_display_controls(monkeypatch):
     import arpeggia
 
     alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDFGHIKLMN")
+    assert (alignment.reference_name, alignment.query_name) == ("Reference", "Query")
+    named = arpeggia.align_seqs(
+        "ACDEFGHIKLMN", "ACDFGHIKLMN", reference_name="Wild type", query_name="Mutant"
+    )
+    assert named.score == alignment.score
+    assert named.aligned_reference == alignment.aligned_reference
+    assert named.operations == alignment.operations
+    assert "Wild type" in named.format(color="never")
+    assert "Mutant" in named.format(color="never")
     plain = alignment.format(width=40, color="never", rulers=False)
     assert "operations" not in plain and "-" in alignment.operations
     assert "\x1b" not in plain

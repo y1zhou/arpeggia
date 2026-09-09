@@ -39,6 +39,7 @@ tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 terminal_size = "0.4"
 anstyle-query = "1.1"
+unicode-width = { version = "0.2", default-features = false }
 
 [features]
 default = []

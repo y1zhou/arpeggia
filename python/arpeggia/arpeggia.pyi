@@ -21,6 +21,9 @@ def align_seqs(
     mode: AlignmentMode = ...,
     gap_open: float = ...,
     gap_extend: float = ...,
+    *,
+    reference_name: str = "Reference",
+    query_name: str = "Query",
 ) -> SeqAlignment:
     """Align two non-empty unaligned protein strings with BLOSUM62.
 
@@ -29,6 +32,8 @@ def align_seqs(
     open >= extend; a gap costs open + (length-1)*extend. Returns read-only
     gapped strings, operations, zero-based half-open spans, counts and ratios.
     edit_distance compares full inputs independently of the protein score.
+    reference_name/query_name are display labels, default Reference/Query;
+    naming does not affect scores, spans, or correspondence.
     Example: align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global").
     """
 
@@ -256,6 +261,10 @@ class SeqAlignment:
         """Wrap to total width; auto color follows the terminal; rulers=False hides ticks."""
     def __repr__(self) -> str: ...
     def __str__(self) -> str: ...
+    @property
+    def reference_name(self) -> str: ...
+    @property
+    def query_name(self) -> str: ...
     @property
     def reference(self) -> str: ...
     @property

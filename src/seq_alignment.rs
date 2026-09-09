@@ -67,6 +67,10 @@ impl Default for SeqAlignOptions {
     pyo3::pyclass(frozen, get_all, skip_from_py_object, module = "arpeggia")
 )]
 pub struct SeqAlignment {
+    /// Display name of the reference sequence.
+    pub reference_name: String,
+    /// Display name of the query sequence.
+    pub query_name: String,
     /// Normalized first sequence (reference).
     pub reference: String,
     /// Normalized second sequence.
@@ -277,6 +281,8 @@ pub fn align_seqs(
     let edit_distance = levenshtein(reference.as_bytes(), query.as_bytes());
     Ok(Analysis::new(
         SeqAlignment {
+            reference_name: "Reference".into(),
+            query_name: "Query".into(),
             reference,
             query,
             mode: options.mode.name().into(),

@@ -437,6 +437,23 @@ fn alignment_display_flags_preserve_plain_json_and_wrapping() {
     );
     let json = run(&["--json", "--color", "always"]);
     let data: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(data["reference_name"], "Reference");
+    assert_eq!(data["query_name"], "Query");
+    let named = run(&["--reference-name", "Wild type", "--query-name", "Mutant"]);
+    assert!(named.status.success());
+    let text = String::from_utf8(named.stdout).unwrap();
+    assert!(text.contains("Wild type") && text.contains("Mutant"));
+    let named_json = run(&[
+        "--reference-name",
+        "Wild type",
+        "--query-name",
+        "Mutant",
+        "--json",
+    ]);
+    let named_data: serde_json::Value = serde_json::from_slice(&named_json.stdout).unwrap();
+    assert_eq!(named_data["reference_name"], "Wild type");
+    assert_eq!(named_data["query_name"], "Mutant");
+    assert_eq!(named_data["score"], data["score"]);
     assert_eq!(data["aligned_query"], "ACD-FGHIKLMN");
     assert_eq!(data["operations"], "   -        ");
     assert!(data.get("columns").is_none());
