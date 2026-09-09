@@ -8,6 +8,8 @@ use std::fmt::{Display, Formatter};
 pub enum WarningCode {
     /// Nonstandard residues used documented substitution-score aliases.
     SequenceScoringAlias,
+    /// Sequence correspondence omitted selected residues or atoms.
+    IncompleteCorrespondence,
     /// The input parser recovered from a non-fatal problem.
     Parser,
     /// One alternate conformer was selected from several.
@@ -38,6 +40,7 @@ impl Display for WarningCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let code = match self {
             Self::SequenceScoringAlias => "SEQUENCE_SCORING_ALIAS",
+            Self::IncompleteCorrespondence => "INCOMPLETE_CORRESPONDENCE",
             Self::Parser => "PARSER",
             Self::ConformerSelected => "CONFORMER_SELECTED",
             Self::ModelSelected => "MODEL_SELECTED",

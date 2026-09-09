@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Rust `get_rmsd` now accepts `RmsdOptions` and returns a detailed `RmsdResult`
+  inside `Analysis`. Evaluation RMSD remains separate from retained-core RMSD.
+
 ### Added
 
+- Optional observed-sequence RMSD correspondence with reference-based selections,
+  explicit chain maps or unique maximum-score one-to-one inference, conservative
+  atom pairing across substitutions, and omission diagnostics.
+- Optional permanent atom-wise rejection and refitting. Evaluation retains every
+  mapped selected pair; degenerate surviving fitting sets fail explicitly.
 - Added exact pairwise protein sequence alignment with global, local, and
   second-sequence-full semi-global modes, BLOSUM62 and configurable affine gap
   costs. Results retain index mappings, aligned spans, gap statistics, both

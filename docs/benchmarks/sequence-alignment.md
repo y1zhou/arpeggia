@@ -29,3 +29,16 @@ Repository regressions cover directional semi-global spans, gap costs and counts
 empty local alignments, original-symbol identity for U/O scoring aliases, invalid
 inputs, and identical full-matrix/checkpoint traceback on repeated sequences.
 The qualification harness and its Python environment are not production dependencies.
+
+## Structural correspondence regressions
+
+A 4,096-matrix exhaustive check validates the assignment solver against all
+eligible two-chain assignments with negative, zero, and positive scores.
+Fixtures cover renumbering, substitutions, directional reference selections,
+unused mobile chains, ambiguous homomers, explicit overrides, gaps, and chemical
+side-chain exclusions. Existing exact-correspondence numerical tests still pass.
+
+The symmetric 20-pair refinement fixture from the PyMOL research retains 16
+fitting pairs at core RMSD 0.1 after two rejection passes and one unchanged
+inspection. Evaluation still includes all 20 pairs at RMSD approximately 1.925617.
+A threshold that removes every fitting pair fails with the surviving count.

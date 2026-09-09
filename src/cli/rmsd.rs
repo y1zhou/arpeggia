@@ -35,14 +35,17 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     let analysis = get_rmsd(
         reference,
         mobile,
-        args.model_num,
-        &args.superpose_residues,
-        &args.rmsd_residues,
-        args.atoms,
+        &arpeggia::RmsdOptions {
+            model_num: args.model_num,
+            superpose_residues: args.superpose_residues.clone(),
+            rmsd_residues: args.rmsd_residues.clone(),
+            atoms: args.atoms,
+            ..Default::default()
+        },
     )?;
     for warning in analysis.warnings {
         tracing::warn!("{warning}");
     }
-    println!("{}", analysis.value);
+    println!("{}", analysis.value.rmsd);
     Ok(())
 }

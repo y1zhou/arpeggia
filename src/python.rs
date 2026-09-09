@@ -78,15 +78,18 @@ fn rmsd(
             crate::get_rmsd(
                 reference,
                 mobile,
-                model_num,
-                superpose_residues,
-                rmsd_residues,
-                atoms,
+                &crate::RmsdOptions {
+                    model_num,
+                    superpose_residues: superpose_residues.into(),
+                    rmsd_residues: rmsd_residues.into(),
+                    atoms,
+                    ..Default::default()
+                },
             )
         })
         .map_err(python_error)?;
     emit_python_warnings(py, analysis.warnings)?;
-    Ok(analysis.value)
+    Ok(analysis.value.rmsd)
 }
 
 /// Calculate every unordered RMSD pair in a structure ensemble.
