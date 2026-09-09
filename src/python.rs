@@ -57,6 +57,64 @@ fn clustering_method(value: &str) -> PyResult<crate::ClusteringMethod> {
     value_enum(value, "method must be 'k-medoids'")
 }
 
+#[pymethods]
+impl crate::SeqAlignment {
+    /// Format statistics and three alignment rows, optionally with position rulers.
+    ///
+    /// width limits visible columns including labels; None detects terminal width
+    /// or uses 80. color is auto, always, or never. Auto inspects sys.stdout and
+    /// respects NO_COLOR. rulers=False hides ticks but retains start/end numbers.
+    /// Data fields always remain plain strings without ANSI escapes.
+    #[pyo3(name = "format", signature = (width=None, color="auto", rulers=true))]
+    fn format_python(
+        &self,
+        py: Python<'_>,
+        width: Option<usize>,
+        color: &str,
+        rulers: bool,
+    ) -> PyResult<String> {
+        let color: crate::AlignmentColor =
+            value_enum(color, "color must be 'auto', 'always', or 'never'")?;
+        let stdout = py.import("sys")?.getattr("stdout")?;
+        let terminal = stdout
+            .call_method0("isatty")
+            .and_then(|v| v.extract::<bool>())
+            .unwrap_or(false);
+        let width = match width {
+            Some(width) => width,
+            None => py
+                .import("shutil")?
+                .call_method0("get_terminal_size")?
+                .getattr("columns")?
+                .extract()?,
+        };
+        self.render(width, color.enabled(terminal), rulers)
+            .map_err(python_error)
+    }
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        self.format_python(py, None, "auto", true)
+    }
+    fn __str__(&self, py: Python<'_>) -> PyResult<String> {
+        self.__repr__(py)
+    }
+}
+
+#[pymethods]
+impl crate::RmsdResult {
+    fn __repr__(&self) -> String {
+        format!(
+            "RmsdResult(rmsd={:.6}, core_rmsd={:.6}, fit_atoms={}/{}, evaluation_atoms={}, cycles={}, chains={})",
+            self.rmsd,
+            self.core_rmsd,
+            self.retained_fit_atoms,
+            self.initial_fit_atoms,
+            self.evaluation_atoms,
+            self.cycles,
+            self.chain_alignments.len()
+        )
+    }
+}
+
 /// Align two unaligned protein sequences using exact BLOSUM62 affine scoring.
 #[pyfunction]
 #[pyo3(signature = (reference, mobile, mode="global", gap_open=10.0, gap_extend=0.5))]

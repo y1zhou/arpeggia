@@ -1,5 +1,7 @@
 """Type stubs for the arpeggia Rust module."""
 
+from typing import Literal
+
 import polars as pl
 
 from ._contract import (
@@ -126,6 +128,16 @@ def sc(
 ) -> float: ...
 
 class SeqAlignment:
+    """Read-only alignment: gapped strings, input spans, scoring and statistics."""
+    def format(
+        self,
+        width: int | None = ...,
+        color: Literal["auto", "always", "never"] = ...,
+        rulers: bool = ...,
+    ) -> str:
+        """Wrap to total width; auto color follows the terminal; rulers=False hides ticks."""
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
     @property
     def reference(self) -> str: ...
     @property

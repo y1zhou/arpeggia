@@ -4,6 +4,8 @@ use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCod
 use serde::Serialize;
 #[path = "blosum62.rs"]
 mod blosum62;
+mod display;
+pub use display::AlignmentColor;
 
 /// Pairwise sequence-alignment objective.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum, Serialize)]

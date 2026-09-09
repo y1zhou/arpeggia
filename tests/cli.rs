@@ -408,3 +408,37 @@ fn sequence_cli_reports_metrics_and_empty_local_json() {
     assert_eq!(data["identity_alignment"], serde_json::Value::Null);
     assert_eq!(data["coverage_shorter"], 0.0);
 }
+
+#[test]
+fn alignment_display_flags_preserve_plain_json_and_wrapping() {
+    let run = |extra: &[&str]| {
+        arpeggia()
+            .args(["align-seqs", "ACDEFGHIKLMN", "ACDFGHIKLMN"])
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+    let plain = run(&["--width", "40", "--no-rulers"]);
+    assert!(plain.status.success());
+    let text = String::from_utf8(plain.stdout).unwrap();
+    assert!(!text.contains('\x1b'));
+    assert!(text.contains("operations"));
+    assert!(text.lines().all(|line| line.len() <= 40));
+    let ruled = run(&["--width", "40"]);
+    assert_eq!(
+        String::from_utf8(ruled.stdout).unwrap().lines().count(),
+        text.lines().count() + 2
+    );
+    let colored = run(&["--color", "always"]);
+    assert!(
+        String::from_utf8(colored.stdout)
+            .unwrap()
+            .contains("\x1b[31m")
+    );
+    let json = run(&["--json", "--color", "always"]);
+    let data: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(data["aligned_mobile"], "ACD-FGHIKLMN");
+    assert_eq!(data["operations"], "   -        ");
+    assert!(data.get("columns").is_none());
+    assert!(!run(&["--width", "1"]).status.success());
+}

@@ -1,4 +1,4 @@
-use arpeggia::{AlignmentMode, ArpeggiaError, ArpeggiaResult, SeqAlignOptions};
+use arpeggia::{AlignmentColor, AlignmentMode, ArpeggiaError, ArpeggiaResult, SeqAlignOptions};
 use clap::Parser;
 
 #[derive(clap::Args, Debug, Clone)]
@@ -22,6 +22,23 @@ impl AlignmentArgs {
         }
     }
 }
+#[derive(clap::Args, Debug, Clone)]
+pub(crate) struct DisplayArgs {
+    /// Total alignment line width, including labels (default: terminal width or 80)
+    #[arg(long)]
+    width: Option<usize>,
+    /// Color policy; auto respects terminal capability and NO_COLOR
+    #[arg(long, value_enum, default_value = "auto")]
+    color: AlignmentColor,
+    /// Hide position rulers; retain sequence start/end numbers
+    #[arg(long)]
+    no_rulers: bool,
+}
+impl DisplayArgs {
+    pub(crate) fn format(&self, alignment: &arpeggia::SeqAlignment) -> ArpeggiaResult<String> {
+        alignment.format(self.width, self.color, !self.no_rulers)
+    }
+}
 #[derive(Parser, Debug, Clone)]
 pub(crate) struct Args {
     /// First unaligned protein sequence
@@ -30,6 +47,8 @@ pub(crate) struct Args {
     mobile: String,
     #[command(flatten)]
     alignment: AlignmentArgs,
+    #[command(flatten)]
+    display: DisplayArgs,
     /// Emit machine-readable results with parameters and mappings
     #[arg(long)]
     json: bool,
@@ -50,28 +69,6 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
     if args.json {
         return print_json(&a);
     }
-    println!(
-        "Mode: {}\nScore: {}\nMatches: {} / {} columns / {} shorter-sequence residues\nPaired residues: {}\nGaps: {} residues in {} runs\nEdit distance: {}",
-        a.mode,
-        a.score,
-        a.matches,
-        a.alignment_length,
-        a.shorter_length,
-        a.paired_residues,
-        a.gap_residues,
-        a.gap_runs,
-        a.edit_distance
-    );
-    println!(
-        "Identity (alignment / shorter): {} / {}\nCoverage (alignment / shorter): {} / {}",
-        ratio(a.identity_alignment),
-        a.identity_shorter,
-        ratio(a.coverage_alignment),
-        a.coverage_shorter
-    );
+    println!("{}", args.display.format(&a)?);
     Ok(())
-}
-
-pub(crate) fn ratio(value: Option<f64>) -> String {
-    value.map_or_else(|| "undefined".into(), |v| format!("{v:.4}"))
 }

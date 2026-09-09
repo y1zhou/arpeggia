@@ -36,6 +36,8 @@ pub(crate) struct Args {
     chain_map: Vec<(String, String)>,
     #[command(flatten)]
     alignment: super::align_seqs::AlignmentArgs,
+    #[command(flatten)]
+    display: super::align_seqs::DisplayArgs,
     /// Maximum rejection/refit cycles after the initial fit
     #[arg(long, default_value_t = 0)]
     refine_cycles: usize,
@@ -96,15 +98,7 @@ pub(crate) fn run(args: &Args) -> ArpeggiaResult<()> {
             chain.residue_pairs.len()
         );
         if let Some(a) = chain.alignment {
-            println!(
-                "  {} alignment: score {}, identity {} / {}, coverage {} / {} (alignment / shorter)",
-                a.mode,
-                a.score,
-                super::align_seqs::ratio(a.identity_alignment),
-                a.identity_shorter,
-                super::align_seqs::ratio(a.coverage_alignment),
-                a.coverage_shorter
-            );
+            println!("{}", args.display.format(&a)?);
         }
     }
     Ok(())

@@ -53,6 +53,41 @@ A local alignment without a positive match has score zero, empty columns,
 `None` alignment-length ratios, and zero shorter-input ratios. Edit distance
 still compares the complete inputs. JSON represents undefined ratios as `null`.
 
+## Display an alignment
+
+Evaluating or printing a Python `SeqAlignment` shows statistics followed by
+reference, mobile, and operation rows. The CLI uses the same layout, including
+per-chain alignments from `rmsd --align-seqs`.
+
+```python
+alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDFGHIKLMN")
+print(alignment)  # terminal width and automatic color
+print(alignment.format(width=60, color="never", rulers=False))
+```
+
+```bash
+arpeggia align-seqs ACDEFGHIKLMN ACDFGHIKLMN --width 60 --no-rulers
+```
+
+Operations describe reference-to-mobile changes: deletions are red (`-`),
+insertions green (`+`), mismatches yellow (`x`), and matches uncolored (space).
+Both sequence cells and the operation marker share the color. Unaligned tails
+are gray with blank operation cells; they do not contribute to alignment
+statistics. Terminal gaps in global alignment remain scored edits.
+
+Each block shows one-based input start/end positions and separate rulers above
+each sequence, with every tenth position right-aligned to its residue. Gaps and
+padding do not advance positions. These are sequence positions, including for
+structural alignments; author residue numbers are in `residue_pairs`. API spans
+remain zero-based and half-open.
+
+Width includes labels and position numbers. Output wraps without truncation,
+using terminal width or 80 columns if unavailable; widths too small for labels
+and one residue fail. `--no-rulers` and `rulers=False` hide tick rows while
+retaining endpoints. `--color` and `color` accept `auto` (default), `always`, or
+`never`. Auto respects terminal capability and `NO_COLOR`; explicit `always`
+forces ANSI color. Fields and JSON always contain plain data.
+
 ## Establish structural correspondence
 
 ```python

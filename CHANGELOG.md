@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added shared CLI/Python alignment displays with colored edits and clipped
+  tails, terminal-width wrapping, input position rulers, and explicit width,
+  color, and ruler-visibility controls.
 - Exposed `align_seqs()` and read-only alignment/result classes in Python, with
   typed mappings and statistics. Added `align-seqs` and sequence/refinement flags
   to the RMSD CLI; JSON includes parameters and correspondence.

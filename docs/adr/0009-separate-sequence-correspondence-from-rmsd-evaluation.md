@@ -110,7 +110,7 @@ for parameters, mappings, and statistics.
 
 ### Gapped sequences and display
 
-Accepted follow-up design; implementation follows the display interview.
+Accepted follow-up design.
 Replace public index-pair columns with equal-length `aligned_reference`,
 `aligned_mobile`, and `operations` strings. Gapped strings make downstream use
 direct; original inputs and zero-based, half-open spans retain enough information
@@ -137,7 +137,10 @@ or padding. Each sequence row shows its start and end positions; rulers mark
 every tenth residue with the last digit aligned to that residue's column.
 Rows without residues omit endpoint numbers. Structural sequence displays use
 observed-sequence positions; author numbering remains in the residue mapping.
-Python `repr()`, `str()`, and `.format(width=None, color="auto")` use automatic
+Each ruler sits immediately above its sequence row, with operations below both.
+CLI `--no-rulers` and Python `.format(rulers=False)` hide rulers while retaining
+start/end positions; rulers are shown by default.
+Python `repr()`, `str()`, and `.format(width=None, color="auto", rulers=True)` use automatic
 color. Explicit `color="never"` produces plain text; `color="always"` overrides
 terminal detection and `NO_COLOR`.
 

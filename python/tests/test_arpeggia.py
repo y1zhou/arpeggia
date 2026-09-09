@@ -463,3 +463,38 @@ def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
     assert result.chain_alignments[0].alignment is not None
     with pytest.raises(AttributeError):
         result.rmsd = 5  # ty: ignore[invalid-assignment] -- verify runtime immutability
+
+
+def test_alignment_display_controls(monkeypatch):
+    """Display policies honor terminal capability without coloring stored data."""
+    import sys
+
+    import arpeggia
+
+    alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDFGHIKLMN")
+    plain = alignment.format(width=40, color="never", rulers=False)
+    assert "operations" in plain and "-" in alignment.operations
+    assert "\x1b" not in plain
+    assert all(len(line) <= 40 for line in plain.splitlines())
+    assert "\x1b[31m" in alignment.format(color="always")
+    assert not hasattr(alignment, "columns")
+    ruled = alignment.format(width=80, color="never")
+    assert (
+        len(ruled.splitlines())
+        == len(alignment.format(width=80, color="never", rulers=False).splitlines()) + 2
+    )
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    assert "\x1b[31m" in repr(alignment)
+    assert str(alignment) == repr(alignment) == alignment.format()
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert "\x1b" not in repr(alignment)
+    assert "\x1b" in alignment.format(color="always")
+    monkeypatch.delenv("NO_COLOR")
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+    assert "\x1b" not in repr(alignment)
+    with pytest.raises(ValueError, match="width"):
+        alignment.format(width=1)
+    with pytest.raises(ValueError, match="color"):
+        alignment.format(color="bad")  # ty: ignore[invalid-argument-type] -- verify runtime validation
