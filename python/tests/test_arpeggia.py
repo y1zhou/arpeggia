@@ -416,7 +416,7 @@ def test_sequence_alignment_results():
     assert alignment.edit_distance == 4
     assert alignment.identity_alignment == alignment.identity_shorter == 1.0
     with pytest.raises(AttributeError):
-        alignment.score = 0
+        alignment.score = 0  # ty: ignore[invalid-assignment] -- verify runtime immutability
     empty = arpeggia.align_seqs("AAAA", "WWWW", mode="local")
     assert empty.identity_alignment is None
     assert empty.coverage_alignment is None
@@ -461,4 +461,4 @@ def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
     assert result.chain_alignments[0].residue_pairs[0].mobile_number == 101
     assert result.chain_alignments[0].alignment is not None
     with pytest.raises(AttributeError):
-        result.rmsd = 5
+        result.rmsd = 5  # ty: ignore[invalid-assignment] -- verify runtime immutability

@@ -22,8 +22,7 @@ Full traceback is scalar; SIMD score-only claims do not describe this workload.
 
 Pinned Hyalite adds one package to the lockfile and has no normal dependencies.
 Serde and serde_json, now direct dependencies for result serialization, were
-already present transitively. Final wheel measurements will include the complete
-feature rather than attributing all growth to Hyalite.
+already present transitively.
 
 Repository regressions cover directional semi-global spans, gap costs and counts,
 empty local alignments, original-symbol identity for U/O scoring aliases, invalid
@@ -42,3 +41,40 @@ The symmetric 20-pair refinement fixture from the PyMOL research retains 16
 fitting pairs at core RMSD 0.1 after two rejection passes and one unchanged
 inspection. Evaluation still includes all 20 pairs at RMSD approximately 1.925617.
 A threshold that removes every fitting pair fails with the surviving count.
+
+## Python performance and package size
+
+Release wheels for baseline `e3a1677` (v0.9.2) and this feature used the same
+Rust 1.96 toolchain and CPython 3.13 on Linux x86-64 (Ryzen 9 9950X3D).
+The table reports the median of five fresh-process medians, with three warm-up
+calls per process and alternating case order.
+
+| Operation | Median time (ms) |
+| --- | ---: |
+| Baseline exact RMSD | 0.959 |
+| Feature exact RMSD | 0.924 |
+| Feature sequence-aligned RMSD | 0.945 |
+| Global sequence alignment, 80 residues | 0.023 |
+| Global sequence alignment, 256 residues | 0.279 |
+| Global sequence alignment, 1,024 residues | 4.609 |
+
+RMSD compares the repository's 1UBQ fixture with itself, using default selections
+and 100 timed calls per process. Timings include parsing and Python result
+construction. All results were numerically zero. The small differences show no
+meaningful regression on this input; they do not establish a speedup or predict
+large multichain performance.
+
+Sequence inputs repeat `ACDEFGHIKLMNPQRSTVWY`, truncated to the stated length;
+the second input inserts `GG` at the midpoint. Global defaults apply, with
+125, 39, and 9 timed calls per process respectively. Each result has edit
+distance two. Timings include alignment, metrics, and Python result handling.
+
+| Artifact | Baseline bytes | Feature bytes | Growth |
+| --- | ---: | ---: | ---: |
+| Compressed wheel | 9,487,996 | 9,596,012 | 1.14% |
+| Native extension | 34,653,584 | 34,910,936 | 0.74% |
+
+Growth includes the complete feature, bindings, and serialization. Validation
+passed 205 Rust tests (including CLI and doctests), 17 Python tests against the
+fresh wheel with warnings treated as errors, Python type checking, and all
+pre-commit checks.
