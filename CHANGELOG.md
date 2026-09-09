@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference-based selections, explicit chain maps or unique maximum-score
   inference, and diagnostics for omitted atoms.
 - Optional atom-wise rejection and refitting. Final evaluation retains all mapped
-  selected pairs, including rejected fitting pairs; degenerate surviving fits fail.
+  selected pairs, including rejected fitting pairs. Unchanged fitting sets retain
+  their core RMSD; degenerate surviving fits fail.
 
 ### Changed
 

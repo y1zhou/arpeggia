@@ -41,6 +41,8 @@ The symmetric 20-pair refinement fixture from the PyMOL research retains 16
 fitting pairs at core RMSD 0.1 after two rejection passes and one unchanged
 inspection. Evaluation still includes all 20 pairs at RMSD approximately 1.925617.
 A threshold that removes every fitting pair fails with the surviving count.
+An unchanged refinement inspection preserves the 0.671302 Å RMSD of a reflected
+four-point fixture; impossible reference/query chain counts fail before scoring.
 
 ## Python performance and package size
 
@@ -83,7 +85,7 @@ pre-commit checks.
 
 The artifact measurements above cover the alignment engine and API before display
 rendering and expanded help; they are not final release-size measurements.
-The complete feature passes 209 Rust tests and 18 Python tests against the rebuilt editable
+The complete feature passes 210 Rust tests and 18 Python tests against the rebuilt editable
 extension, with Python warnings treated as errors. Regressions cover gapped
 strings and recovered residue indices, insertion/deletion orientation, independent
 rulers across gaps, named Unicode labels, narrow wrapping, gray clipping, empty local results, and plain

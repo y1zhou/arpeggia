@@ -225,8 +225,9 @@ pub fn get_rmsd(
         retained = survivors;
         core_rmsd = kabsch_prepared_rmsd(&first, &second)?;
     }
-    // Preserve the established exact-equal selection fast path and its rounding.
-    let rmsd = if cycles == 0 && superpose_selector == rmsd_selector {
+    // Unchanged inspections leave fit and evaluation populations identical.
+    // Preserve the core solver's reflection handling and rounding in that case.
+    let rmsd = if retained.len() == initial_count && superpose_selector == rmsd_selector {
         core_rmsd
     } else {
         kabsch_prepared_selected_rmsd(&first, &second)?

@@ -229,6 +229,13 @@ fn chain_mapping(
             })
             .collect();
     }
+    if first.len() > second.len() {
+        return Err(ArpeggiaError::Calculation(format!(
+            "cannot assign {} reference chains to {} query chains",
+            first.len(),
+            second.len()
+        )));
+    }
     let scoring = crate::seq_alignment::scoring(&options.alignment)?;
     let mut scratch = hyalite::PairScratch::new();
     let mut scores = Vec::new();
@@ -477,12 +484,80 @@ mod tests {
         pdb
     }
     #[test]
+    fn unchanged_refinement_preserves_reflection_corrected_rmsd() {
+        let structure = |sign: f64| {
+            let mut model = pdbtbx::Model::new(1);
+            for (i, (x, y, z)) in [
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (0.0, 2.0, 0.0),
+                (0.0, 0.0, 3.0),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let atom =
+                    Atom::new(false, i + 1, "CA", sign * x, y, z, 1.0, 20.0, "C", 0).unwrap();
+                model.add_atom(atom, "A", (i as isize + 1, None), ("ALA", None));
+            }
+            let mut pdb = PDB::new();
+            pdb.add_model(model);
+            pdb
+        };
+        let baseline = get_rmsd(structure(1.0), structure(-1.0), &RmsdOptions::default())
+            .unwrap()
+            .value;
+        assert!((baseline.rmsd - 0.6713023905014821).abs() < 1e-12);
+        for cutoff in [2.0, 100.0] {
+            let result = get_rmsd(
+                structure(1.0),
+                structure(-1.0),
+                &RmsdOptions {
+                    refine_cycles: 1,
+                    refine_cutoff: cutoff,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .value;
+            assert_eq!(result.rmsd, baseline.rmsd);
+            assert_eq!(result.core_rmsd, baseline.core_rmsd);
+            assert_eq!(
+                (
+                    result.retained_fit_atoms,
+                    result.evaluation_atoms,
+                    result.cycles
+                ),
+                (4, 4, 1)
+            );
+        }
+    }
+    #[test]
     fn optimal_assignment_is_not_greedy_and_rejects_missing_edges() {
         let scores = vec![vec![100, 99], vec![98, 1]];
         assert_eq!(assignment(&scores, None), Some((197, vec![1, 0])));
         assert_eq!(assignment(&[vec![0, 3], vec![-1, 2]], None), None);
         assert_eq!(assignment(&[vec![3, 2, 1]], None), Some((3, vec![0])));
         assert_eq!(assignment(&[vec![3], vec![2]], None), None);
+        let reference = structure(&[
+            ("A", &["ALA", "CYS", "ASP"], 1),
+            ("B", &["TRP", "TYR", "PHE"], 1),
+        ]);
+        let query = structure(&[("X", &["ALA", "CYS", "ASP"], 1)]);
+        let error = get_rmsd(
+            reference,
+            query,
+            &RmsdOptions {
+                align_seqs: true,
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot assign 2 reference chains to 1 query chains")
+        );
     }
     #[test]
     fn assignment_matches_exhaustive_small_matrices() {
