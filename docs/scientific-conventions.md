@@ -19,6 +19,10 @@
 - Standard atom, residue, and chain SASA use one atom population and ProtOr
   radii with elemental fallback. Polar/hydrophobic columns follow Rosetta's
   legacy `SasaFilter` atom partition; numerical areas remain Shrake–Rupley.
+- Smaller solvent probes access narrower crevices; larger probes exclude them.
+  Total SASA can increase or decrease with probe radius. An isolated atom has
+  area `4π(atom_radius + probe_radius)²`, illustrating why smaller probes do not
+  always give larger areas. See the [SASA geometry definition](https://freesasa.github.io/doxygen/Geometry.html).
 - dSASA is the two-sided buried area
   `SASA(group 1) + SASA(group 2) - SASA(complex)`. Divide by two only when a
   one-sided interface-area convention is required.

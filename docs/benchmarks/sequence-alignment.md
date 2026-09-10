@@ -85,9 +85,10 @@ pre-commit checks.
 
 The artifact measurements above cover the alignment engine and API before display
 rendering and expanded help; they are not final release-size measurements.
-The complete feature passes 210 Rust tests and 18 Python tests against the rebuilt editable
+The complete feature passes 211 Rust tests and 18 Python tests against the rebuilt editable
 extension, with Python warnings treated as errors. Regressions cover gapped
-strings and recovered residue indices, insertion/deletion orientation, independent
+strings and recovered residue indices, insertion/deletion orientation,
+positive-score substitution markers without changing identity, independent
 rulers across gaps, named Unicode labels, narrow wrapping, gray clipping, empty local results, and plain
 JSON. CLI and Python were also checked in a 40-column pseudo-terminal: both
 detected width, enabled color automatically, and respected `NO_COLOR`.

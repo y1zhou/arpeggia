@@ -293,6 +293,8 @@ def sasa(
             - "residue": Aggregate SASA by residue
             - "chain": Aggregate SASA by chain
         probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
+            Smaller probes access narrower crevices; larger probes exclude them.
+            Total SASA changes depend on the structure.
         n_points (int, optional): Number of points for surface calculation. Defaults to 100.
         model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
         chains (str, optional): Comma-separated chain IDs to include (e.g., "A,B,C").
@@ -340,6 +342,8 @@ def dsasa(
             Format: "A,B/C,D" where chains A,B form one side and C,D form the other.
             Groups must be disjoint and non-empty; "A/" selects A vs all remaining chains.
         probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
+            Smaller probes access narrower crevices; larger probes exclude them.
+            Total SASA changes depend on the structure.
         n_points (int, optional): Number of points for surface calculation. Defaults to 100.
         model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
         num_threads (int, optional): Number of threads for parallel processing (0 for all cores). Defaults to 1.
@@ -367,6 +371,8 @@ def dsasa_components(
         input_file (str): PDB or mmCIF path.
         groups (str): Disjoint non-empty groups, e.g. "A,B/C" or "A/" (A vs rest).
         probe_radius (float): Solvent probe radius in Å, default 1.4.
+            Smaller probes access narrower crevices; larger probes exclude them.
+            Total SASA changes depend on the structure.
         n_points (int): Positive surface sample count per sphere, default 100.
         model_num (int): Model serial, or 0 for the first model.
         num_threads (int): Worker limit, default 1; 0 uses available processors.
@@ -397,6 +403,8 @@ def relative_sasa(
     Args:
         input_file (str): Path to the PDB or mmCIF file
         probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
+            Smaller probes access narrower crevices; larger probes exclude them.
+            Total SASA changes depend on the structure.
         n_points (int, optional): Number of points for surface calculation. Defaults to 100.
         model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
         chains (str, optional): Comma-separated chain IDs to include (e.g., "A,B,C").
@@ -451,6 +459,8 @@ def sap_score(
             - "atom": Calculate SAP for each atom
             - "residue": Aggregate SAP by residue (default)
         probe_radius (float, optional): Probe radius in Ångströms for SASA calculation. Defaults to 1.1.
+            Smaller probes access narrower crevices; larger probes exclude them.
+            Total SASA changes depend on the structure.
         n_points (int, optional): Number of points for SASA surface calculation. Defaults to 100.
         model_num (int, optional): Model serial to analyze (0 for first model). Defaults to 0.
         sap_radius (float, optional): Radius in Ångströms for neighbor search. Defaults to 5.0.

@@ -98,7 +98,9 @@ pub struct DsasaResult {
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4).
+///   Smaller probes access narrower crevices; larger probes exclude them.
+///   Total SASA changes depend on the structure.
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
@@ -426,7 +428,9 @@ fn atom_sasa_records_to_dataframe(records: &[AtomSasaRecord]) -> DataFrame {
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4).
+///   Smaller probes access narrower crevices; larger probes exclude them.
+///   Total SASA changes depend on the structure.
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
@@ -522,7 +526,9 @@ fn residue_sasa_records_to_dataframe(records: &[ResidueSasaRecord]) -> DataFrame
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4).
+///   Smaller probes access narrower crevices; larger probes exclude them.
+///   Total SASA changes depend on the structure.
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
@@ -610,7 +616,9 @@ fn chain_sasa_records_to_dataframe(records: &[ChainSasaRecord]) -> DataFrame {
 ///
 /// * `pdb` - Reference to a PDB structure
 /// * `groups` - Chain groups specification (e.g., "A,B/C,D")
-/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4).
+///   Smaller probes access narrower crevices; larger probes exclude them.
+///   Total SASA changes depend on the structure.
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 ///
@@ -748,7 +756,9 @@ pub fn get_max_asa(resn: &str) -> Option<f32> {
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms (typically 1.4)
+/// * `probe_radius` - Probe radius in Ångströms (typically 1.4).
+///   Smaller probes access narrower crevices; larger probes exclude them.
+///   Total SASA changes depend on the structure.
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `chains` - Comma-separated chain IDs to include (e.g., "A,B,C"). Empty string includes all chains.
@@ -1237,7 +1247,7 @@ ENDMDL\nEND\n";
     fn test_sasa_probe_radius_effect() {
         let pdb = load_ubiquitin();
 
-        // Smaller probe radius should result in larger SASA
+        // Ubiquitin has greater SASA with this smaller probe; the trend is structure-dependent.
         let small_probe = run_with_threads(1, || get_chain_sasa(&pdb, 1.0, 100, 0, ""));
         let small_probe = small_probe.unwrap().value;
         let large_probe = run_with_threads(1, || get_chain_sasa(&pdb, 2.0, 100, 0, ""));
@@ -1260,7 +1270,7 @@ ENDMDL\nEND\n";
 
         assert!(
             small_sasa > large_sasa,
-            "Smaller probe radius should give larger SASA: {small_sasa} vs {large_sasa}"
+            "Ubiquitin SASA at 1 Å should exceed SASA at 2 Å: {small_sasa} vs {large_sasa}"
         );
     }
 

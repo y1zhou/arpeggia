@@ -168,7 +168,9 @@ fn is_sap_sidechain(resn: &str, atomn: &str) -> bool {
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.1)
+/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.1).
+///   Smaller probes access narrower crevices; larger probes exclude them.
+///   Total SASA changes depend on the structure.
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)
@@ -387,7 +389,9 @@ fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
 /// # Arguments
 ///
 /// * `pdb` - Reference to a PDB structure
-/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.1)
+/// * `probe_radius` - Probe radius in Ångströms for SASA calculation (typically 1.1).
+///   Smaller probes access narrower crevices; larger probes exclude them.
+///   Total SASA changes depend on the structure.
 /// * `n_points` - Number of points for surface calculation (typically 100)
 /// * `model_num` - Model number to analyze (0 for first model)
 /// * `sap_radius` - Radius in Ångströms for neighbor search (typically 5.0)

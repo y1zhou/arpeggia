@@ -35,10 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`. CLI RMSD
   output reports details by default and supports structured `--json` output.
 - Expanded CLI help and Google-style Python/IDE docstrings with reference
-  selection syntax,
-  independent defaults, units, result semantics, and examples. Consolidated
-  structure-comparison usage in a dedicated guide, linked repository files through
-  GitHub for installed-package users, and clarified Python/CLI names in README.
+  selection syntax, independent defaults, units, result semantics, and examples.
+  Probe-radius guidance explains crevice access and how SASA changes depend on
+  the structure. Consolidated structure-comparison usage in a dedicated guide,
+  linked repository files through GitHub for installed-package users, and
+  clarified Python/CLI names in README.
 
 ### Validation
 

@@ -87,7 +87,7 @@ are gray with blank operation cells; they do not contribute to alignment
 statistics. Terminal gaps in global alignment remain scored edits.
 
 Similar substitutions are nonidentical pairs with a strictly positive BLOSUM62
-score, including `B/Z` and `U/O` scoring aliases. Zero scores remain `x`.
+score, including ambiguous `B/Z` residues and `U/O` scoring aliases. Zero scores remain `x`.
 Identity takes precedence: identical `X/X` is a match despite its negative score.
 Both substitution categories count toward `mismatches`; the distinction changes
 neither identity nor edit distance and does not establish chemical equivalence

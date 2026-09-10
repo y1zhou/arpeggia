@@ -19,7 +19,8 @@ pub(crate) struct Args {
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Solvent probe radius in Ångströms
+    /// Solvent probe radius in Ångströms. Smaller probes access narrower crevices;
+    /// larger probes exclude them. Total SASA changes depend on the structure.
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
     probe_radius: f32,
 

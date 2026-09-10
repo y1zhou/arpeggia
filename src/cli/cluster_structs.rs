@@ -1,3 +1,4 @@
+use super::rmsd::RESIDUE_SELECTION_HELP;
 use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file, write_df_to_new_file};
 use arpeggia::{
     ArpeggiaError, ArpeggiaResult, AtomSubset, ClusterOptions, ClusteringMethod,
@@ -9,7 +10,7 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
 #[derive(Parser, Debug, Clone)]
-#[command(version, about, after_help = super::RESIDUE_SELECTION_HELP)]
+#[command(version, about, after_help = RESIDUE_SELECTION_HELP)]
 pub(crate) struct Args {
     /// Non-recursive directory of PDB or mmCIF structures
     #[arg(short, long)]
