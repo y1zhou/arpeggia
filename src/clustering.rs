@@ -1,6 +1,6 @@
 //! K-medoids clustering over pairwise RMSD matrices.
 
-use crate::pairwise_rmsd::PairwiseRmsdMatrix;
+use crate::PairwiseRmsdMatrix;
 use crate::utils::polars_calculation_error;
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use clap::ValueEnum;

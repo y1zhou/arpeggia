@@ -1,7 +1,7 @@
 // BLOSUM62: Henikoff & Henikoff (1992), doi:10.1073/pnas.89.22.10915.
 // Values checked against Biopython 1.86 Bio.Align.substitution_matrices/BLOSUM62.
-pub(super) const ALPHABET: &[u8] = b"ARNDCQEGHILKMFPSTWYVBZX";
-pub(super) const MATRIX: [i32; 23 * 23] = [
+pub(super) const BLOSUM62_ALPHABET: &[u8] = b"ARNDCQEGHILKMFPSTWYVBZX";
+pub(super) const BLOSUM62: [i32; 23 * 23] = [
     4, -1, -2, -2, 0, -1, -1, 0, -2, -1, -1, -1, -1, -2, -1, 1, 0, -3, -2, 0, -2, -1, 0, -1, 5, 0,
     -2, -3, 1, 0, -2, 0, -3, -2, 2, -1, -3, -2, -1, -1, -3, -2, -3, -1, 0, -1, -2, 0, 6, 1, -3, 0,
     0, 0, 1, -3, -3, 0, -2, -3, -2, 1, 0, -4, -2, -3, 3, 0, -1, -2, -2, 1, 6, -3, 0, 2, -1, -1, -3,

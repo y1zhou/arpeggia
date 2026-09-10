@@ -15,7 +15,6 @@ mod clustering;
 mod contacts;
 mod diagnostics;
 mod metadata;
-mod pairwise_rmsd;
 mod rmsd;
 mod sap;
 mod sasa;
@@ -30,7 +29,7 @@ pub use clustering::{ClusterOptions, ClusteringMethod, cluster_pairwise_rmsd};
 pub use contacts::ProtonationMode;
 pub use diagnostics::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 pub use metadata::{BondEndpoint, StructureMetadata, get_seqres, read_metadata};
-pub use pairwise_rmsd::{
+pub use rmsd::pairwise::{
     PairwiseRmsdMatrix, PairwiseRmsdOptions, StructureObservation, get_pairwise_rmsd,
     get_pairwise_rmsd_matrix, read_pairwise_matrix, read_structure_observations,
 };

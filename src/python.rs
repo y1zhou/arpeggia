@@ -466,7 +466,7 @@ fn cluster_structs(
             analysis.value
         }
         (None, Some(dataframe)) => {
-            let warnings = crate::pairwise_rmsd::check_packed_matrix_memory(
+            let warnings = crate::rmsd::pairwise::check_packed_matrix_memory(
                 dataframe.0.height(),
                 bypass_mem_check,
             )

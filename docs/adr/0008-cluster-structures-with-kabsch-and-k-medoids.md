@@ -15,7 +15,7 @@ Selected atoms must correspond exactly after model and conformer selection.
 Their identities include chain, author residue number, insertion code, residue
 name, and atom name. A mismatch fails rather than silently intersecting atom
 sets. Sequence/structural alignment and weighting remain deferred at the
-correspondence boundary in [the RMSD module](https://github.com/y1zhou/arpeggia/blob/master/src/rmsd.rs).
+correspondence boundary in [the RMSD selection module](https://github.com/y1zhou/arpeggia/blob/master/src/rmsd/selection.rs).
 
 The Superposition Selection determines one proper rigid-body transform; the
 RMSD Selection is evaluated with that transform without recentering or

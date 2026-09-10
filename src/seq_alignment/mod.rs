@@ -2,9 +2,8 @@
 
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use serde::Serialize;
-#[path = "blosum62.rs"]
-mod blosum62;
 mod display;
+mod matrices;
 pub use display::AlignmentColor;
 #[cfg(feature = "python")]
 pub(crate) use display::color_enabled;
@@ -168,7 +167,7 @@ pub(crate) fn scoring(options: &SeqAlignOptions) -> ArpeggiaResult<hyalite::Scor
     let extend = scaled_cost(options.gap_extend)?;
     hyalite::Scoring::new(
         23,
-        blosum62::MATRIX.iter().map(|v| v * 100).collect(),
+        matrices::BLOSUM62.iter().map(|v| v * 100).collect(),
         open,
         extend,
     )
@@ -183,7 +182,7 @@ pub(crate) fn encode(sequence: &str) -> ArpeggiaResult<Vec<u8>> {
     }
     sequence.bytes().map(|b| {
         let b = match b.to_ascii_uppercase() { b'U' => b'C', b'O' => b'K', c => c };
-        blosum62::ALPHABET.iter().position(|a| *a == b).map(|i| i as u8)
+        matrices::BLOSUM62_ALPHABET.iter().position(|a| *a == b).map(|i| i as u8)
             .ok_or_else(|| ArpeggiaError::InvalidArgument("sequences must contain only amino-acid letters (including B/Z/X/U/O), without gaps, whitespace, or stops".into()))
     }).collect()
 }

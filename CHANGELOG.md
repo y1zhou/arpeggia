@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Grouped RMSD selection, fitting, correspondence, and pairwise calculations
+  under one module, and sequence alignment with its matrix data and display.
+  Existing crate-root exports and inline unit-test organization are preserved.
 - Python `rmsd()` returns a read-only `RmsdResult` instead of a scalar; use `.rmsd`
   for full evaluation RMSD and `.core_rmsd` for retained fitting pairs. Rust
   `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`. CLI RMSD

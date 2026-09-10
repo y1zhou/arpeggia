@@ -1,6 +1,15 @@
 //! Observed-chain alignment and coordinate correspondence before atom selection.
-use super::*;
-use pdbtbx::{Atom, Chain, Residue};
+use super::RmsdOptions;
+use super::selection::{
+    AtomIdentity, AtomSubset, ResidueSelector, SelectedCoordinateUnion, SelectionMembership,
+    atom_in_subset,
+};
+use crate::contacts::one_letter_code;
+use crate::structure::selected_model;
+use crate::{AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
+use pdbtbx::{Atom, Chain, PDB, Residue};
+use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Corresponding coordinate residues, preserving author numbering and names.
 #[derive(Clone, Debug, Serialize)]
@@ -457,6 +466,7 @@ pub(super) fn aligned_coordinates(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::get_rmsd;
     fn structure(chains: &[(&str, &[&str], isize)]) -> PDB {
         let mut model = pdbtbx::Model::new(1);
         let mut serial = 1;

@@ -1,9 +1,12 @@
 //! Ensemble structure input and pairwise RMSD calculation.
 
-use crate::rmsd::{
-    AtomIdentity, PreparedCoordinates, ResidueSelector, kabsch_prepared_rmsd,
-    kabsch_prepared_selected_rmsd, prepare_coordinate_union, select_coordinate_union,
-    validate_rmsd_selections, validate_selection_keys,
+use super::kabsch::{
+    PreparedCoordinates, kabsch_prepared_rmsd, kabsch_prepared_selected_rmsd,
+    prepare_coordinate_union,
+};
+use super::selection::{
+    AtomIdentity, ResidueSelector, select_coordinate_union, validate_rmsd_selections,
+    validate_selection_keys,
 };
 use crate::utils::polars_calculation_error;
 use crate::{
