@@ -134,13 +134,13 @@ The public evidence does not justify a blanket conclusion. Two maintainer issues
 
 Both issues were open in the retrieved records.[^immunum-speed-issue][^immunum-truth-issue] These are transparent limitations, not evidence that Immunum is unusable. My recommendation is **first-choice Rust candidate to benchmark**, not **proven most accurate and fastest antibody numberer**.
 
-### 4.4 RIOT: useful when the task is larger than numbering
+### 4.4 RIOT: separate V/J alignment for protein numbering
 
-RIOT combines nucleotide and amino-acid immunoglobulin annotation with an open germline database and includes established numbering conventions. Its peer-reviewed paper appeared online in late 2024 and in the 2025 *Briefings in Bioinformatics* issue.[^riot]
+RIOT aligns protein V and J segments separately, then transfers their germline-to-scheme mappings onto the input. This avoids treating the intervening CDR3 as one long insertion against a complete V–J profile. Its paper illustrates an ANARCI failure on 4ocr; that example does not establish an Immunum failure.[^riot]
 
-It is therefore relevant when the required output includes germline annotation or repertoire analysis, not just a numbered variable-domain amino-acid sequence. The paper states noncommercial-use conditions for noncommercial organizations; an open database does not imply that every software component is unrestricted for commercial deployment.[^riot]
+The reported protein V/J assignment results, **96.94%/97.72%** on 1,274 therapeutic sequences, measure agreement with exhaustive Smith–Waterman/E-value assignments, not residue-numbering accuracy. Numbering comparisons found 23 IMGT conflicts and left some disagreements unresolved. Immunum was not a comparator; the paper supplies no dedicated alpaca/VHH numbering-accuracy result.[^riot]
 
-I would compare RIOT with a complete annotation pipeline, not rank its total runtime against a pure amino-acid numbering kernel without separating the extra work.
+RIOT therefore merits a direct protein-numbering comparison. The inspected source has IMGT/Martin/Chothia/Kabat but no AHo; its Rust component performs prefiltering while the numbering pipeline remains Python. Native integration convenience does not establish numbering quality.[^riot-source]
 
 ### 4.5 AbNumber: useful API, but disclose the backend
 
@@ -261,8 +261,7 @@ For reference labels, use structurally curated cases where a correspondence is d
 
 ## 9. Arpeggia implementation findings
 
-These findings inform the design interview; recommendations are not accepted
-API decisions. The requested Chothia-to-Martin alias is recorded in
+These findings inform the design interview. Accepted scope and API decisions are recorded in
 [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
 
 ### 9.1 Native engine qualification
@@ -380,6 +379,53 @@ comparisons can still call `align_seqs()`. CDR backgrounds require named region
 boundaries and handling of gap/blank cells. Region identification must remain
 possible without color.[^arpeggia-alignment]
 
+### 9.4 Comparing engines and CDR definitions
+
+No inspected evidence establishes a RIOT-versus-Immunum accuracy ranking.
+Immunum's maintainers identify agreement between ANARCI and AntPack as their
+current benchmark reference and request independent structural labels.
+Its 1.3.1 tests include an ultralong bovine CDR3 (4k3e H), but assert domain
+coverage rather than every numbered position. ANARCI's limitations cannot be
+assumed to apply unchanged to Immunum's position-dependent scoring.[^immunum-truth-issue][^immunum-alignment]
+
+Compare both engines on the same protein panel, separating domain coverage,
+residue labels, CDR membership and germline matching. Include human/mouse H/K/L,
+alpaca VHH, long loops, framework indels and truncated domains. Assess
+disagreements against scheme rules and structural evidence; leave unresolved
+cases explicit rather than using either engine as truth.
+
+A numbering scheme labels residues; a CDR definition assigns region membership.
+For example, under fixed Chothia/Martin numbering, Kabat CDR-H1 is H31–H35 and
+AbM/Martin CDR-H1 is H26–H35. H28 keeps its number but changes region. Mixed
+definitions must be transferred through residue correspondence, not applied as
+numeric cutoffs in another scheme.[^martin-chapter]
+
+The accepted `cdr_definition="auto"` policy follows the selected numbering
+scheme. Exact defaults still need an explicit convention. The Martin group's
+2024 study uses AbM boundaries with Martin numbering. For AHo, a published
+structural-loop convention uses 25–40, 58–77 and 109–137; this agrees with the
+core boundaries illustrated by Honegger and Plückthun, but is not a universal
+definition used by every tool. It differs from Immunum's unverified table.
+These are candidates for the documented default map.[^martin-loops][^aho-loops][^aho-original]
+
+### 9.5 Explicit germline imputation
+
+Antid's `imputed_seq` fills FR1/FR4 gaps from the first displayed germline and
+requires the original variable-domain sequence to remain contiguous. It returns
+a string, does not replace `X`, and does not fill CDRs.[^antid-imputation]
+
+An unoccupied numbered position is not necessarily missing input. An eight-residue
+IMGT CDR1 normally leaves positions 31–34 empty; filling them changes its loop
+length. With raw amino-acid input alone, distinguishing an internal biological
+deletion from omitted data requires information the string does not carry.[^imgt]
+
+Terminal completion is therefore a useful initial policy. Internal insertions
+and replacement of unknown residues require explicit semantics. Tied references
+can agree on the observed fragment while differing at an omitted position;
+selecting the first reference would hide that uncertainty. Completed residues
+need source attribution and a distinction from supplied residues. None of these
+operations reconstructs coordinates or the full V/D/J junction.
+
 ## References and implementation records
 
 [^anarci]: Dunbar J, Deane CM. **ANARCI: antigen receptor numbering and receptor classification.** *Bioinformatics* 32, 298–300 (2016; online 2015). DOI: <https://doi.org/10.1093/bioinformatics/btv552>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/26424857/>.
@@ -403,6 +449,7 @@ possible without color.[^arpeggia-alignment]
 [^anarcii-release]: ANARCII **2.0.8** package metadata and release history: <https://pypi.org/project/anarcii/>. Release date 30 June 2026; Python ≥3.11 in the retrieved package metadata.
 [^anarcii-license]: ANARCII, pinned **BSD 3-Clause** license: <https://github.com/oxpig/ANARCII/blob/e0d8f192f5a861e03a50918f114d0f5735e42333/LICENCE>.
 [^immunum-commit]: Immunum commit **`e027d5fe2405300508eee7ce78582a2fe4990f20`**, 28 August 2026, adding Chothia, Martin, and AHo and changing source version to 1.3.0: <https://github.com/ENPICOM/immunum/commit/e027d5fe2405300508eee7ce78582a2fe4990f20>.
+[^riot-source]: RIOT [scheme and species enums](https://github.com/NaturalAntibody/riot_na/blob/2ee4dc3dcfa440cf04356d2c89dbf4917194d8dc/riot_na/data/model.py), [numbering pipeline](https://github.com/NaturalAntibody/riot_na/blob/2ee4dc3dcfa440cf04356d2c89dbf4917194d8dc/riot_na/api/riot_numbering.py), and [Rust manifest](https://github.com/NaturalAntibody/riot_na/blob/2ee4dc3dcfa440cf04356d2c89dbf4917194d8dc/Cargo.toml).
 [^antpack-yanked]: AntPack **0.5** release record and release history: <https://pypi.org/project/antpack/0.5/>. Released 14 April 2026; yanked for “Bug fix.”
 [^immunum-manifest]: Immunum 1.3.1 **Cargo manifest**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/Cargo.toml>.
 [^immunum-annotator]: Immunum **annotator**, including bounds, thresholds and scratch storage: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/annotator.rs>.
@@ -416,3 +463,9 @@ possible without color.[^arpeggia-alignment]
 [^igblast]: NCBI **IgBLAST introduction**, including separate amino-acid and nucleotide capabilities: <https://www.ncbi.nlm.nih.gov/igblast/intro.html>.
 [^antid-numbering]: antid **numbering objects, germline display and alignment**, inspected at `cbae1717f8bdb87fd504066dd6e3e3730de0dfe9`: <https://github.com/y1zhou/antid/blob/cbae1717f8bdb87fd504066dd6e3e3730de0dfe9/src/antid/numbering/antibody.py>.
 [^arpeggia-alignment]: Arpeggia [sequence-alignment contract](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) and [renderer](https://github.com/y1zhou/arpeggia/blob/master/src/seq_alignment/display.rs).
+[^immunum-alignment]: Immunum 1.3.1 [alignment implementation and 4k3e H coverage regression](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/alignment.rs#L486).
+[^martin-chapter]: Martin ACR, **Protein sequence and structure analysis of antibody variable domains**, Table 3.4: [author's chapter](https://citeseerx.ist.psu.edu/document?doi=ad292f8ef5c09a4ebb540a69e2c1e91366b1a3f2&repid=rep1&type=pdf).
+[^martin-loops]: Martin group, **Do antibody CDR loops change conformation upon binding?** (2024), Martin numbering with AbM CDR boundaries: <https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/>.
+[^aho-loops]: Xu et al., **Functional clustering of B cell receptors using sequence and structural features** (2019), Methods: BCR notation: <https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f>.
+[^aho-original]: Honegger and Plückthun (2001), original AHo paper, Figure 3: [author-hosted PDF](https://plueckthun.bioc.uzh.ch/wp-content/uploads/Publications/APpub0204.pdf).
+[^antid-imputation]: antid [terminal imputation](https://github.com/y1zhou/antid/blob/cbae1717f8bdb87fd504066dd6e3e3730de0dfe9/src/antid/numbering/antibody.py#L592-L642).

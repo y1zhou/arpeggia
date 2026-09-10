@@ -259,6 +259,11 @@ A convention assigning equivalent positions and insertion labels to antibody
 variable-domain residues. It is distinct from the method assigning those labels.
 _Avoid_: Numbering engine, CDR definition, sequence alignment
 
+**Numbered Antibody**:
+One antibody variable domain with assigned numbered positions and its location
+in the supplied sequence. It does not denote a paired or multidomain antibody.
+_Avoid_: Whole antibody molecule, paired heavy and light chains
+
 **Antibody Numbered Position**:
 A position within an antibody numbering scheme, including any insertion label.
 Its order follows the scheme rather than ordinary text or numeric sorting.
@@ -273,6 +278,12 @@ _Avoid_: Numbering scheme, experimentally determined antigen-contact residues
 A catalogued unrearranged immunoglobulin gene-segment sequence, identified by
 species, gene and allele. A matching reference does not establish ancestry.
 _Avoid_: Reconstructed ancestral antibody, species of origin
+
+**Germline Imputation**:
+An estimate of missing sequence residues using an aligned Germline Reference.
+The added residues are inferred sequence, not observations or reconstructed
+atomic coordinates.
+_Avoid_: Observed sequence, ancestral reconstruction, structure completion
 
 **Core RMSD**:
 The RMSD of retained fitting pairs under their final fitted transform.
