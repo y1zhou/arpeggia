@@ -132,7 +132,10 @@ The public evidence does not justify a blanket conclusion. Two maintainer issues
 | Issue #32, “Fix `antpack` parallelization benchmark” | Maintainers identify problematic scaling in the AntPack parallel comparison and propose fixes | The comparative speed chart is not a settled basis for declaring a universal winner |
 | Issue #33, “Fix correctness benchmarks” | The current reference uses positions where ANARCI and AntPack agree; independent structural truth is requested | Agreement on a consensus subset is not independent structural accuracy |
 
-Both issues were open in the retrieved records.[^immunum-speed-issue][^immunum-truth-issue] These are transparent limitations, not evidence that Immunum is unusable. My recommendation is **first-choice Rust candidate to benchmark**, not **proven most accurate and fastest antibody numberer**.
+Both issues were open in the retrieved records.[^immunum-speed-issue][^immunum-truth-issue]
+Our fixture comparison supports Immunum as the first-choice Rust candidate,
+subject to the qualification issues in section 9; it establishes neither
+independent structural accuracy nor a comparative speed ranking.
 
 ### 4.4 RIOT: separate V/J alignment for protein numbering
 
@@ -140,7 +143,10 @@ RIOT aligns protein V and J segments separately, then transfers their germline-t
 
 The reported protein V/J assignment results, **96.94%/97.72%** on 1,274 therapeutic sequences, measure agreement with exhaustive Smith–Waterman/E-value assignments, not residue-numbering accuracy. Numbering comparisons found 23 IMGT conflicts and left some disagreements unresolved. Immunum was not a comparator; the paper supplies no dedicated alpaca/VHH numbering-accuracy result.[^riot]
 
-RIOT therefore merits a direct protein-numbering comparison. The inspected source has IMGT/Martin/Chothia/Kabat but no AHo; its Rust component performs prefiltering while the numbering pipeline remains Python. Native integration convenience does not establish numbering quality.[^riot-source]
+The direct protein comparison is recorded in section 9. The inspected source
+has IMGT/Martin/Chothia/Kabat but no AHo; its Rust component performs prefiltering
+while the numbering pipeline remains Python. Native integration convenience
+does not establish numbering quality.[^riot-source]
 
 ### 4.5 AbNumber: useful API, but disclose the backend
 
@@ -302,11 +308,14 @@ The upstream AHo CDR table is explicitly marked unverified and its CDR3 start
 disagrees with its cited alternatives. Martin uses AbM region boundaries.
 Numbering support therefore does not settle the CDR coloring policy.[^immunum-aho][^immunum-numbering]
 
-**Recommendation:** qualify the pinned dependency on human/mouse H/K/L and
-alpaca VHH cases, partial domains, framework insertions, long loops and multiple
-domains before adopting it. Review source and bundled-profile attribution
-separately. A bespoke engine would add profile construction, domain detection
-and insertion-rule maintenance without evidence of improved accuracy.
+The [AntPack-fixture comparison](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
+now tests Immunum alongside RIOT and AntPack. It found strongest fixture-label
+agreement in Immunum, but also a light-chain Martin/Kabat span defect and
+non-antibody inputs passing the default confidence threshold. Resolve these
+and qualify long loops, multiple domains and species coverage before adoption.
+Review source and bundled-profile attribution separately. A bespoke engine
+would add profile construction, domain detection and insertion-rule maintenance
+without evidence of improved accuracy.
 Constant-region numbering remains separate work: IMGT defines a distinct
 C-domain system, and this engine models variable domains only.[^imgt-constant]
 
@@ -388,11 +397,11 @@ Its 1.3.1 tests include an ultralong bovine CDR3 (4k3e H), but assert domain
 coverage rather than every numbered position. ANARCI's limitations cannot be
 assumed to apply unchanged to Immunum's position-dependent scoring.[^immunum-truth-issue][^immunum-alignment]
 
-Compare both engines on the same protein panel, separating domain coverage,
-residue labels, CDR membership and germline matching. Include human/mouse H/K/L,
-alpaca VHH, long loops, framework indels and truncated domains. Assess
-disagreements against scheme rules and structural evidence; leave unresolved
-cases explicit rather than using either engine as truth.
+The [three-engine benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
+separates returned mappings, residue-label agreement and domain coverage on
+26,365 AntPack-fixture inputs. Its labels do not resolve independent accuracy;
+germline matching and species-specific structural validation remain untested.
+Assess remaining disagreements against scheme rules and structural evidence.
 
 A numbering scheme labels residues; a CDR definition assigns region membership.
 For example, under fixed Chothia/Martin numbering, Kabat CDR-H1 is H31–H35 and
@@ -400,13 +409,14 @@ AbM/Martin CDR-H1 is H26–H35. H28 keeps its number but changes region. Mixed
 definitions must be transferred through residue correspondence, not applied as
 numeric cutoffs in another scheme.[^martin-chapter]
 
-The accepted `cdr_definition="auto"` policy follows the selected numbering
-scheme. Exact defaults still need an explicit convention. The Martin group's
-2024 study uses AbM boundaries with Martin numbering. For AHo, a published
-structural-loop convention uses 25–40, 58–77 and 109–137; this agrees with the
-core boundaries illustrated by Honegger and Plückthun, but is not a universal
-definition used by every tool. It differs from Immunum's unverified table.
-These are candidates for the documented default map.[^martin-loops][^aho-loops][^aho-original]
+The accepted defaults are recorded in
+[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
+The Martin group's 2024 study supports pairing AbM boundaries with Martin
+numbering. The selected AHo structural-loop convention agrees with the core
+boundaries illustrated by Honegger and Plückthun, but is not universal across
+tools and differs from Immunum's unverified table. Public docstrings will cite
+these sources. The `chothia` CDR-definition alias remains deferred until engine
+selection.[^martin-loops][^aho-loops][^aho-original]
 
 ### 9.5 Explicit germline imputation
 
@@ -419,12 +429,12 @@ IMGT CDR1 normally leaves positions 31–34 empty; filling them changes its loop
 length. With raw amino-acid input alone, distinguishing an internal biological
 deletion from omitted data requires information the string does not carry.[^imgt]
 
-Terminal completion is therefore a useful initial policy. Internal insertions
-and replacement of unknown residues require explicit semantics. Tied references
+The accepted imputation policy therefore fills only missing beginnings of FR1
+and ends of FR4, returning a new object with residue provenance. Tied references
 can agree on the observed fragment while differing at an omitted position;
-selecting the first reference would hide that uncertainty. Completed residues
-need source attribution and a distinction from supplied residues. None of these
-operations reconstructs coordinates or the full V/D/J junction.
+the position stays unresolved unless they agree on presence and residue or the
+caller selects a reference. Internal gaps and unknown input residues remain
+unchanged. This does not reconstruct coordinates or the full V/D/J junction.
 
 ## References and implementation records
 

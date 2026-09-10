@@ -24,15 +24,30 @@ restriction. Report matched-reference species rather than presumed input origin.
 `cdr_definition="auto"` selects the CDR convention associated with the chosen
 numbering scheme. A caller choosing a different CDR definition must explicitly
 provide both arguments. This keeps the usual scheme/region pairing convenient
-while making a mixed convention intentional. Exact Martin and AHo region
-policies still require resolution; the backend's tables are not authoritative
-merely because the backend supports those numbering schemes.
+while making a mixed convention intentional. IMGT and Kabat use their matching
+definitions. Martin uses AbM/Martin boundaries, as in the
+[Martin group's study](https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/).
+AHo uses CDR1 25–40, CDR2 58–77 and CDR3 109–137 from the published
+[structural-loop convention](https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f).
+Public docstrings must cite these definitions. Whether `chothia` also aliases
+Martin in the CDR-definition argument is deferred until engine selection.
 
-An explicit method on `NumberedAntibody` will impute missing residues from the
-closest aligned germline reference. Eligible positions, ambiguous reference
-matches and the returned result remain under discussion. This method is
-separate from ordinary numbering so supplied sequence and inferred sequence
-can be distinguished.
+An explicit imputation method returns a new `NumberedAntibody` and preserves
+the original object and supplied sequence. It fills only missing chunks at the
+beginning of FR1 or the end of FR4, using the closest aligned germline references.
+It does not fill internal gaps or replace unknown input residues. A position
+is filled only when tied references agree on its presence and amino acid;
+otherwise it remains unresolved unless the caller selects a reference explicitly.
+Record each inferred residue and its germline source so later alignments can
+distinguish supplied and inferred residues.
+
+Engine qualification compares RIOT, Immunum and AntPack on the
+[AntPack test set](https://github.com/jlparkI/AntPack/tree/main/tests/test_data).
+Pin the dataset and tool versions, retain failures, and distinguish agreement
+with fixture labels from independent numbering accuracy. Report residue
+numbering, domain coverage and failures separately.
+The [comparison report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
+records the completed 26,365-input run and unresolved qualification issues.
 
 Engine selection and the remaining result contract are open. Supporting evidence is in the
 [numbering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md).
