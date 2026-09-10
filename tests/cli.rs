@@ -413,7 +413,7 @@ fn sequence_cli_reports_metrics_and_empty_local_json() {
 fn alignment_display_flags_preserve_plain_json_and_wrapping() {
     let run = |extra: &[&str]| {
         arpeggia()
-            .args(["align-seqs", "ACDEFGHIKLMN", "ACDFGHIKLMN"])
+            .args(["align-seqs", "ACDEFGHIKLMN", "ACDYGHIKLMN"])
             .args(extra)
             .output()
             .unwrap()
@@ -430,11 +430,8 @@ fn alignment_display_flags_preserve_plain_json_and_wrapping() {
         text.lines().count() + 2
     );
     let colored = run(&["--color", "always"]);
-    assert!(
-        String::from_utf8(colored.stdout)
-            .unwrap()
-            .contains("\x1b[31m")
-    );
+    let text = String::from_utf8(colored.stdout).unwrap();
+    assert!(text.contains("\x1b[31m") && text.contains("\x1b[34m:\x1b[0m"));
     let json = run(&["--json", "--color", "always"]);
     let data: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
     assert_eq!(data["reference_name"], "Reference");
@@ -454,8 +451,9 @@ fn alignment_display_flags_preserve_plain_json_and_wrapping() {
     assert_eq!(named_data["reference_name"], "Wild type");
     assert_eq!(named_data["query_name"], "Mutant");
     assert_eq!(named_data["score"], data["score"]);
-    assert_eq!(data["aligned_query"], "ACD-FGHIKLMN");
-    assert_eq!(data["operations"], "   -        ");
+    assert_eq!(data["aligned_query"], "ACD-YGHIKLMN");
+    assert_eq!(data["operations"], "   -:       ");
+    assert_eq!(data["mismatches"], 1);
     assert!(data.get("columns").is_none());
     assert!(!run(&["--width", "1"]).status.success());
 }

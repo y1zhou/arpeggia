@@ -1,28 +1,20 @@
 //! Shared alignment renderer for Rust, CLI, and Python.
 use super::SeqAlignment;
 use crate::{ArpeggiaError, ArpeggiaResult};
+use clap::builder::styling::{AnsiColor, Style};
+use std::fmt::Write;
 use std::io::IsTerminal;
 use unicode_width::UnicodeWidthStr;
 
 /// Color policy for human-readable sequence alignments.
-#[derive(Clone, Copy, Debug, Default, clap::ValueEnum)]
-pub enum AlignmentColor {
-    /// Enable color on capable terminals, respecting NO_COLOR.
-    #[default]
-    Auto,
-    /// Emit ANSI colors even when redirected.
-    Always,
-    /// Return plain text.
-    Never,
-}
-impl AlignmentColor {
-    pub(crate) fn enabled(self, terminal: bool) -> bool {
-        match self {
-            Self::Always => true,
-            Self::Never => false,
-            Self::Auto => {
-                terminal && !anstyle_query::no_color() && anstyle_query::term_supports_color()
-            }
+pub use clap::ColorChoice as AlignmentColor;
+
+pub(crate) fn color_enabled(color: AlignmentColor, terminal: bool) -> bool {
+    match color {
+        AlignmentColor::Always => true,
+        AlignmentColor::Never => false,
+        AlignmentColor::Auto => {
+            terminal && !anstyle_query::no_color() && anstyle_query::term_supports_color()
         }
     }
 }
@@ -42,7 +34,7 @@ impl SeqAlignment {
         });
         self.render(
             width,
-            color.enabled(std::io::stdout().is_terminal()),
+            color_enabled(color, std::io::stdout().is_terminal()),
             rulers,
         )
     }
@@ -187,17 +179,22 @@ fn display_name(name: &str) -> String {
 }
 
 fn paint(output: &mut String, cell: u8, operation: u8, color: bool) {
-    let escape = match operation {
-        b'+' => "\x1b[32m",
-        b'-' => "\x1b[31m",
-        b'x' => "\x1b[33m",
-        b'.' => "\x1b[90m",
-        _ => "",
+    let style = match operation {
+        b'+' => AnsiColor::Green.on_default(),
+        b'-' => AnsiColor::Red.on_default(),
+        b':' => AnsiColor::Blue.on_default(),
+        b'x' => AnsiColor::Yellow.on_default(),
+        b'.' => AnsiColor::BrightBlack.on_default(),
+        _ => Style::new(),
     };
-    if color && cell != b' ' && !escape.is_empty() {
-        output.push_str(escape);
-        output.push(cell as char);
-        output.push_str("\x1b[0m");
+    if color && cell != b' ' && !style.is_plain() {
+        write!(
+            output,
+            "{style}{}{reset}",
+            cell as char,
+            reset = style.render_reset()
+        )
+        .expect("writing to a String cannot fail");
     } else {
         output.push(cell as char);
     }
@@ -272,11 +269,14 @@ mod tests {
         .value;
         let colored = a.render(80, true, false).unwrap();
         assert!(colored.contains("\x1b[90mG\x1b[0m"));
-        assert!(colored.contains("\x1b[33mx\x1b[0m"));
+        for cell in ['F', 'Y', ':'] {
+            assert!(colored.contains(&format!("\x1b[34m{cell}\x1b[0m")));
+        }
         assert!(!a.render(80, false, false).unwrap().contains('\x1b'));
         for (reference, query, marker, escape) in [
             ("ACDEFGHIK", "ACDQQQEFGHIK", '+', "\x1b[32m"),
             ("ACDQQQEFGHIK", "ACDEFGHIK", '-', "\x1b[31m"),
+            ("A", "G", 'x', "\x1b[33m"),
         ] {
             let a = align_seqs(reference, query, &SeqAlignOptions::default())
                 .unwrap()

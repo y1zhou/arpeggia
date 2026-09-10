@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and configurable affine gap costs. `SeqAlignment` includes gapped strings,
   operations, input spans, identity/coverage ratios, gap statistics, and full-input
   edit distance.
-- Shared CLI/Python alignment displays with colored edits and clipped tails,
+- Shared CLI/Python alignment displays with blue `:` markers for positive-score
+  substitutions, colored edits and clipped tails,
   custom sequence names, terminal-width wrapping, position rulers, and
   width/color/ruler controls.
 - Optional observed-sequence correspondence before two-structure RMSD, with

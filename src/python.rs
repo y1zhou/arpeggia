@@ -99,8 +99,12 @@ impl crate::SeqAlignment {
                 .getattr("columns")?
                 .extract()?,
         };
-        self.render(width, color.enabled(terminal), rulers)
-            .map_err(python_error)
+        self.render(
+            width,
+            crate::seq_alignment::color_enabled(color, terminal),
+            rulers,
+        )
+        .map_err(python_error)
     }
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         self.format_python(py, None, "auto", true)
@@ -151,13 +155,15 @@ impl crate::RmsdResult {
 ///
 /// Returns:
 ///     SeqAlignment: Plain gapped aligned_reference/aligned_query strings,
-///         reference-to-query operations (space, +, -, x), zero-based half-open
+///         reference-to-query operations (space for match, + insertion, - deletion,
+///         : positive-score substitution, x other substitution), zero-based half-open
 ///         input spans, score, matches, mismatches, gap_residues, and gap_runs.
 ///         identity_alignment/identity_shorter and coverage_alignment/coverage_shorter
 ///         are ratios using alignment-column and shorter-full-input denominators.
 ///         edit_distance is full-input Levenshtein distance, independent of score.
 ///         Empty local results have score zero and None alignment-length ratios.
 ///         U/O score as C/K with a warning but retain distinct identity.
+///         Positive-score substitutions are blue in displays and remain mismatches.
 ///
 /// Examples:
 ///     >>> alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")

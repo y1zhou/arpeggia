@@ -25,6 +25,13 @@ and `P/S`. Retain the underlying counts. Unaligned terminal segments do not coun
 toward `A`; substitutions count toward `P` but not `M`. Empty local alignments
 have undefined alignment-length ratios and zero shorter-input ratios.
 
+Similar substitutions are nonidentical pairs with a strictly positive BLOSUM62
+score, including ambiguous residues and accepted `U/O` scoring aliases. Identity
+takes precedence over score; identical `X/X` remains a match despite its negative
+score. Zero-scoring substitutions are not similar. `mismatches` counts all
+nonidentical pairs; similarity does not change identity, edit distance, or
+structural atom correspondence. Separate similarity statistics are unnecessary.
+
 Gap-residue and gap-run counts are distinct. Edit distance is full-input
 Levenshtein distance, independent of the protein-scored alignment; local clipping
 does not shorten its inputs.
@@ -107,6 +114,12 @@ records, and the final transformation are omitted to keep results compact.
 The CLI returns a concise detailed summary by default, with explicit JSON output
 for parameters, mappings, and statistics.
 
+Rust, CLI JSON, and Python share the same result structs. Four feature-gated
+`#[pyclass]` annotations remain on those definitions, as required by PyO3;
+Python methods and conversions stay in the binding module. This avoids wrapper
+types and duplicate property forwarding while keeping PyO3 optional. Serde
+serializes the results and nested correspondence for CLI JSON.
+
 ### Gapped sequences and display
 
 Sequence names are display metadata, separate from sequence data and residue
@@ -115,15 +128,17 @@ correspondence. `reference_name` and `query_name` default to "Reference" and
 results and JSON, with label padding based on visible terminal width.
 
 `SeqAlignment` exposes equal-length `aligned_reference`,
-`aligned_query`, and `operations` strings. Gapped strings make downstream use
+`aligned_query`, and `operations` ASCII strings. Gapped strings make downstream use
 direct; original inputs and zero-based, half-open spans retain enough information
 to reconstruct index pairs internally. Strings contain only the scored alignment,
 using `-` for gaps and no color escapes. Operations describe reference-to-query
-changes: space for match, `+` for insertion, `-` for deletion, and `x` for
-substitution.
+changes: space for match, `+` for insertion, `-` for deletion, `:` for similar
+substitution, and `x` for other substitution. ASCII keeps one byte per column
+in both stored data and the operation row.
 
 Render reference and query rows followed by an unlabeled operation row. Insertions are green,
-deletions red, and mismatches yellow, coloring both sequence cells and the marker;
+deletions red, similar substitutions blue, and other substitutions yellow,
+coloring both sequence cells and the marker;
 matches are uncolored. Clipped tails are gray with blank operation cells, with
 prefixes right-aligned against the scored alignment and suffixes left-aligned
 after it. Global terminal gaps remain scored operations. Empty local results
@@ -134,6 +149,8 @@ columns, or an explicit width including labels and positions. Reject widths
 that cannot fit labels and one residue. CLI and Python object displays enable
 color automatically when the terminal supports it; stored fields and JSON remain
 plain. Explicit color controls and `NO_COLOR` support remain available.
+Clap supplies the color enum and named ANSI styles; width detection uses native
+Rust/Python APIs, while the shared renderer owns alignment layout.
 
 Display positions are one-based input coordinates, counting residues but not gaps
 or padding. Each sequence row shows its start and end positions; rulers mark

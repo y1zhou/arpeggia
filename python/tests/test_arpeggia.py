@@ -475,10 +475,10 @@ def test_alignment_display_controls(monkeypatch):
 
     import arpeggia
 
-    alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDFGHIKLMN")
+    alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDYGHIKLMN")
     assert (alignment.reference_name, alignment.query_name) == ("Reference", "Query")
     named = arpeggia.align_seqs(
-        "ACDEFGHIKLMN", "ACDFGHIKLMN", reference_name="Wild type", query_name="Mutant"
+        "ACDEFGHIKLMN", "ACDYGHIKLMN", reference_name="Wild type", query_name="Mutant"
     )
     assert named.score == alignment.score
     assert named.aligned_reference == alignment.aligned_reference
@@ -490,6 +490,9 @@ def test_alignment_display_controls(monkeypatch):
     assert "\x1b" not in plain
     assert all(len(line) <= 40 for line in plain.splitlines())
     assert "\x1b[31m" in alignment.format(color="always")
+    assert "\x1b[34m:\x1b[0m" in alignment.format(color="always")
+    assert alignment.operations == "   -:       "
+    assert alignment.mismatches == 1
     assert not hasattr(alignment, "columns")
     ruled = alignment.format(width=80, color="never")
     assert (

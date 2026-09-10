@@ -50,13 +50,15 @@ def align_seqs(
 
     Returns:
         SeqAlignment: Plain gapped aligned_reference/aligned_query strings,
-            reference-to-query operations (space, +, -, x), zero-based half-open
+            reference-to-query operations (space for match, + insertion, - deletion,
+            : positive-score substitution, x other substitution), zero-based half-open
             input spans, score, matches, mismatches, gap_residues, and gap_runs.
             identity_alignment/identity_shorter and coverage_alignment/coverage_shorter
             are ratios using alignment-column and shorter-full-input denominators.
             edit_distance is full-input Levenshtein distance, independent of score.
             Empty local results have score zero and None alignment-length ratios.
             U/O score as C/K with a warning but retain distinct identity.
+            Positive-score substitutions are blue in displays and remain mismatches.
 
     Examples:
         >>> alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global")

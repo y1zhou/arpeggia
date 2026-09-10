@@ -6,6 +6,8 @@ use serde::Serialize;
 mod blosum62;
 mod display;
 pub use display::AlignmentColor;
+#[cfg(feature = "python")]
+pub(crate) use display::color_enabled;
 
 /// Pairwise sequence-alignment objective.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum, Serialize)]
@@ -93,7 +95,8 @@ pub struct SeqAlignment {
     pub aligned_reference: String,
     /// Scored query alignment, with `-` for gaps and without clipped tails.
     pub aligned_query: String,
-    /// Reference-to-query operations: space (match), + (insertion), - (deletion), x (mismatch).
+    /// Reference-to-query operations: space (match), + (insertion), - (deletion),
+    /// : (positive-score substitution), x (other substitution). All are ASCII.
     pub operations: String,
     /// Number of columns, including gaps.
     pub alignment_length: usize,
@@ -245,7 +248,13 @@ pub fn align_seqs(
                 let same = reference.as_bytes()[i] == query.as_bytes()[j];
                 aligned_reference.push(reference.as_bytes()[i] as char);
                 aligned_query.push(query.as_bytes()[j] as char);
-                operations.push(if same { ' ' } else { 'x' });
+                operations.push(if same {
+                    ' '
+                } else if scoring.score(first[i] as usize, second[j] as usize) > 0 {
+                    ':'
+                } else {
+                    'x'
+                });
                 paired += 1;
                 matches += usize::from(same);
                 i += 1;
@@ -396,9 +405,35 @@ mod tests {
         assert_eq!(a.edit_distance, 4);
         let a = align_seqs("UO", "CK", &SeqAlignOptions::default()).unwrap();
         assert_eq!(a.value.matches, 0);
-        assert_eq!(a.value.operations, "xx");
+        assert_eq!(a.value.operations, "::");
         assert_eq!(a.value.edit_distance, 2);
         assert_eq!(a.warnings.len(), 1);
+    }
+    #[test]
+    fn similarity_uses_positive_scores_without_changing_identity() {
+        for (reference, query, operation) in [
+            ("F", "Y", ":"),
+            ("A", "G", "x"),
+            ("A", "X", "x"),
+            ("B", "D", ":"),
+            ("Z", "E", ":"),
+            ("U", "C", ":"),
+            ("O", "K", ":"),
+            ("X", "X", " "),
+        ] {
+            let a = align_seqs(reference, query, &SeqAlignOptions::default())
+                .unwrap()
+                .value;
+            assert_eq!(a.operations, operation, "{reference}/{query}");
+            let identical = usize::from(reference == query);
+            assert_eq!((a.matches, a.mismatches), (identical, 1 - identical));
+            assert_eq!(a.edit_distance, 1 - identical);
+            assert_eq!(a.identity_alignment, Some(identical as f64));
+            assert_eq!(
+                (a.alignment_length, a.paired_residues, a.gap_residues),
+                (1, 1, 0)
+            );
+        }
     }
     #[test]
     fn validate_alphabet_and_precise_costs() {

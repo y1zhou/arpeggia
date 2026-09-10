@@ -223,6 +223,12 @@ from the reference sequence to the query sequence. Unaligned terminal segments
 are outside these operations.
 _Avoid_: Minimum edit script, sequence edit distance
 
+**Similar Substitution**:
+A nonidentical residue pair with a strictly positive substitution-matrix score,
+including accepted scoring aliases. It remains a mismatch for sequence identity
+and does not establish chemical equivalence for atom correspondence.
+_Avoid_: Identical residue, chemically equivalent residue
+
 **Sequence Identity**:
 The identical-residue pair count divided by either alignment-column count
 (including gaps) or shorter full input length, with the denominator named.

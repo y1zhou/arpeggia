@@ -9,7 +9,7 @@ alignment = arpeggia.align_seqs("GGACDEFGHIKGG", "ACDEFGHIK", mode="semi-global"
 print(alignment.score, alignment.identity_alignment, alignment.edit_distance)
 print(alignment.reference_span, alignment.query_span)  # (2, 11), (0, 9)
 print(alignment.aligned_reference, alignment.aligned_query)
-print(alignment.operations)  # spaces for matches; + insertion, - deletion, x mismatch
+print(alignment.operations)  # space match, + insertion, - deletion, : similar, x other
 ```
 
 ```bash
@@ -35,7 +35,7 @@ do not establish a unique biological correspondence.
 `SeqAlignment` has read-only Python attributes. Spans are zero-based and
 half-open. `aligned_reference` and `aligned_query` contain the scored alignment
 with `-` for gaps; `operations` describes reference-to-query changes. These three
-plain strings have equal lengths. Clipped terminal segments remain in the original
+ASCII strings have equal lengths. Clipped terminal segments remain in the original
 inputs, outside the spans and aligned strings. Input indices can be recovered
 by counting nongap residues from each span start.
 
@@ -80,10 +80,18 @@ are padded to their visible widths; control characters are escaped for display.
 RMSD chain alignments use names such as "Reference A" and "Query H".
 
 Operations describe reference-to-query changes: deletions are red (`-`),
-insertions green (`+`), mismatches yellow (`x`), and matches uncolored (space).
+insertions green (`+`), similar substitutions blue (`:`), other substitutions
+yellow (`x`), and matches uncolored (space).
 Both sequence cells and the operation marker share the color. Unaligned tails
 are gray with blank operation cells; they do not contribute to alignment
 statistics. Terminal gaps in global alignment remain scored edits.
+
+Similar substitutions are nonidentical pairs with a strictly positive BLOSUM62
+score, including `B/Z` and `U/O` scoring aliases. Zero scores remain `x`.
+Identity takes precedence: identical `X/X` is a match despite its negative score.
+Both substitution categories count toward `mismatches`; the distinction changes
+neither identity nor edit distance and does not establish chemical equivalence
+for structural atom pairing. Stored operations and JSON use the same ASCII markers.
 
 Each block shows one-based input start/end positions and separate rulers above
 each sequence, with every tenth position right-aligned to its residue. Gaps and
