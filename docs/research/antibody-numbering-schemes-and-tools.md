@@ -1,9 +1,9 @@
 # Antibody numbering schemes and high-throughput tools: September 2026 assessment
 
-**Research cutoff:** 8 September 2026; this report does not assume developments later in September.
+**Research dates:** Initial survey 8 September 2026; Immunum and IMGT implementation follow-up 10 September 2026 (section 9). Other package release records retain the initial survey's cutoff.
 **Scope:** Antibody variable-domain numbering, structural correspondence and insertion placement, performance evidence, and Python/Rust integration.
 **Evidence:** Primary papers, official package records, source files, and maintainer issue discussions.
-**Validation status:** No numbering-engine accuracy or throughput benchmark was executed in this session. Published and maintainer-reported measurements are identified as such.
+**Validation status:** Section 9 records a small Rust integration/boundary probe and downloaded reference-data counts. No comparative accuracy or throughput benchmark was run; published measurements remain attributed to their authors.
 
 ## Executive assessment
 
@@ -15,7 +15,7 @@ For engines, my current shortlist is **AntPack for fast CPU numbering of convent
 
 **I did not find adequate evidence to declare that a newer tool universally surpasses AntPack in both speed and accuracy.** ANARCII provides published evidence of advantages on challenging sequence classes. Immunum is a serious engineering alternative, but its maintainers explicitly identify weaknesses in their AntPack parallel benchmark and in the independence of their correctness benchmark.[^anarcii-paper][^immunum-speed-issue][^immunum-truth-issue]
 
-A deployment decision must also account for licensing and version differences: current AntPack licensing is not the same as its older GPL line, and Immunum's five-scheme source support is newer than the verified PyPI package.[^antpack-current][^antpack-gpl][^immunum-release][^immunum-commit]
+A deployment decision must also account for licensing and version differences: current AntPack licensing is not the same as its older GPL line. The follow-up verified Immunum 1.3.1 with five schemes in both its Rust and Python releases.[^antpack-current][^antpack-gpl][^immunum-release]
 
 ## 1. Four concepts that should not be conflated
 
@@ -119,9 +119,9 @@ Immunum implements a semi-global Needleman–Wunsch-style alignment against posi
 
 This is an attractive engineering combination for a service or data pipeline: native Rust processing can be used directly, while Python users can stay in a tabular workflow rather than repeatedly calling a Python function for each sequence. Those are integration advantages, not independently measured accuracy advantages.
 
-**A version distinction matters.** The verified PyPI release is **1.2.0, uploaded 4 August 2026**. A later source commit, **28 August 2026**, adds Chothia, Martin, and AHo support and changes the source version to 1.3.0. The newer README describes five schemes, with alternate antibody schemes derived from internal IMGT numbering.[^immunum-release][^immunum-commit][^immunum-source]
+**The source-only limitation has been resolved.** The follow-up verified **1.3.1, released 2 September 2026**, on both PyPI and crates.io. Its published Rust artifact identifies commit `45bb70d34802cc592ebd86e685cc9f551885a2d6`. Chothia, Martin and AHo were added on 28 August; all five schemes are now released, with alternate antibody schemes derived from internal IMGT numbering.[^immunum-release][^immunum-commit][^immunum-source]
 
-Therefore, do not assume an unpinned `pip install immunum` obtains every capability shown in the newest source README. Select the released package or pinned source revision deliberately, and test each required scheme and chain class.
+Pin the deployed artifact and test each required scheme and chain class. Section 9 records integration boundaries that release availability alone does not resolve.
 
 #### Has Immunum surpassed AntPack?
 
@@ -156,8 +156,7 @@ The source also contains defensive handling of duplicate positions returned by A
 | **AntPack 0.5** | Released 14 April 2026 but **yanked**, reason “Bug fix” | Do not treat a newer-looking release number or README as a safe default |
 | **AntPack 0.3.8.6.3** | GPL line; released 23 June 2026 | A lower version can be newer by calendar date; assess the exact artifact and its GPL obligations |
 | **ANARCII 2.0.8** | Released 30 June 2026; Python ≥3.11; repository BSD 3-Clause | Pin model/package versions and account for the PyTorch environment |
-| **Immunum 1.2.0** | PyPI release 4 August 2026 | Do not infer newer source-only scheme support from the package name |
-| **Immunum source `e027d5f…`** | 28 August 2026 commit adds Chothia/Martin/AHo and updates version to 1.3.0 | A pinned source build may be needed for those capabilities at this cutoff |
+| **Immunum 1.3.1** | PyPI and crates.io release 2 September 2026; Rust artifact matches `45bb70d…` | All five schemes are released; disable default features for native core use |
 
 These records were checked against PyPI and repository sources, not inferred from version ordering alone.[^antpack-current][^antpack-yanked][^antpack-gpl][^anarcii-release][^anarcii-license][^immunum-release][^immunum-commit]
 
@@ -165,14 +164,13 @@ Licensing here is a report of the maintainers' published terms, not legal advice
 
 ## 6. Python and Rust examples
 
-These are interface examples grounded in the inspected documentation/source. The engines were not installed or executed in this research session.
+These are interface examples grounded in the inspected documentation/source. The follow-up compiled Immunum's native core; the Python examples were not executed.
 
 ### 6.1 Immunum in Python
 
 ```python
 from immunum import Annotator
 
-# IMGT is available in the verified released interface.
 annotator = Annotator(chains=["H", "K", "L"], scheme="imgt")
 sequence = (
     "QVQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGG"
@@ -185,7 +183,7 @@ print(result.confidence)
 print(result.numbering)
 ```
 
-For tabular processing, the documented Polars plugin exposes `imp.number(...)` and `imp.segment(...)` as expressions. The same scheme/version warning applies to both the ordinary Python API and the plugin.[^immunum-source][^immunum-release]
+For tabular processing, the documented Polars plugin exposes `imp.number(...)` and `imp.segment(...)` as expressions.[^immunum-source]
 
 ### 6.2 Immunum in Rust
 
@@ -206,7 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Use the crate version or source revision corresponding to the API under test. The constructor and method pattern follow the inspected README; the example was not compiled here. Do not assume a stale dependency-version snippet in a README describes the latest released Python and Rust artifacts identically.[^immunum-source]
+The follow-up compiled this constructor/method pattern against `immunum = { version = "=1.3.1", default-features = false }`, keeping upstream CLI, Python, Polars and WASM integrations out of Arpeggia's dependency graph.[^immunum-manifest]
 
 ### 6.3 ANARCII in Python
 
@@ -261,18 +259,131 @@ A useful test suite should stratify heavy/kappa/lambda, conventional antibodies/
 
 For reference labels, use structurally curated cases where a correspondence is defensible and explicitly mark unresolved regions. Keep all examples out of tuning and avoid filtering away cases merely because engines disagree. The maintainers' correctness issue in Immunum is a particularly clear example of why an agreement-defined reference can otherwise bias the comparison.[^immunum-truth-issue]
 
-## 9. Bottom line
+## 9. Arpeggia implementation findings
 
-**Scheme choice:** Support IMGT for interchange and retain Martin or AHo when structural or legacy analyses require them. A new numbering engine is not, by itself, a new and structurally superior scheme.
+These findings inform the design interview; recommendations are not accepted
+API decisions. The requested Chothia-to-Martin alias is recorded in
+[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
 
-**Engine choice:** AntPack remains a strong CPU baseline; ANARCII has meaningful recent evidence on difficult sequence classes; Immunum is the most directly relevant Rust-native candidate found in this research. RIOT and AbNumber solve useful adjacent workflow problems, but their scope and backend should be made explicit.
+### 9.1 Native engine qualification
 
-**Has AntPack been surpassed?** On particular difficult accuracy tests, there is published evidence in favor of ANARCII. For a universal speed-and-accuracy claim, or a settled claim that Immunum is faster on a fair matched benchmark, the retrieved evidence is insufficient. The appropriate next decision is a version-pinned benchmark on the project's sequence distribution, not an unconditional leaderboard.
+Immunum 1.3.1 is the smallest integration candidate found: its core compiled
+without Python and already implements IMGT, Martin, AHo and Kabat. The published
+crate is 91,762 bytes; generated consensus JSON totaled 554,835 bytes in the
+probe build. Neither figure measures the eventual Arpeggia binary or wheel
+increase.[^immunum-release][^immunum-manifest]
+
+The annotator returns one best variable domain, inclusive zero-based input
+bounds and positions in input order. Arpeggia uses half-open spans. Its
+`confidence` is a normalized alignment heuristic, not a calibrated probability.
+Profiles derive from human/mouse RepSeqIO 1.9 V/J sequences; there is no species
+filter or germline assignment. Alpaca accuracy needs separate qualification.
+Construction parses embedded profiles; an internal `RefCell` buffer prevents
+sharing one annotator across parallel workers without synchronization. Reusing
+instances per worker is a candidate for avoiding repeated construction.[^immunum-annotator][^immunum-profiles]
+
+A standalone debug-build probe used the 122-residue IGH sequence in section 6:
+
+| Probe | Observed result |
+|---|---|
+| Number the sequence under IMGT, Martin, AHo and Kabat | All four returned results; this checks integration, not positional accuracy |
+| Number `sequence + GGGGSGGGGS + sequence` | All four returned only the second domain, inclusive span `132..=253`, without a multidomain warning |
+| Apply the IMGT CDR3 conversion rule to length 65 | 52 insertions with valid single-letter labels |
+| Apply that rule to length 66 | Invalid label `112[` |
+| Apply that rule to length 413 | Integer-overflow panic |
+
+The last three checks call `number_with_rules` directly with the
+`Insertion::Symmetric { left: 111, right: 112 }` rule from `IMGT_RULES`.
+These are synthetic conversion tests, not end-to-end numbering of biological
+long-CDR antibodies. Single-character insertion labels and unchecked `u8`
+arithmetic require a supported boundary or correction **before** conversion;
+postprocessing malformed output would not prevent the panic.[^immunum-numbering]
+
+The upstream AHo CDR table is explicitly marked unverified and its CDR3 start
+disagrees with its cited alternatives. Martin uses AbM region boundaries.
+Numbering support therefore does not settle the CDR coloring policy.[^immunum-aho][^immunum-numbering]
+
+**Recommendation:** qualify the pinned dependency on human/mouse H/K/L and
+alpaca VHH cases, partial domains, framework insertions, long loops and multiple
+domains before adopting it. Review source and bundled-profile attribution
+separately. A bespoke engine would add profile construction, domain detection
+and insertion-rule maintenance without evidence of improved accuracy.
+Constant-region numbering remains separate work: IMGT defines a distinct
+C-domain system, and this engine models variable domains only.[^imgt-constant]
+
+### 9.2 Germline data and interpretation
+
+Current IMGT terms license data and metadata under CC BY 4.0 for public and
+private users; tools retain separate terms. A fresh attributed snapshot is a
+more direct candidate than transformed datasets carrying older terms.[^imgt-terms]
+
+Downloaded IMGT/GENE-DB release **202636-7** on 10 September 2026; the release and
+amino-acid files reported last modification on 5 September. The gapped
+`IMGTGENEDB-ReferenceSequences.fasta-AA-WithGaps-F+ORF+inframeP` file was
+3,332,989 bytes, SHA-256
+`3cb6b0b8cb8940b3b2a9b105771a6a74aa67c06e3ca39eaea0d2030c90e7efd0`.[^imgt-download]
+
+An illustrative filter retained IGHV/IGKV/IGLV and IGHJ/IGKJ/IGLJ, functional
+records including bracketed/parenthesized `F`, and species names with their
+strain/subspecies suffixes. It excluded stop-containing sequences, retained
+partial records and original IMGT gaps, and did not deduplicate:
+
+| Species | V references | J references | Total |
+|---|---:|---:|---:|
+| Human | 511 | 33 | 544 |
+| Mouse, including strains/subspecies | 628 | 19 | 647 |
+| Alpaca | 73 | 6 | 79 |
+| Rat | 268 | 13 | 281 |
+| Rabbit | 123 | 20 | 143 |
+
+The required three-species subset occupied **255,885 bytes raw / 35,217 bytes
+gzip**, retaining full headers and one sequence line per record (`mtime=0`).
+These are research-file sizes, not a final filtering policy or package size
+estimate. A reproducible bundle needs release ID, download date, checksum,
+attribution and transformation rules. Exact species matching alone would
+discard most mouse records.
+
+The snapshot contains alpaca heavy-chain V/J references but no alpaca K/L
+references. Of the 73 retained alpaca V references, 66 are marked partial at the
+3′ end around Cys104; discarding all partial entries would remove most coverage.
+This supports an alpaca **VHH** germline scope, not exhaustive conventional
+alpaca light-chain matching.[^imgt-alpaca]
+
+Prefer separate V and J similarity results, retaining tied gene/allele names
+and measured coverage. A stitched V+J display is not an inferred ancestral
+antibody: junctional additions and D contributions are not recovered by that
+operation. NCBI's IgBLAST reports D/J assignment only for nucleotide searches;
+an amino-acid J comparison here would need to be labeled as similarity, not a
+unique gene call. Missing reference coverage must remain distinguishable from
+a true deletion.[^igblast]
+
+### 9.3 Position correspondence and display reuse
+
+At `cbae1717f8bdb87fd504066dd6e3e3730de0dfe9`, antid delegates numbering, ordered
+positions and V/J matching to AntPack. Its useful alignment model is the union
+of numbered positions with one gapped sequence per row, not a new multiple
+sequence alignment calculation. Preserve input order and validate compatible
+schemes/chain classes. Its displayed germline merges V and J, favoring J where
+both cover a position; that convenience should not conceal junction provenance.[^antid-numbering]
+
+Rust can retain sequence bytes and typed position/input-offset records, deriving
+region slices and tabular views when requested. Avoid duplicated per-residue
+DataFrames. Position order must follow the scheme: for example, IMGT's inserted
+positions on the 112 side run in reverse insertion order.[^imgt]
+
+Arpeggia's `SeqAlignment` promises an optimal pairwise BLOSUM62 alignment.
+Numbering-based correspondence need not be that optimum. Reuse the sequence
+module's width handling, escaped names, rulers, foreground operation colors
+and upstream `Style` backgrounds through a small internal renderer. Do not
+construct a dummy `SeqAlignment` with misleading scores. Actual V/J pairwise
+comparisons can still call `align_seqs()`. CDR backgrounds require named region
+boundaries and handling of gap/blank cells. Region identification must remain
+possible without color.[^arpeggia-alignment]
 
 ## References and implementation records
 
 [^anarci]: Dunbar J, Deane CM. **ANARCI: antigen receptor numbering and receptor classification.** *Bioinformatics* 32, 298–300 (2016; online 2015). DOI: <https://doi.org/10.1093/bioinformatics/btv552>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/26424857/>.
-[^immunum-source]: ENPICOM, **Immunum README**, including algorithm, interfaces, chain/scheme support, and MIT license declaration: <https://github.com/ENPICOM/immunum/blob/e027d5fe2405300508eee7ce78582a2fe4990f20/README.md>.
+[^immunum-source]: ENPICOM, **Immunum 1.3.1 README**, including algorithm, interfaces, chain/scheme support, and MIT license declaration: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/README.md>.
 [^martin]: Abhinandan KR, Martin ACR. **Analysis and improvements to Kabat and structurally correct numbering of antibody variable domains.** *Molecular Immunology* 45, 3832–3839 (2008). DOI: <https://doi.org/10.1016/j.molimm.2008.05.022>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/18614234/>.
 [^aho]: Honegger A, Plückthun A. **Yet another numbering scheme for immunoglobulin variable domains: an automatic modeling and analysis tool.** *Journal of Molecular Biology* 309, 657–670 (2001). DOI: <https://doi.org/10.1006/jmbi.2001.4662>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/11397087/>.
 [^evaluation2024]: Zhu Z, Olson KS, Magliery TJ. **50 Years of Antibody Numbering Schemes: A Statistical and Structural Evaluation Reveals Key Differences and Limitations.** *Antibodies* 13, 99 (2024). DOI: <https://doi.org/10.3390/antib13040099>. Publisher: <https://www.mdpi.com/2073-4468/13/4/99>; PubMed: <https://pubmed.ncbi.nlm.nih.gov/39727482/>.
@@ -283,8 +394,7 @@ For reference labels, use structurally curated cases where a correspondence is d
 [^immunum-truth-issue]: Immunum maintainer issue **#33**, *Fix correctness benchmarks*: <https://github.com/ENPICOM/immunum/issues/33>. Opened 23 March 2026; open in the retrieved record. The issue explicitly requests an independent, for example structure-based, gold standard.
 [^antpack-current]: AntPack, current PyPI package metadata and licensing: <https://pypi.org/project/antpack/>. At retrieval, the default non-yanked release was 0.4; versions 0.3.9 onward use academic/noncommercial terms and key setup.
 [^antpack-gpl]: AntPack **0.3.8.6.3**, release record and GPL metadata: <https://pypi.org/project/antpack/0.3.8.6.3/>. Released 23 June 2026; Python ≥3.8 stated in this package record.
-[^immunum-release]: Immunum **1.2.0**, PyPI package and release history: <https://pypi.org/project/immunum/>. Source distribution and wheels uploaded 4 August 2026.
-[^immunum-commit]: Immunum commit **`e027d5fe2405300508eee7ce78582a2fe4990f20`**, 28 August 2026, adding Chothia, Martin, and AHo and changing source version to 1.3.0: <https://github.com/ENPICOM/immunum/commit/e027d5fe2405300508eee7ce78582a2fe4990f20>.
+[^immunum-release]: Immunum **1.3.1**, released 2 September 2026: <https://pypi.org/project/immunum/1.3.1/>; Rust release metadata: <https://crates.io/api/v1/crates/immunum>. The inspected Rust artifact's VCS record identifies `45bb70d34802cc592ebd86e685cc9f551885a2d6`.
 [^antpack-regions]: AntPack, official **clustering / region assignment** documentation, including separate numbering and CDR conventions: <https://antpackdocumentationlatest.pages.dev/clustering_overview>.
 [^imgt]: IMGT, **IMGT unique numbering for V domains**, official scientific chart: <https://imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html>.
 [^antpack-doc]: AntPack, official **numbering background** documentation: <https://antpackdocumentationlatest.pages.dev/numbering_background>. The documentation site's displayed version can lag package releases; verify the deployed API separately.
@@ -292,4 +402,17 @@ For reference labels, use structurally curated cases where a correspondence is d
 [^abnumber]: AbNumber, inspected **`abnumber/common.py`**, `_anarci_align` backend selection, scheme conversion, germline fallback, and duplicate-position handling: <https://github.com/prihoda/AbNumber/blob/master/abnumber/common.py>. File blob hash at retrieval: `d494cb3593745ee824727537176da5eec67e1aaf`. This is an inspected source record, not a guarantee about every packaged version.
 [^anarcii-release]: ANARCII **2.0.8** package metadata and release history: <https://pypi.org/project/anarcii/>. Release date 30 June 2026; Python ≥3.11 in the retrieved package metadata.
 [^anarcii-license]: ANARCII, pinned **BSD 3-Clause** license: <https://github.com/oxpig/ANARCII/blob/e0d8f192f5a861e03a50918f114d0f5735e42333/LICENCE>.
+[^immunum-commit]: Immunum commit **`e027d5fe2405300508eee7ce78582a2fe4990f20`**, 28 August 2026, adding Chothia, Martin, and AHo and changing source version to 1.3.0: <https://github.com/ENPICOM/immunum/commit/e027d5fe2405300508eee7ce78582a2fe4990f20>.
 [^antpack-yanked]: AntPack **0.5** release record and release history: <https://pypi.org/project/antpack/0.5/>. Released 14 April 2026; yanked for “Bug fix.”
+[^immunum-manifest]: Immunum 1.3.1 **Cargo manifest**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/Cargo.toml>.
+[^immunum-annotator]: Immunum **annotator**, including bounds, thresholds and scratch storage: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/annotator.rs>.
+[^immunum-profiles]: Immunum **consensus profile provenance**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/resources/consensus/README.md>.
+[^immunum-numbering]: Immunum **numbering rules and insertion generation**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering.rs>.
+[^immunum-aho]: Immunum **AHo numbering and unverified region table**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering/aho.rs>.
+[^imgt-constant]: IMGT **unique numbering for C domains**: <https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVCsuperfamily.html>.
+[^imgt-terms]: IMGT **terms of use**, retrieved 10 September 2026: <https://www.imgt.org/about/termsofuse.php>.
+[^imgt-download]: IMGT **GENE-DB downloads**: <https://www.imgt.org/download/GENE-DB/>; [release](https://www.imgt.org/download/GENE-DB/RELEASE); [gapped amino-acid references](https://www.imgt.org/download/GENE-DB/IMGTGENEDB-ReferenceSequences.fasta-AA-WithGaps-F%2BORF%2BinframeP).
+[^imgt-alpaca]: IMGT direct alpaca exports: [IGHV](https://www.imgt.org/genedb/GENElect?query=7.3+IGHV&species=Vicugna+pacos), [IGHJ](https://www.imgt.org/genedb/GENElect?query=7.6+IGHJ&species=Vicugna+pacos). Unfiltered exports contain 84 V and 7 J records; section 9 counts use the stated functional filter.
+[^igblast]: NCBI **IgBLAST introduction**, including separate amino-acid and nucleotide capabilities: <https://www.ncbi.nlm.nih.gov/igblast/intro.html>.
+[^antid-numbering]: antid **numbering objects, germline display and alignment**, inspected at `cbae1717f8bdb87fd504066dd6e3e3730de0dfe9`: <https://github.com/y1zhou/antid/blob/cbae1717f8bdb87fd504066dd6e3e3730de0dfe9/src/antid/numbering/antibody.py>.
+[^arpeggia-alignment]: Arpeggia [sequence-alignment contract](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) and [renderer](https://github.com/y1zhou/arpeggia/blob/master/src/seq_alignment/display.rs).

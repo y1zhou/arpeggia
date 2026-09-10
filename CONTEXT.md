@@ -254,6 +254,26 @@ Nongap residue pairs from an alignment of observed chain sequences, including
 substitutions. Author numbering can differ between paired residues.
 _Avoid_: Identical residues, equal residue numbers, antibody numbering
 
+**Antibody Numbering Scheme**:
+A convention assigning equivalent positions and insertion labels to antibody
+variable-domain residues. It is distinct from the method assigning those labels.
+_Avoid_: Numbering engine, CDR definition, sequence alignment
+
+**Antibody Numbered Position**:
+A position within an antibody numbering scheme, including any insertion label.
+Its order follows the scheme rather than ordinary text or numeric sorting.
+_Avoid_: Input sequence offset, author residue number, alignment column
+
+**CDR Definition**:
+A convention delimiting the three complementarity-determining regions and the
+framework regions of an antibody variable domain.
+_Avoid_: Numbering scheme, experimentally determined antigen-contact residues
+
+**Germline Reference**:
+A catalogued unrearranged immunoglobulin gene-segment sequence, identified by
+species, gene and allele. A matching reference does not establish ancestry.
+_Avoid_: Reconstructed ancestral antibody, species of origin
+
 **Core RMSD**:
 The RMSD of retained fitting pairs under their final fitted transform.
 _Avoid_: Full-selection RMSD, final evaluation RMSD
