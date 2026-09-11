@@ -85,6 +85,24 @@ impl NumberedAntibody {
             if unavailable {
                 continue;
             }
+            let endpoint = NumberedPosition {
+                number: if region == "FR1" {
+                    1
+                } else {
+                    core::rules(scheme.backend(), chain).last().unwrap().num_end
+                },
+                insertion: None,
+            };
+            let outside = if region == "FR1" {
+                endpoint.order(scheme.backend(), chain) < first
+            } else {
+                endpoint.order(scheme.backend(), chain) > last
+            };
+            if outside && maps.iter().all(|map| !map.contains_key(&endpoint)) {
+                result.diagnostics.push(format!(
+                    "IMPUTATION_REFERENCE_COVERAGE: no tied reference covers {region} endpoint {endpoint}; no extrapolation beyond available sequence"
+                ));
+            }
             ids.sort();
             ids.dedup();
             let candidates: HashSet<_> = maps.iter().flat_map(|map| map.keys().copied()).collect();
@@ -228,5 +246,44 @@ mod tests {
                 .any(|d| d.starts_with("IMPUTATION_UNRESOLVED"))
         );
         assert!(partial.impute(Some("unknown-reference"), None).is_err());
+    }
+
+    #[test]
+    fn uncovered_reference_ends_are_reported_without_extrapolation() {
+        let mut partial = number_antibody(
+            &SEQUENCE[5..SEQUENCE.len() - 3],
+            &NumberingOptions::default(),
+        )
+        .unwrap();
+        for matching in [&mut partial.v_match, &mut partial.j_match]
+            .into_iter()
+            .flatten()
+        {
+            for hit in &mut matching.hits {
+                // Model references whose terminal coverage is unavailable, as
+                // in the bundled partial V and short alpaca J records.
+                for position in &mut hit.imgt_positions {
+                    if position.is_some_and(|p| p.number == 1 || p.number == 128) {
+                        *position = None;
+                    }
+                }
+            }
+        }
+        let result = partial.impute(None, None).unwrap();
+        assert!(
+            result
+                .residues
+                .iter()
+                .all(|r| ![1, 128].contains(&r.position.number))
+        );
+        assert_eq!(
+            result
+                .diagnostics
+                .iter()
+                .filter(|d| d.starts_with("IMPUTATION_REFERENCE_COVERAGE"))
+                .count(),
+            2
+        );
+        assert_eq!(result.input_sequence, partial.input_sequence);
     }
 }

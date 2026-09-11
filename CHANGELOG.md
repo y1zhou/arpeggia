@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explicit terminal FR1/FR4 imputation returns a new numbered antibody and
   preserves original input indices and reference provenance. Tied references
   must agree, with optional explicit reference selection; internal gaps, CDRs
-  and unknown input residues remain unchanged.
+  and unknown input residues remain unchanged. Uncovered reference endpoints
+  produce explicit coverage diagnostics.
 - `align_antibodies()` / `align-antibodies` return `AntibodyAlignment` objects
   for one or more numbered antibodies through the ordered
   union of positions, preserving input row order and per-row CDR definitions.
