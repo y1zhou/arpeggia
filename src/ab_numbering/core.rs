@@ -77,6 +77,21 @@ pub(super) fn convert(
     chain: Chain,
     input_length: usize,
 ) -> ArpeggiaResult<Vec<NumberedPosition>> {
+    // Count-based rules cannot distinguish a cut loop from an internal deletion.
+    // Require their whole source window for both numbering and CDR conversion.
+    // AHo's rule starting at 1 explicitly handles missing N-terminal FR1 residues.
+    // Germline V/J segments use convert_states directly: they are not full domains.
+    for rule in rules(scheme, chain) {
+        if rule.align_start > 1
+            && !matches!(rule.insertion, Insertion::None)
+            && (alignment.cons_start > rule.align_start || alignment.cons_end < rule.align_end)
+        {
+            return Err(failure(format!(
+                "partial domain lacks {scheme} conversion context at IMGT positions {}–{}; supply the surrounding framework sequence",
+                rule.align_start, rule.align_end
+            )));
+        }
+    }
     let aligned = &alignment.positions[alignment.query_start..=alignment.query_end];
     let mut converted = convert_states(aligned, scheme, chain)?;
     // Preserve Immunum's AHo light-chain tail rule; this residue has no raw
@@ -387,6 +402,71 @@ mod tests {
                 .map(|r| r.position)
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn terminal_truncations_preserve_surviving_numbering_and_regions() {
+        for sequence in [HEAVY, KAPPA, LAMBDA] {
+            for scheme in [
+                NumberingScheme::Imgt,
+                NumberingScheme::Martin,
+                NumberingScheme::Aho,
+                NumberingScheme::Kabat,
+            ] {
+                let options = NumberingOptions {
+                    scheme: Some(scheme),
+                    ..Default::default()
+                };
+                let full = number_antibody(sequence, &options).unwrap();
+                for removed in [1, 5, 9, 20, 22, 23, 24, 25, 26] {
+                    let partial = number_antibody(&sequence[removed..sequence.len() - 3], &options);
+                    if removed <= 5 {
+                        assert!(partial.is_ok(), "{scheme:?}: {partial:?}");
+                    }
+                    if let Ok(partial) = partial {
+                        for residue in &partial.residues {
+                            let original_index = residue.input_index.unwrap() + removed;
+                            let original = full
+                                .residues
+                                .iter()
+                                .find(|r| r.input_index == Some(original_index))
+                                .unwrap();
+                            assert_eq!(
+                                (residue.position, &residue.region),
+                                (original.position, &original.region),
+                                "{scheme:?} {} truncated by {removed}, input index {original_index}",
+                                full.chain
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        let kabat = NumberingOptions {
+            scheme: Some(NumberingScheme::Kabat),
+            ..Default::default()
+        };
+        assert_eq!(number_antibody(HEAVY, &kabat).unwrap().cdr1(), "TYALS");
+        assert!(
+            number_antibody(&HEAVY[23..], &kabat)
+                .unwrap_err()
+                .to_string()
+                .contains("IMGT positions 24–40")
+        );
+        // A safe numbering scheme must not bypass an unsafe CDR-definition conversion.
+        for scheme in [
+            NumberingScheme::Imgt,
+            NumberingScheme::Martin,
+            NumberingScheme::Aho,
+            NumberingScheme::Kabat,
+        ] {
+            let options = NumberingOptions {
+                scheme: Some(scheme),
+                cdr_definition: CdrDefinition::Kabat,
+                ..Default::default()
+            };
+            assert!(number_antibody(&HEAVY[23..], &options).is_err());
+        }
     }
 
     #[test]

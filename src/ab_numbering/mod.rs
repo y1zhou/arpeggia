@@ -237,6 +237,7 @@ impl NumberedAntibody {
 /// IMGT is the default; `chothia` is a CLI/Python alias for Martin numbering.
 /// Inputs may have tags or constant tails, but a second recognized domain fails.
 /// Only terminal FR1/FR4 truncations retaining the intervening core are supported.
+/// Both conventions must retain the framework context needed for loop conversion.
 /// Numbering does not impute missing residues.
 ///
 /// Conventions: <https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html>,
