@@ -100,10 +100,7 @@ impl SeqAlignment {
                             None
                         } else {
                             position += 1;
-                            Some(PositionLabel {
-                                text: position.to_string(),
-                                tick: position.is_multiple_of(10),
-                            })
+                            Some(position)
                         }
                     })
                     .collect();
@@ -113,12 +110,12 @@ impl SeqAlignment {
                     cells: cells.into_bytes(),
                     positions: labels,
                     operations: operations.as_bytes().to_vec(),
-                    regions: Vec::new(),
+                    imputed: Vec::new(),
                     show_operations: index == 1,
                 }
             })
             .collect();
-        let body = render_rows(&rows, width, color, rulers)?;
+        let body = render_rows(&rows, width, color, rulers, &[])?;
         let mut output = wrap_summary(&summary, width);
         if self.alignment_length == 0 {
             output.push_str(&wrap_summary("No positive-scoring alignment", width));
@@ -128,21 +125,15 @@ impl SeqAlignment {
     }
 }
 
-/// A coordinate label at a particular display cell, independent of input offsets.
-pub(crate) struct PositionLabel {
-    pub(crate) text: String,
-    pub(crate) tick: bool,
-}
-
 /// Internal display data. Cells, positions and operations have equal lengths;
-/// regions are either empty or one CDR index (0–3) per cell.
+/// imputed is either empty or one flag per cell. Source coordinates are one-based.
 pub(crate) struct DisplayRow {
     pub(crate) name: String,
     pub(crate) right_name: String,
     pub(crate) cells: Vec<u8>,
-    pub(crate) positions: Vec<Option<PositionLabel>>,
+    pub(crate) positions: Vec<Option<usize>>,
     pub(crate) operations: Vec<u8>,
-    pub(crate) regions: Vec<u8>,
+    pub(crate) imputed: Vec<bool>,
     pub(crate) show_operations: bool,
 }
 
@@ -151,6 +142,7 @@ pub(crate) fn render_rows(
     width: usize,
     color: bool,
     rulers: bool,
+    regions: &[u8],
 ) -> ArpeggiaResult<String> {
     let names: Vec<_> = rows.iter().map(|r| display_name(&r.name)).collect();
     let right_names: Vec<_> = rows.iter().map(|r| display_name(&r.right_name)).collect();
@@ -159,7 +151,7 @@ pub(crate) fn render_rows(
     let digits = rows
         .iter()
         .flat_map(|r| r.positions.iter().flatten())
-        .map(|p| p.text.len())
+        .map(|p| p.ilog10() as usize + 1)
         .max()
         .unwrap_or(1);
     let prefix = label_width + 2 + digits;
@@ -177,59 +169,80 @@ pub(crate) fn render_rows(
     debug_assert!(rows.iter().all(|r| r.cells.len() == length
         && r.operations.len() == length
         && r.positions.len() == length
-        && (r.regions.is_empty() || r.regions.len() == length)));
+        && (r.imputed.is_empty() || r.imputed.len() == length)));
+    debug_assert!(regions.is_empty() || regions.len() == length);
     let mut output = String::new();
     for start in (0..length).step_by(block_width) {
         let end = start.saturating_add(block_width).min(length);
         output.push('\n');
+        // Antibody callers supply one reference-derived band map for the whole
+        // block. Ordinary pairwise alignments pass no region annotations.
+        if !regions.is_empty() {
+            output.push_str(&" ".repeat(prefix));
+            let mut labels = vec![b' '; end - start];
+            let mut offset = 0;
+            for run in regions[start..end].chunk_by(|a, b| a == b) {
+                if run[0] > 0 {
+                    labels[offset..offset + run.len()].fill(b'-');
+                    let name = format!("CDR{}", run[0]);
+                    if run.len() >= name.len() {
+                        let at = offset + (run.len() - name.len()) / 2;
+                        labels[at..at + name.len()].copy_from_slice(name.as_bytes());
+                    } else {
+                        labels[offset..offset + run.len()].fill(b'0' + run[0]);
+                    }
+                }
+                offset += run.len();
+            }
+            for (column, cell) in labels.into_iter().enumerate() {
+                paint(
+                    &mut output,
+                    cell,
+                    b' ',
+                    regions[start + column],
+                    false,
+                    color,
+                );
+            }
+            output.push('\n');
+        }
         for (index, row) in rows.iter().enumerate() {
             let cells = &row.cells[start..end];
             let coordinates = &row.positions[start..end];
-            if !row.regions.is_empty() && row.regions[start..end].iter().any(|r| *r > 0) {
-                output.push_str(&" ".repeat(prefix));
-                let mut labels = vec![b' '; cells.len()];
-                let mut offset = 0;
-                for run in row.regions[start..end].chunk_by(|a, b| a == b) {
-                    if run[0] > 0 {
-                        labels[offset..offset + run.len()].fill(b'-');
-                        let name = format!("CDR{}", run[0]);
-                        if run.len() >= name.len() {
-                            let at = offset + (run.len() - name.len()) / 2;
-                            labels[at..at + name.len()].copy_from_slice(name.as_bytes());
-                        } else {
-                            labels[offset..offset + run.len()].fill(b'0' + run[0]);
-                        }
-                    }
-                    offset += run.len();
-                }
-                output.push_str(
-                    std::str::from_utf8(&labels)
-                        .expect("ASCII region labels")
-                        .trim_end(),
-                );
-                output.push('\n');
-            }
             if rulers {
                 let mut ruler = vec![b' '; prefix + cells.len()];
                 for (column, label) in coordinates.iter().enumerate() {
-                    if let Some(label) = label.as_ref().filter(|p| p.tick) {
+                    if let Some(position) = label.filter(|p| p.is_multiple_of(10)) {
+                        let text = position.to_string();
                         let stop = prefix + column + 1;
-                        ruler[stop - label.text.len()..stop].copy_from_slice(label.text.as_bytes());
+                        ruler[stop - text.len()..stop].copy_from_slice(text.as_bytes());
                     }
                 }
-                output.push_str(std::str::from_utf8(&ruler).expect("ASCII ruler").trim_end());
+                let visible = if regions.is_empty() {
+                    ruler.iter().rposition(|b| *b != b' ').map_or(0, |i| i + 1)
+                } else {
+                    ruler.len()
+                };
+                for (column, &cell) in ruler[..visible].iter().enumerate() {
+                    let region = column
+                        .checked_sub(prefix)
+                        .and_then(|i| regions.get(start + i))
+                        .copied()
+                        .unwrap_or(0);
+                    paint(&mut output, cell, b' ', region, false, color);
+                }
                 output.push('\n');
             }
             let begin = coordinates
                 .iter()
                 .flatten()
                 .next()
-                .map_or("", |p| p.text.as_str());
+                .map_or_else(String::new, |p| p.to_string());
             let last = coordinates
                 .iter()
                 .flatten()
                 .next_back()
-                .map_or("", |p| p.text.as_str());
+                .map_or_else(String::new, |p| p.to_string());
             output.push_str(&names[index]);
             output.push_str(&" ".repeat(label_width - names[index].width()));
             write!(output, " {begin:>digits$} ").expect("String write");
@@ -238,7 +251,8 @@ pub(crate) fn render_rows(
                     &mut output,
                     cell,
                     row.operations[start + column],
-                    row.regions.get(start + column).copied().unwrap_or(0),
+                    regions.get(start + column).copied().unwrap_or(0),
+                    row.imputed.get(start + column).copied().unwrap_or(false),
                     color,
                 );
             }
@@ -255,7 +269,8 @@ pub(crate) fn render_rows(
                         &mut output,
                         if op == b'.' { b' ' } else { op },
                         op,
-                        row.regions.get(column).copied().unwrap_or(0),
+                        0,
+                        false,
                         color,
                     );
                 }
@@ -298,25 +313,31 @@ pub(crate) fn display_name(name: &str) -> String {
     label
 }
 
-fn paint(output: &mut String, cell: u8, operation: u8, region: u8, color: bool) {
-    let mut style = match operation {
-        b'+' => AnsiColor::Green.on_default(),
-        b'-' => AnsiColor::Red.on_default(),
-        b':' => AnsiColor::Blue.on_default(),
-        b'x' => AnsiColor::Yellow.on_default(),
-        b'.' => AnsiColor::BrightBlack.on_default(),
-        _ => Style::new(),
+pub(crate) fn region_style(region: u8) -> Style {
+    let background = match region {
+        1 => AnsiColor::White,
+        2 => AnsiColor::BrightMagenta,
+        3 => AnsiColor::BrightCyan,
+        _ => return Style::new(),
     };
-    if region > 0 {
-        let background = match region {
-            1 => AnsiColor::BrightWhite,
-            2 => AnsiColor::BrightMagenta,
-            _ => AnsiColor::BrightCyan,
-        };
-        style = style.bg_color(Some(background.into()));
-        if operation == b' ' {
-            style = style.fg_color(Some(AnsiColor::Black.into()));
-        }
+    AnsiColor::Black.on(background)
+}
+
+fn paint(output: &mut String, cell: u8, operation: u8, region: u8, imputed: bool, color: bool) {
+    let mut style = region_style(region);
+    let foreground = match operation {
+        b'+' => Some(AnsiColor::Green),
+        b'-' => Some(AnsiColor::Red),
+        b':' => Some(AnsiColor::Blue),
+        b'x' => Some(AnsiColor::Yellow),
+        b'.' => Some(AnsiColor::BrightBlack),
+        _ => None,
+    };
+    if let Some(foreground) = foreground {
+        style = style.fg_color(Some(foreground.into()));
+    }
+    if imputed {
+        style = style.invert();
     }
     if color && (cell != b' ' || region > 0) && !style.is_plain() {
         write!(

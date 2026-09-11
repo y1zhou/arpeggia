@@ -1,7 +1,7 @@
 use super::*;
 use crate::AlignmentColor;
 use crate::seq_alignment::display::{
-    DisplayRow, PositionLabel, color_enabled, render_rows, wrap_summary,
+    DisplayRow, color_enabled, display_name, render_rows, wrap_summary,
 };
 use std::collections::HashMap;
 use std::io::IsTerminal;
@@ -15,13 +15,6 @@ fn dimensions(width: Option<usize>, color: AlignmentColor) -> (usize, bool) {
     )
 }
 
-fn label(position: Option<NumberedPosition>) -> Option<PositionLabel> {
-    position.map(|p| PositionLabel {
-        text: p.to_string(),
-        tick: p.insertion.is_none() && p.number.is_multiple_of(10),
-    })
-}
-
 fn region(name: &str) -> u8 {
     match name {
         "CDR1" => 1,
@@ -31,10 +24,21 @@ fn region(name: &str) -> u8 {
     }
 }
 
+// Reference insertions/deletions inside a CDR must not break its vertical band.
+fn cdr_bands(mut regions: Vec<u8>) -> Vec<u8> {
+    for cdr in 1..=3 {
+        if let Some(start) = regions.iter().position(|r| *r == cdr) {
+            let end = regions.iter().rposition(|r| *r == cdr).unwrap();
+            regions[start..=end].fill(cdr);
+        }
+    }
+    regions
+}
+
 impl AntibodyAlignment {
     /// Format antibody comparisons with the selected reference first and germlines hidden.
     ///
-    /// Width includes names and numbered-position labels. A rendering-only
+    /// Width includes names and original input-position labels. A rendering-only
     /// reference override does not change the stored reference index or row order.
     pub fn format(
         &self,
@@ -70,6 +74,7 @@ impl AntibodyAlignment {
                 ..=row.iter().rposition(|b| *b != b'-').unwrap()
         };
         let reference_span = span(reference_row);
+        let mut regions = Vec::new();
         let rows: Vec<_> = std::iter::once(reference)
             .chain((0..self.antibodies.len()).filter(|i| *i != reference))
             .map(|index| {
@@ -94,12 +99,24 @@ impl AntibodyAlignment {
                 let positions = self
                     .positions
                     .iter()
-                    .map(|p| label(by_position.contains_key(p).then_some(*p)))
+                    .map(|p| {
+                        by_position
+                            .get(p)
+                            .and_then(|r| r.input_index)
+                            .map(|i| i + 1)
+                    })
                     .collect();
-                let regions = self
+                if index == reference {
+                    regions = self
+                        .positions
+                        .iter()
+                        .map(|p| by_position.get(p).map_or(0, |r| region(&r.region)))
+                        .collect();
+                }
+                let imputed = self
                     .positions
                     .iter()
-                    .map(|p| by_position.get(p).map_or(0, |r| region(&r.region)))
+                    .map(|p| by_position.get(p).is_some_and(|r| r.input_index.is_none()))
                     .collect();
                 DisplayRow {
                     name: antibody.name.clone(),
@@ -107,18 +124,20 @@ impl AntibodyAlignment {
                     cells,
                     positions,
                     operations,
-                    regions,
+                    imputed,
                     show_operations: index != reference,
                 }
             })
             .collect();
-        let body = render_rows(&rows, width, color, rulers)?;
+        let body = render_rows(&rows, width, color, rulers, &cdr_bands(regions))?;
         let mut output = wrap_summary(
             &format!(
-                "{} antibodies; {} positions; {} numbering\nCDR regions: 1 = CDR1, 2 = CDR2, 3 = CDR3",
+                "{} antibodies; {} positions\nReference: {}; {} numbering; {} CDR definition\nCDR regions: 1 = CDR1, 2 = CDR2, 3 = CDR3",
                 self.antibodies.len(),
                 self.positions.len(),
-                self.antibodies[reference].scheme
+                display_name(&self.antibodies[reference].name),
+                self.antibodies[reference].scheme,
+                self.antibodies[reference].cdr_definition
             ),
             width,
         );
@@ -135,6 +154,8 @@ struct Column {
     input_index: Option<usize>,
     query_position: Option<NumberedPosition>,
     reference_position: Option<NumberedPosition>,
+    reference_index: Option<usize>,
+    imputed: bool,
     region: u8,
 }
 
@@ -170,6 +191,8 @@ impl NumberedAntibody {
                 input_index: Some(i),
                 query_position: by_input.get(&i).map(|r| r.position),
                 reference_position: None,
+                reference_index: None,
+                imputed: false,
                 region: by_input.get(&i).map_or(0, |r| region(&r.region)),
             })
             .collect();
@@ -194,6 +217,7 @@ impl NumberedAntibody {
                     columns[index].reference =
                         r.map_or(b'-', |i| alignment.reference.as_bytes()[i]);
                     columns[index].reference_position = r.and_then(|i| reference_positions[i]);
+                    columns[index].reference_index = r;
                     columns[index].operation = op;
                     cursor = index + 1;
                 } else if let Some(r) = r {
@@ -204,6 +228,8 @@ impl NumberedAntibody {
                         input_index: None,
                         query_position: None,
                         reference_position: reference_positions[r],
+                        reference_index: Some(r),
+                        imputed: false,
                         region: 0,
                     });
                 }
@@ -231,6 +257,7 @@ impl NumberedAntibody {
                     let column = &mut columns[hit.query_input_start + q as usize];
                     column.reference = alignment.reference.as_bytes()[r];
                     column.reference_position = reference_positions[r];
+                    column.reference_index = Some(r);
                 } else {
                     let at = hit.query_input_start + if q < 0 { 0 } else { alignment.query.len() };
                     before[at].push(Column {
@@ -240,6 +267,8 @@ impl NumberedAntibody {
                         input_index: None,
                         query_position: None,
                         reference_position: reference_positions[r],
+                        reference_index: Some(r),
+                        imputed: false,
                         region: 0,
                     });
                 }
@@ -258,6 +287,7 @@ impl NumberedAntibody {
             {
                 column.query = residue.amino_acid as u8;
                 column.query_position = Some(residue.position);
+                column.imputed = true;
                 column.operation = crate::seq_alignment::operation(column.reference, column.query);
             } else {
                 let at = combined
@@ -278,11 +308,24 @@ impl NumberedAntibody {
                         input_index: None,
                         query_position: Some(residue.position),
                         reference_position: None,
+                        reference_index: None,
+                        imputed: true,
                         region: 0,
                     },
                 );
             }
         }
+        let first_reference = combined.iter().position(|c| c.reference_index.is_some());
+        let last_reference = combined.iter().rposition(|c| c.reference_index.is_some());
+        for (index, column) in combined.iter_mut().enumerate() {
+            if first_reference.is_none_or(|first| index < first)
+                || last_reference.is_none_or(|last| index > last)
+            {
+                column.reference = b' ';
+                column.operation = b'.';
+            }
+        }
+        let regions = cdr_bands(combined.iter().map(|c| c.region).collect());
         let name = |m: &Option<GermlineMatch>, absent: &str| {
             m.as_ref().map_or_else(
                 || absent.into(),
@@ -292,7 +335,7 @@ impl NumberedAntibody {
                 },
             )
         };
-        let rows: Vec<_> = [true, false]
+        let rows: Vec<_> = [false, true]
             .into_iter()
             .map(|reference| DisplayRow {
                 name: if reference {
@@ -312,19 +355,39 @@ impl NumberedAntibody {
                 positions: combined
                     .iter()
                     .map(|c| {
-                        label(if reference {
-                            c.reference_position
+                        (if reference {
+                            c.reference_index
                         } else {
-                            c.query_position
+                            c.input_index
                         })
+                        .map(|i| i + 1)
                     })
                     .collect(),
-                operations: combined.iter().map(|c| c.operation).collect(),
-                regions: combined.iter().map(|c| c.region).collect(),
-                show_operations: !reference,
+                operations: combined
+                    .iter()
+                    .map(|c| {
+                        if reference {
+                            match c.operation {
+                                b'+' => b'-',
+                                b'-' => b'+',
+                                op => op,
+                            }
+                        } else if c.query_position.is_none() {
+                            b'.'
+                        } else {
+                            b' '
+                        }
+                    })
+                    .collect(),
+                imputed: if reference {
+                    Vec::new()
+                } else {
+                    combined.iter().map(|c| c.imputed).collect()
+                },
+                show_operations: reference,
             })
             .collect();
-        let body = render_rows(&rows, width, color, rulers)?;
+        let body = render_rows(&rows, width, color, rulers, &regions)?;
         let mut summary = format!(
             "{} chain; {} numbering; {} CDR definition\nConfidence: {:.3}; matched profile positions: {}\nDomain input span: [{}, {}); imputed residues: {}\nCDR regions: 1 = CDR1, 2 = CDR2, 3 = CDR3",
             self.chain,
@@ -403,5 +466,215 @@ mod tests {
         assert_eq!(alignment.antibodies[0].name, "first");
         assert_eq!(alignment.reference_index, 0);
         assert!(alignment.render(80, false, true, Some(2)).is_err());
+    }
+    // Decode the terminal cells so assertions cover visible columns and active
+    // backgrounds, rather than depending on a particular ANSI escape grouping.
+    fn styled_cells(line: &str) -> Vec<(char, Option<u8>, bool)> {
+        let mut result = Vec::new();
+        let (mut background, mut inverse) = (None, false);
+        let mut text = line;
+        while !text.is_empty() {
+            if let Some(escape) = text.strip_prefix("\x1b[") {
+                let end = escape.find('m').unwrap();
+                for code in escape[..end].split(';').map(|c| c.parse::<u8>().unwrap()) {
+                    match code {
+                        0 => {
+                            background = None;
+                            inverse = false;
+                        }
+                        7 => inverse = true,
+                        27 => inverse = false,
+                        40..=47 | 100..=107 => background = Some(code),
+                        49 => background = None,
+                        _ => {}
+                    }
+                }
+                text = &escape[end + 1..];
+            } else {
+                let c = text.chars().next().unwrap();
+                result.push((c, background, inverse));
+                text = &text[c.len_utf8()..];
+            }
+        }
+        result
+    }
+
+    #[test]
+    fn single_display_places_source_rulers_above_input_and_stitched_germlines() {
+        let sequence = format!("AAAAAA{}AAAAAA", SEQUENCE.replace("GGSFSTY", "GGGSGGSFSTY"));
+        let ab = number_antibody(
+            &sequence,
+            &NumberingOptions {
+                name: "input".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let before = serde_json::to_string(&ab).unwrap();
+        for width in [80, 250] {
+            let text = ab.render(width, false, true).unwrap();
+            let lines: Vec<_> = text.lines().collect();
+            let mut input_position = 0usize;
+            let mut reference_sequence = String::new();
+            let mut operations = String::new();
+            for (line_index, line) in lines
+                .iter()
+                .enumerate()
+                .filter(|(_, l)| l.starts_with("input "))
+            {
+                let cells = line.split_whitespace().nth(2).unwrap();
+                let prefix = line.find(cells).unwrap();
+                let germline = lines[line_index + 2];
+                assert!(
+                    germline.starts_with(
+                        &ab.v_match.as_ref().unwrap().hits[0]
+                            .alignment
+                            .reference_name
+                    )
+                );
+                assert!(!lines[line_index + 1].contains("CDR"));
+                let reference_cells = &germline[prefix..prefix + cells.len()];
+                let ops = &lines[line_index + 3][prefix..prefix + cells.len()];
+                reference_sequence.push_str(reference_cells);
+                operations.push_str(ops);
+                for (column, residue) in cells.bytes().enumerate() {
+                    if residue != b'-' {
+                        input_position += 1;
+                        if input_position.is_multiple_of(10) {
+                            let label = input_position.to_string();
+                            let stop = prefix + column + 1;
+                            assert_eq!(&lines[line_index - 1][stop - label.len()..stop], label);
+                        }
+                    }
+                    match ops.as_bytes()[column] {
+                        b'+' => assert_eq!(residue, b'-'),
+                        b'-' => assert_eq!(reference_cells.as_bytes()[column], b'-'),
+                        _ => {}
+                    }
+                }
+            }
+            assert_eq!(input_position, sequence.len());
+            assert!(reference_sequence.starts_with("      "));
+            assert!(reference_sequence.ends_with("      "));
+            assert!(
+                operations.contains('-'),
+                "insertions in the top input are germline deletions"
+            );
+            assert!(operations.starts_with("      ") && operations.ends_with("      "));
+            assert!(text.lines().all(|line| line.width() <= width));
+            if width == 250 {
+                let index = lines.iter().position(|l| l.starts_with("input ")).unwrap();
+                let input_cells = lines[index].split_whitespace().nth(2).unwrap();
+                let prefix = lines[index].find(input_cells).unwrap();
+                let mut column = 0;
+                for matching in [&ab.v_match, &ab.j_match] {
+                    let hit = &matching.as_ref().unwrap().hits[0];
+                    for (position, residue) in hit.alignment.reference.bytes().enumerate() {
+                        while reference_sequence.as_bytes()[column] == b' '
+                            || reference_sequence.as_bytes()[column] == b'-'
+                        {
+                            column += 1;
+                        }
+                        assert_eq!(reference_sequence.as_bytes()[column], residue);
+                        if (position + 1).is_multiple_of(10) {
+                            let label = (position + 1).to_string();
+                            let stop = prefix + column + 1;
+                            assert_eq!(&lines[index + 1][stop - label.len()..stop], label);
+                        }
+                        column += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(serde_json::to_string(&ab).unwrap(), before);
+    }
+
+    #[test]
+    fn shared_bands_follow_reference_but_rulers_and_imputation_follow_each_input() {
+        let first = number_antibody(
+            SEQUENCE,
+            &NumberingOptions {
+                name: "original".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let partial = number_antibody(
+            &SEQUENCE[5..],
+            &NumberingOptions {
+                name: "shortened".into(),
+                scheme: Some(NumberingScheme::Imgt),
+                cdr_definition: CdrDefinition::Chothia,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v = &partial.v_match.as_ref().unwrap().hits[0].references[0].id;
+        let second = partial.impute(Some(v), None).unwrap();
+        assert!(second.residues.iter().any(|r| r.input_index.is_none()));
+        let alignment = align_antibodies(vec![first, second], 0).unwrap();
+        for reference in [0, 1] {
+            let text = alignment.render(250, true, true, Some(reference)).unwrap();
+            let lines: Vec<_> = text.lines().collect();
+            let selected = &alignment.antibodies[reference];
+            assert!(text.contains(&format!(
+                "{} numbering; {} CDR definition",
+                selected.scheme, selected.cdr_definition
+            )));
+            let top = lines
+                .iter()
+                .position(|l| l.starts_with(&format!("{} ", selected.name)))
+                .unwrap();
+            let decoded = styled_cells(lines[top]);
+            let plain: String = decoded.iter().map(|c| c.0).collect();
+            let cells = plain.split_whitespace().nth(2).unwrap();
+            let prefix = plain.find(cells).unwrap();
+            let marker = styled_cells(lines[top - 2]);
+            for offset in [top - 1, top, top + 1, top + 2] {
+                let row = styled_cells(lines[offset]);
+                for column in prefix..prefix + alignment.positions.len() {
+                    assert_eq!(
+                        row[column].1, marker[column].1,
+                        "CDR band at column {column}"
+                    );
+                }
+            }
+            assert!(marker.iter().any(|c| c.1 == Some(47)));
+            assert!(marker.iter().any(|c| c.1 == Some(105)));
+            assert!(marker.iter().any(|c| c.1 == Some(106)));
+            assert!(
+                styled_cells(lines[top + 3])
+                    .iter()
+                    .all(|c| c.1.is_none() && !c.2)
+            );
+            for antibody in &alignment.antibodies {
+                let index = lines
+                    .iter()
+                    .position(|l| l.starts_with(&format!("{} ", antibody.name)))
+                    .unwrap();
+                let row = styled_cells(lines[index]);
+                let ruler: String = styled_cells(lines[index - 1]).iter().map(|c| c.0).collect();
+                for residue in &antibody.residues {
+                    let column = alignment
+                        .positions
+                        .iter()
+                        .position(|p| *p == residue.position)
+                        .unwrap();
+                    assert_eq!(row[prefix + column].2, residue.input_index.is_none());
+                    if let Some(position) = residue
+                        .input_index
+                        .map(|i| i + 1)
+                        .filter(|i| i.is_multiple_of(10))
+                    {
+                        let label = position.to_string();
+                        let stop = prefix + column + 1;
+                        assert_eq!(&ruler[stop - label.len()..stop], label);
+                    }
+                }
+            }
+        }
+        assert_eq!(alignment.reference_index, 0);
+        assert_eq!(alignment.antibodies[0].cdr_definition, "imgt");
+        assert_eq!(alignment.antibodies[1].cdr_definition, "chothia");
     }
 }

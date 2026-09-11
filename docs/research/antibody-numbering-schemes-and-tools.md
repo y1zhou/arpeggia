@@ -701,8 +701,9 @@ multiple sequence alignment API.
 
 ## 11. Display revision workplan
 
-**Status, 11 September 2026:** the display specification is agreed; implementation
-has not started.
+**Status, 11 September 2026:** implementation is underway. Source-coordinate
+rulers, reference-first rows, shared CDR bands and imputed-residue highlighting
+pass targeted Rust checks; summary styling and API documentation remain in progress.
 The requested layout and styling are recorded in
 [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#numbered-antibody-display).
 The maintainer publishes the branch; pushes require a new explicit request.
@@ -770,8 +771,8 @@ collapsing must not remove source records from structured results.
    CLI and Python tests, type checks and pre-commit checks, then commit meaningful
    milestones locally. Do not push without explicit authorization.
 
-All three display policies are settled. The next step is implementation of
-this workplan; no code or publishing changes have been made during the review.
+All three display policies are settled. Implementation follows the milestones
+above; publishing remains the maintainer's responsibility.
 
 ## References and implementation records
 
