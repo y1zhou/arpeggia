@@ -273,7 +273,7 @@ For reference labels, use structurally curated cases where a correspondence is d
 
 ## 9. Arpeggia implementation findings
 
-These findings inform the design interview. Accepted scope and API decisions are recorded in
+Accepted scope and API decisions from the completed design interview are recorded in
 [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
 The selected backend is Immunum's Rust core with default features disabled;
 Arpeggia supplies its own result objects, Python bindings and CLI rendering.
@@ -336,12 +336,33 @@ only its final result cannot prevent the insertion failure. The lower-level
 path reuses upstream scoring, alignment and scheme rules; it needs only the
 chain-selection and validation orchestration.[^immunum-core-api]
 
+Load the immutable H/K/L profiles once and reuse alignment scratch storage
+within each call or worker. Upstream selects the highest raw score, retaining
+the first profile on a tie; confidence is the clamped ratio of its confidence
+score to maximum confidence score, or zero when the denominator is zero.
+Count distinct matched profile positions within the winning query span,
+excluding insertions. Recognition of additional domains in the remaining
+prefix/suffix needs these evidence checks, without requiring successful
+numbering or complete FR1-to-FR4 coverage of the additional domain.
+
+Preflight every conversion rule against the retained source-position runs.
+Single-letter sequential insertions permit at most 26 extra residues;
+two-sided symmetric insertions permit at most 52. Framework/offset runs also
+need the single-letter limit checked. These are per-rule capacities, not a
+universal CDR-length limit. Conversion must consume every supported input
+residue and produce valid, unique labels in scheme order. Do not repair an
+internal conversion failure by silently shortening the reported domain.
+
 The raw alignment also supports cheap conversion into a separate CDR definition's
 native scheme, transferring region membership through input offsets without
 another alignment. Conversion lengths need explicit handling: Martin/Kabat
 can omit a light-chain terminal source position, while the high-level AHo path
 can append light-chain position 149 from the next input residue. Keep these
 boundary rules separate from CDR membership.[^immunum-annotator][^immunum-numbering]
+For Martin/Kabat light chains, trim only a verified terminal suffix outside
+the selected rule table's source coverage; preserve it in the supplied input.
+For AHo, retain the upstream light-chain 148-to-149 extension when applicable,
+without appending a duplicate if conversion already produced position 149.
 
 ### 9.2 Germline data and interpretation
 
@@ -491,6 +512,170 @@ can agree on the observed fragment while differing at an omitted position;
 the position stays unresolved unless they agree on presence and residue or the
 caller selects a reference. Internal gaps and unknown input residues remain
 unchanged. This does not reconstruct coordinates or the full V/D/J junction.
+
+## 10. Implementation plan
+
+**Status, 11 September 2026:** research and design documentation only.
+Implementation is paused at the maintainer's request. The accepted behavior is
+in [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
+the milestones below are the proposed execution plan, not completed work.
+Work remains on `feat/antibody-numbering`, based on sequence-alignment PR
+[#25](https://github.com/y1zhou/arpeggia/pull/25) at `1ace91e`. The eventual
+antibody PR will be stacked on that branch, with its feature diff reviewed
+against the parent and the combined release changes described against `master`.
+
+### Integration boundaries
+
+Keep numbering, germline matching and imputation in `ab_numbering`. Use
+Immunum's public alignment/conversion functions and rules, with Arpeggia
+validating their inputs and translating results into its own types. A backend
+trait, custom alignment algorithm and copied scheme tables are unnecessary.
+Use a small explicit region table only where the agreed convention differs
+from upstream, notably AHo.
+
+Use one Rust result model for the library, serde JSON and optional PyO3
+bindings, following the existing sequence-alignment API. Numbered residues
+hold typed positions, amino acids, input offsets, regions and optional
+imputation provenance. Keep the original input and domain span separate from
+the derived numbered sequence. Retain V/J matches and the coverage/correspondence
+needed to distinguish unknown reference sequence, alignment gaps and inferred
+residues. Convenience region strings are derived from the residue records.
+
+Reuse the sequence module's input conventions, BLOSUM62 scoring and alignment
+implementation. Preserve accepted input symbols rather than silently replacing
+`U/O` in the stored sequence. A germline match reports known-residue evidence
+separately from `SeqAlignment`'s literal-symbol identity. Share only the row/block
+layout needed by both renderers: names, positions, wrapping, operation styles,
+optional right labels and CDR backgrounds. Existing pairwise alignment semantics
+and displays must remain unchanged.
+
+### Milestones and completion criteria
+
+1. **Guarded numbering core** — `ab_numbering: add guarded numbering core`.
+   Pin Immunum 1.3.1 without default features; expose typed positions, scheme/CDR
+   choices and read-only numbered residues. Implement winning-profile selection,
+   recognition, domain-span handling and safe conversion before building the
+   higher-level germline result. Convert the winning alignment into internal
+   IMGT, the requested scheme and the CDR definition's scheme only as needed.
+   Complete when H/K/L examples work across all four schemes, the Chothia alias
+   and explicit CDR override differ correctly, and the span, long-insertion,
+   partial-domain and multiple-domain regressions pass without panics.
+
+2. **Offline references and V/J matching** —
+   `ab_numbering: match bundled V/J germlines`.
+   Package the three-species subset described in section 9.2 with reproducible
+   filtering, release/hash metadata and IMGT attribution. Keep runtime assets
+   outside `docs/`, which release packages omit. Preserve partial-reference
+   coverage and all source metadata. Add eager, separate V/J matching and the
+   public `number_antibody()` result; reuse alignment work for identical
+   sequence/coverage pairs while retaining every tied reference.
+   Complete when species restrictions, known-residue gates, deterministic ties,
+   ambiguous residues and missing V/J evidence have verified outcomes, including
+   mouse strain names and partial alpaca references.
+
+3. **Terminal imputation** —
+   `ab_numbering: impute terminal framework gaps`.
+   Add `.impute()` using the stored matches and correspondence, returning a new
+   object. Require tied references to agree on residue presence and known amino
+   acid unless the caller explicitly selects a reference.
+   Complete when beginning-FR1/end-FR4 examples fill only supported terminal
+   sequence, provenance and missing input offsets survive, and internal gaps,
+   CDRs, unknown input residues and the original object remain unchanged.
+
+4. **Numbered antibody alignment** —
+   `ab_numbering: align numbered antibodies`.
+   Build the scheme-ordered union of positions and one gapped string per input,
+   preserving row order and each antibody's regions. Add the stored and per-format
+   `reference_index` contract without introducing an alignment score.
+   Complete when reversed IMGT insertion ordering, absent columns, K/L mixtures,
+   incompatible chains/schemes and invalid reference indices behave correctly;
+   switching reference changes comparisons but not stored rows or columns.
+
+5. **Shared annotated display** —
+   `alignment: share annotated sequence rendering`.
+   Extend the existing renderer only enough for CDR backgrounds, per-row
+   comparisons, explicit position labels, coverage masks and the right-hand
+   J label. Render one antibody against the combined V/J row with gray junction
+   hyphens and blank markers. Render an `AntibodyAlignment` with the selected
+   antibody first and germlines hidden.
+   Complete when colored and plain output identify regions; terminal/explicit
+   widths account for both gutters; names are escaped; rulers and color controls
+   work; unavailable reference cells cannot appear as insertions/deletions; and
+   existing `SeqAlignment` display tests still pass.
+
+6. **Python and CLI integration** —
+   `api: expose antibody numbering and alignment`.
+   Export `NumberedAntibody`, `AntibodyAlignment`, their supporting public record
+   types, `number_antibody()` and `align_antibodies()`. Add `number-antibody` and
+   `align-antibodies`, including positional strings, comma-separated `--names`,
+   species/convention selection, `--reference-index`, JSON and display controls.
+   Use existing error/diagnostic conventions and update Python type contracts.
+   Complete when the rebuilt extension and an installed wheel expose the same
+   read-only data as CLI JSON, names default by position, invalid arguments fail
+   clearly, and Google-style docstrings explain defaults, selection rules,
+   examples and scientific sources.
+
+7. **Release qualification and documentation** —
+   `docs: qualify antibody numbering for release`.
+   Re-run the pinned engine comparison through Arpeggia's completed adapter;
+   record intentional changes separately from unexplained disagreements.
+   Measure numbering and matching costs; check existing sequence-alignment
+   runtime and package growth against the stacked parent using the same build
+   settings. Update usage, scientific conventions, benchmark
+   evidence and the changelog, then prepare the stacked PR.
+   Complete when the checks below pass and remaining limitations are explicit.
+
+Commit each working milestone after its relevant checks and
+`prek run --files <changed files>`. Keep documentation current with each code
+milestone; record user-visible changes in
+[CHANGELOG.md](https://github.com/y1zhou/arpeggia/blob/master/CHANGELOG.md) and add a
+concise cross-reference in the
+[cleanup audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md)
+when extending its earlier reuse work.
+Do not describe unfinished functionality as shipped or add iterative branch
+renames to the release changelog. Public documentation and docstrings link to
+GitHub's default branch so installed-package users can reach the references.
+
+### Qualification before the stacked PR
+
+The existing comparison is the baseline, not proof of antibody-numbering
+accuracy. Re-run all 26,365 inputs across the supported schemes, retaining
+rejections, warnings and per-input numbering/span differences. The accepted
+FR1-through-FR4 scope excludes ten original antibody-panel inputs; distinguish
+that restriction from a regression. Keep the malformed fixture-label exclusion
+unchanged. Confirm the coverage gate still rejects the negative controls and
+that the light-chain conversion/span defect is corrected.
+
+Supplement the panel with focused cases for conversion limits, tandem domains,
+tags and constant tails, mixed CDR definitions, supported terminal truncations,
+V/J ties, missing reference coverage and imputation. These exercise behavior the
+original panel did not qualify. Prefer public-result assertions over tests that
+merely repeat private helper logic.
+
+Follow the [locked build instructions](https://github.com/y1zhou/arpeggia/blob/master/BUILD.md)
+for Rust checks and rebuilding the Python extension. Run
+Python/CLI integration checks and `ty` where available. Smoke-test packaged
+artifacts offline: the reference bundle and attribution must be included even
+though research docs and benchmark inputs are excluded. Record compressed
+package and binary sizes, dependency additions, and repeated release-build
+timings for numbering alone, eager V/J matching and batch reuse. No performance
+or species-specific accuracy claim follows from the earlier concurrent
+three-engine comparison.
+
+### Remaining engineering choices and deferred scope
+
+Choose private field layouts, public supporting-record names, explicit-reference
+selector syntax for imputation, and the CDR background palette while implementing
+the agreed behavior. Document the exact coverage denominators and retain their
+counts. These choices must preserve tied-reference provenance and readable plain
+output. Return to the maintainer if qualification requires changing an accepted
+semantic rule or dropping a supported scheme; do not silently relax the guards.
+
+Constant-region numbering, structure-file input, severe partial domains,
+automatic handling of multiple domains, multi-letter insertion support and
+additional germline species remain future work. The initial implementation
+does not require another engine, runtime downloads or a new general-purpose
+multiple sequence alignment API.
 
 ## References and implementation records
 
