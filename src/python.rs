@@ -7,6 +7,8 @@ use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use std::ffi::CString;
 
+mod ab_numbering;
+
 fn value_enum<T: clap::ValueEnum>(value: &str, error: &'static str) -> PyResult<T> {
     T::from_str(&value.replace('_', "-"), true)
         .map_err(|_| pyo3::exceptions::PyValueError::new_err(error))
@@ -57,6 +59,25 @@ fn clustering_method(value: &str) -> PyResult<crate::ClusteringMethod> {
     value_enum(value, "method must be 'k-medoids'")
 }
 
+fn display_options(py: Python<'_>, width: Option<usize>, color: &str) -> PyResult<(usize, bool)> {
+    let color: crate::AlignmentColor =
+        value_enum(color, "color must be 'auto', 'always', or 'never'")?;
+    let stdout = py.import("sys")?.getattr("stdout")?;
+    let terminal = stdout
+        .call_method0("isatty")
+        .and_then(|v| v.extract::<bool>())
+        .unwrap_or(false);
+    let width = match width {
+        Some(width) => width,
+        None => py
+            .import("shutil")?
+            .call_method0("get_terminal_size")?
+            .getattr("columns")?
+            .extract()?,
+    };
+    Ok((width, crate::seq_alignment::color_enabled(color, terminal)))
+}
+
 #[pymethods]
 impl crate::SeqAlignment {
     /// Format statistics and three alignment rows, optionally with position rulers.
@@ -84,28 +105,10 @@ impl crate::SeqAlignment {
         color: &str,
         rulers: bool,
     ) -> PyResult<String> {
-        let color: crate::AlignmentColor =
-            value_enum(color, "color must be 'auto', 'always', or 'never'")?;
-        let stdout = py.import("sys")?.getattr("stdout")?;
-        let terminal = stdout
-            .call_method0("isatty")
-            .and_then(|v| v.extract::<bool>())
-            .unwrap_or(false);
-        let width = match width {
-            Some(width) => width,
-            None => py
-                .import("shutil")?
-                .call_method0("get_terminal_size")?
-                .getattr("columns")?
-                .extract()?,
-        };
-        self.render(
-            width,
-            crate::seq_alignment::color_enabled(color, terminal),
-            rulers,
-        )
-        .map_err(python_error)
+        let (width, color) = display_options(py, width, color)?;
+        self.render(width, color, rulers).map_err(python_error)
     }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         self.format_python(py, None, "auto", true)
     }
@@ -991,6 +994,7 @@ fn sc(
 /// including contact detection, SASA calculation, SAP score calculation, and sequence extraction.
 #[pymodule]
 fn arpeggia(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    ab_numbering::register(m)?;
     m.add_class::<crate::SeqAlignment>()?;
     m.add_class::<crate::RmsdResult>()?;
     m.add_class::<crate::ChainAlignment>()?;

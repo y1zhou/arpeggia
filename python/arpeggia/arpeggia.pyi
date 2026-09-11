@@ -1,5 +1,6 @@
 """Type stubs for the arpeggia Rust module."""
 
+from collections.abc import Sequence
 from typing import Literal
 
 import polars as pl
@@ -7,8 +8,11 @@ import polars as pl
 from ._contract import (
     AlignmentMode,
     AtomSubset,
+    CdrDefinition,
     ClusteringMethod,
     DsasaComponents,
+    GermlineSpecies,
+    NumberingScheme,
     ProtonationMode,
     SapLevel,
     SasaLevel,
@@ -695,3 +699,343 @@ class RmsdResult:
     def rmsd_residues(self) -> str: ...
     @property
     def chain_alignments(self) -> list[ChainAlignment]: ...
+
+def number_antibody(
+    sequence: str,
+    *,
+    name: str = "Seq001",
+    scheme: NumberingScheme | None = None,
+    cdr_definition: CdrDefinition = "auto",
+    species: GermlineSpecies | Sequence[GermlineSpecies] | None = None,
+) -> NumberedAntibody:
+    """Number one variable domain and compute separate, tied V/J similarities.
+
+    Args:
+        sequence (str): Unaligned amino-acid input; tags and constant tails are
+            retained. Only terminal FR1/FR4 truncations are supported.
+        name (str): Display name, default Seq001.
+        scheme (str | None): IMGT by default; Martin, AHo and Kabat are supported.
+            Chothia aliases Martin numbering.
+        cdr_definition (str): Auto follows the scheme. An explicit definition
+            requires an explicit scheme; Chothia uses distinct consensus regions.
+        species (str | Sequence[str] | None): Human, mouse, alpaca, or a sequence
+            of these names. None searches all bundled references.
+
+    Returns:
+        NumberedAntibody: Read-only residue correspondence, region sequences,
+            confidence, diagnostics and V/J matches; missing matches are None.
+
+    Raises:
+        ValueError: Invalid input or options.
+        RuntimeError: Unsupported domain, truncation, or insertion length.
+
+    Conventions and citations:
+    https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md
+    IMGT: https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html
+    Martin/AbM: https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/
+    AHo: https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f
+    """
+
+def align_antibodies(
+    antibodies: Sequence[NumberedAntibody], *, reference_index: int = 0
+) -> AntibodyAlignment:
+    """Align compatible antibodies by numbered positions.
+
+    Args:
+        antibodies (Sequence[NumberedAntibody]): One or more antibodies in one
+            scheme, all heavy or all light. K/L mixtures are supported.
+        reference_index (int): Zero-based comparison reference, default 0.
+
+    Returns:
+        AntibodyAlignment: Antibodies and gapped rows stored in input order.
+            Display places the reference first and hides germlines.
+
+    Raises:
+        ValueError: Empty/incompatible inputs or invalid reference index.
+    """
+
+class NumberedAntibody:
+    """Read-only NumberedAntibody result; constructed by the antibody analysis functions."""
+
+    @property
+    def name(self) -> str:
+        """Display name."""
+
+    @property
+    def input_sequence(self) -> str:
+        """Complete normalized input, including unnumbered tails."""
+
+    @property
+    def domain_span(self) -> tuple[int, int]:
+        """Zero-based, half-open numbered span in the original input."""
+
+    @property
+    def chain(self) -> str:
+        """Detected H, K or L chain class."""
+
+    @property
+    def scheme(self) -> str:
+        """Resolved numbering convention."""
+
+    @property
+    def cdr_definition(self) -> str:
+        """Resolved CDR convention."""
+
+    @property
+    def residues(self) -> list[NumberedResidue]:
+        """Ordered residue correspondence."""
+
+    @property
+    def confidence(self) -> float:
+        """Profile confidence heuristic; not a probability of correct numbering."""
+
+    @property
+    def matched_profile_positions(self) -> int:
+        """Distinct profile positions with matched input residues, excluding insertions."""
+
+    @property
+    def diagnostics(self) -> list[str]:
+        """Recoverable limitations of this annotation."""
+
+    @property
+    def v_match(self) -> GermlineMatch | None:
+        """Best qualifying V similarities, or none when reference evidence is insufficient."""
+
+    @property
+    def j_match(self) -> GermlineMatch | None:
+        """Best qualifying J similarities, or none when reference evidence is insufficient."""
+
+    @property
+    def sequence(self) -> str:
+        """Derived sequence sequence under this antibody's CDR definition."""
+
+    @property
+    def fr1(self) -> str:
+        """Derived fr1 sequence under this antibody's CDR definition."""
+
+    @property
+    def cdr1(self) -> str:
+        """Derived cdr1 sequence under this antibody's CDR definition."""
+
+    @property
+    def fr2(self) -> str:
+        """Derived fr2 sequence under this antibody's CDR definition."""
+
+    @property
+    def cdr2(self) -> str:
+        """Derived cdr2 sequence under this antibody's CDR definition."""
+
+    @property
+    def fr3(self) -> str:
+        """Derived fr3 sequence under this antibody's CDR definition."""
+
+    @property
+    def cdr3(self) -> str:
+        """Derived cdr3 sequence under this antibody's CDR definition."""
+
+    @property
+    def fr4(self) -> str:
+        """Derived fr4 sequence under this antibody's CDR definition."""
+
+    def impute(
+        self, *, v_reference: str | None = None, j_reference: str | None = None
+    ) -> NumberedAntibody:
+        """Fill supported terminal FR1/FR4 residues in a new object.
+
+        Args:
+            v_reference (str | None): Exact tied V reference ID; None requires
+                all tied references to agree on presence and a known residue.
+            j_reference (str | None): Equivalent selector for J references.
+
+        Returns:
+            NumberedAntibody: Original input/span preserved, with source IDs
+                and input_index=None for added residues. Internal gaps and
+                unknown input residues remain unchanged.
+
+        Raises:
+            ValueError: Unknown reference selector.
+        """
+
+    def format(
+        self,
+        width: int | None = None,
+        color: Literal["auto", "always", "never"] = "auto",
+        rulers: bool = True,
+    ) -> str:
+        """Render wrapped sequences with CDR regions and optional numbered rulers.
+
+        Args:
+            width (int | None): Total columns including labels; None detects
+                terminal width with an 80-column fallback.
+            color (str): Auto uses terminal support and NO_COLOR; always/never
+                override it. Stored fields remain plain.
+            rulers (bool): Show numbered rulers by default; endpoint numbers
+                and plain CDR region labels remain when False.
+
+        Returns:
+            str: Styled or plain alignment text.
+
+        Raises:
+            ValueError: Invalid display options or insufficient width.
+        """
+
+class AntibodyAlignment:
+    """Read-only AntibodyAlignment result; constructed by the antibody analysis functions."""
+
+    @property
+    def antibodies(self) -> list[NumberedAntibody]:
+        """Original numbered antibodies, retaining their CDR definitions and germlines."""
+
+    @property
+    def positions(self) -> list[NumberedPosition]:
+        """Ordered union of numbered positions."""
+
+    @property
+    def aligned_sequences(self) -> list[str]:
+        """One plain gapped sequence per input, in original row order."""
+
+    @property
+    def reference_index(self) -> int:
+        """Zero-based input row used as the display comparison reference."""
+
+    def format(
+        self,
+        width: int | None = None,
+        color: Literal["auto", "always", "never"] = "auto",
+        rulers: bool = True,
+        *,
+        reference_index: int | None = None,
+    ) -> str:
+        """Render wrapped sequences with CDR regions and optional numbered rulers.
+
+        Args:
+            width (int | None): Total columns including labels; None detects
+                terminal width with an 80-column fallback.
+            color (str): Auto uses terminal support and NO_COLOR; always/never
+                override it. Stored fields remain plain.
+            rulers (bool): Show numbered rulers by default; endpoint numbers
+                and plain CDR region labels remain when False.
+            reference_index (int | None): Zero-based reference override for
+                this rendering, preserving stored row order and reference.
+
+        Returns:
+            str: Styled or plain alignment text.
+
+        Raises:
+            ValueError: Invalid display options or insufficient width.
+        """
+
+class NumberedPosition:
+    """Read-only NumberedPosition result; constructed by the antibody analysis functions."""
+
+    @property
+    def number(self) -> int:
+        """Position number in the selected scheme."""
+
+    @property
+    def insertion(self) -> str | None:
+        """Insertion letter, when present."""
+
+class NumberedResidue:
+    """Read-only NumberedResidue result; constructed by the antibody analysis functions."""
+
+    @property
+    def position(self) -> NumberedPosition:
+        """Numbered position."""
+
+    @property
+    def amino_acid(self) -> str:
+        """Supplied amino-acid symbol."""
+
+    @property
+    def input_index(self) -> int | None:
+        """Zero-based index in the original input; absent for imputed residues."""
+
+    @property
+    def region(self) -> str:
+        """FR1, CDR1, FR2, CDR2, FR3, CDR3 or FR4."""
+
+    @property
+    def imputed_from(self) -> list[str]:
+        """Source reference IDs for an imputed residue; empty for supplied residues."""
+
+class GermlineReference:
+    """Read-only GermlineReference result; constructed by the antibody analysis functions."""
+
+    @property
+    def id(self) -> str:
+        """Stable reference selector: accession, gene/allele, species and source span."""
+
+    @property
+    def species(self) -> str:
+        """Full source species name, including any strain/subspecies suffix."""
+
+    @property
+    def gene(self) -> str:
+        """Gene name without allele suffix."""
+
+    @property
+    def allele(self) -> str:
+        """Allele suffix."""
+
+    @property
+    def accession(self) -> str:
+        """Source sequence accession."""
+
+class GermlineHit:
+    """Read-only GermlineHit result; constructed by the antibody analysis functions."""
+
+    @property
+    def references(self) -> list[GermlineReference]:
+        """All references sharing this sequence and coverage, sorted by source identity."""
+
+    @property
+    def alignment(self) -> SeqAlignment:
+        """Optimal local reference-to-input alignment with BLOSUM62 and gap costs 10/0.5."""
+
+    @property
+    def query_input_start(self) -> int:
+        """Input index corresponding to query index zero in the segment alignment."""
+
+    @property
+    def imgt_positions(self) -> list[NumberedPosition | None]:
+        """Internal IMGT positions per reference residue. J junction residues have none."""
+
+    @property
+    def imgt_span(self) -> tuple[int, int]:
+        """One-based, half-open span of available IMGT reference coverage."""
+
+    @property
+    def known_pairs(self) -> int:
+        """Nongap pairs where both residues are among the 20 standard amino acids."""
+
+    @property
+    def known_matches(self) -> int:
+        """Identical standard-amino-acid pairs."""
+
+    @property
+    def known_fr4_pairs(self) -> int:
+        """Known pairs in the input's IMGT FR4 (118–128)."""
+
+    @property
+    def known_identity(self) -> float:
+        """Known matches divided by known pairs."""
+
+    @property
+    def reference_coverage(self) -> float:
+        """Known pairs divided by all standard residues in the reference segment."""
+
+    @property
+    def query_coverage(self) -> float:
+        """Known pairs divided by all standard residues in the input segment."""
+
+class GermlineMatch:
+    """Read-only GermlineMatch result; constructed by the antibody analysis functions."""
+
+    @property
+    def score(self) -> float:
+        """Maximum qualifying local alignment score."""
+
+    @property
+    def hits(self) -> list[GermlineHit]:
+        """Tied sequence/coverage groups; the first is the display representative."""

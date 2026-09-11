@@ -20,13 +20,16 @@ This is a port of the [Arpeggio](https://github.com/PDBeurope/arpeggio/) library
 | `seq()` | `seq` | Coordinate-observed protein sequences. |
 | `seqres()` | `seqres` | Declared sequences, including residues without coordinates. |
 | `align_seqs()` | `align-seqs` | Gapped pairwise alignment, identity, score, and edit distance. |
+| `number_antibody()` | `number-antibody` | Antibody numbering, CDRs, germline similarities, and terminal imputation. |
+| `align_antibodies()` | `align-antibodies` | Compare antibodies at shared numbered positions. |
 | `rmsd()` | `rmsd` | Structural fit/evaluation with optional sequence alignment and rejection. |
 | `pairwise_rmsd()` | `cluster-structs --pairwise-rmsd`¹ | Pairwise RMSD table for exactly corresponding structures. |
 | `cluster_structs()` | `cluster-structs` | K-medoids clustering and representative structures. |
 
 ¹ The CLI writes the pair table as part of clustering; Python can calculate it independently.
 
-See [sequence alignment](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md),
+See [antibody numbering](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md),
+[sequence alignment](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md),
 [structure comparison](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md), and
 [scientific conventions](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md) for usage and assumptions.
 

@@ -457,3 +457,82 @@ fn alignment_display_flags_preserve_plain_json_and_wrapping() {
     assert!(data.get("columns").is_none());
     assert!(!run(&["--width", "1"]).status.success());
 }
+
+const ANTIBODY_SEQUENCE: &str = "QVQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGGVIPLLTITNYAPRFQGRITITADRSTSTAYLELNSLRPEDTAVYYCAREGTTGKPIGAFAHWGQGTLVTVSS";
+
+#[test]
+fn antibody_cli_preserves_names_and_structured_numbering() {
+    let output = arpeggia()
+        .args([
+            "number-antibody",
+            ANTIBODY_SEQUENCE,
+            "--name",
+            "WT",
+            "--scheme",
+            "chothia",
+            "--species",
+            "human",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["name"], "WT");
+    assert_eq!(result["scheme"], "martin");
+    assert_eq!(result["cdr_definition"], "martin");
+    assert!(result["residues"].as_array().unwrap().len() > 100);
+    assert!(result["v_match"]["hits"].is_array());
+    assert!(!output.stdout.contains(&0x1b));
+    let output = arpeggia()
+        .args([
+            "align-antibodies",
+            ANTIBODY_SEQUENCE,
+            ANTIBODY_SEQUENCE,
+            ANTIBODY_SEQUENCE,
+            "--names",
+            "WT,,Mutant",
+            "--reference-index",
+            "2",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["reference_index"], 2);
+    assert_eq!(result["antibodies"][0]["name"], "WT");
+    assert_eq!(result["antibodies"][1]["name"], "Seq002");
+    assert_eq!(result["antibodies"][2]["name"], "Mutant");
+}
+
+#[test]
+fn antibody_cli_rejects_invalid_names_and_conventions() {
+    for options in [
+        vec!["align-antibodies", ANTIBODY_SEQUENCE, "--names", "one,two"],
+        vec![
+            "number-antibody",
+            ANTIBODY_SEQUENCE,
+            "--cdr-definition",
+            "chothia",
+        ],
+        vec![
+            "align-antibodies",
+            ANTIBODY_SEQUENCE,
+            "--reference-index",
+            "1",
+        ],
+    ] {
+        let output = arpeggia().args(options).output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("invalid argument"));
+    }
+}

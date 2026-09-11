@@ -26,13 +26,13 @@ impl AlignmentArgs {
 pub(crate) struct DisplayArgs {
     /// Total alignment line width, including labels (default: terminal width or 80)
     #[arg(long)]
-    width: Option<usize>,
+    pub(crate) width: Option<usize>,
     /// Color policy; auto respects terminal capability and NO_COLOR
     #[arg(long, value_enum, default_value = "auto")]
-    color: AlignmentColor,
+    pub(crate) color: AlignmentColor,
     /// Hide position rulers; retain sequence start/end numbers
     #[arg(long)]
-    no_rulers: bool,
+    pub(crate) no_rulers: bool,
 }
 impl DisplayArgs {
     pub(crate) fn format(&self, alignment: &arpeggia::SeqAlignment) -> ArpeggiaResult<String> {

@@ -60,7 +60,7 @@ jobs:
           locked: true
           # (optional) Comma-separated list of additional files to be included to archive.
           # Note that glob pattern is not supported yet.
-          include: LICENSE,README.md
+          include: LICENSE,README.md,data/germlines/README.md
           # (optional) Whether to create the leading directory in the archive or not. default to false.
           leading-dir: true
           # (required) GitHub token for uploading assets to GitHub Releases.

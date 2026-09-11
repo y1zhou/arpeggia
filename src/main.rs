@@ -17,6 +17,10 @@ struct Cli {
 
 #[derive(Subcommand, Clone)]
 enum Commands {
+    /// Number one antibody variable domain and compare its V/J germline references
+    NumberAntibody(crate::cli::ab_numbering::NumberArgs),
+    /// Align antibody sequences by numbered positions
+    AlignAntibodies(crate::cli::ab_numbering::AlignArgs),
     /// Align two unaligned protein sequences
     AlignSeqs(crate::cli::align_seqs::Args),
     /// Superpose two structures and report fitting and evaluation RMSD
@@ -55,6 +59,8 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
     let result: ArpeggiaResult<()> = match &cli.command {
+        Commands::NumberAntibody(args) => crate::cli::ab_numbering::run_number(args),
+        Commands::AlignAntibodies(args) => crate::cli::ab_numbering::run_alignment(args),
         Commands::AlignSeqs(args) => crate::cli::align_seqs::run(args),
         Commands::Rmsd(args) => crate::cli::rmsd::run(args),
         Commands::ClusterStructs(args) => crate::cli::cluster_structs::run(args),

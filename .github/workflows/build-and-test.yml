@@ -3,7 +3,7 @@ name: Build and test
 on:
   workflow_dispatch: # manual trigger
   pull_request:
-    branches: ["master"]
+    branches: ["master", "feat/**"]
     types:
       - opened
       - synchronize
@@ -16,6 +16,7 @@ on:
       - python/**
       - tests/**
       - test-data/**
+      - data/**
       - pyproject.toml
       - uv.lock
       - .github/workflows/**
@@ -60,4 +61,4 @@ jobs:
         run: uv run --no-sync pytest python/tests/ -v
 
       - name: Check Python types
-        run: uv run --no-sync ty check python
+        run: uv run --no-sync ty check python data/germlines/prepare.py

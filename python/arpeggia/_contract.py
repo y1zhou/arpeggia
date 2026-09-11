@@ -1,8 +1,22 @@
 """Shared Python exposure contract for arpeggia."""
 
-EXPORTED_CLASSES = ("SeqAlignment", "RmsdResult", "ChainAlignment", "ResiduePair")
+EXPORTED_CLASSES = (
+    "SeqAlignment",
+    "RmsdResult",
+    "ChainAlignment",
+    "ResiduePair",
+    "NumberedAntibody",
+    "AntibodyAlignment",
+    "NumberedPosition",
+    "NumberedResidue",
+    "GermlineReference",
+    "GermlineHit",
+    "GermlineMatch",
+)
 
 EXPORTED_FUNCTIONS = (
+    "number_antibody",
+    "align_antibodies",
     "align_seqs",
     "rmsd",
     "pairwise_rmsd",

@@ -28,3 +28,15 @@ def alignment_api_types() -> tuple[arpeggia.SeqAlignment, float | None]:
     """Check the typed alignment object and its empty-alignment ratio."""
     result = arpeggia.align_seqs("ACDE", "ACD", mode="semi-global")
     return result, result.identity_alignment
+
+
+def antibody_api_types(
+    sequence: str,
+) -> tuple[arpeggia.NumberedAntibody, arpeggia.AntibodyAlignment, str]:
+    """Check antibody classes, region views, imputation and numbered alignments."""
+    antibody = arpeggia.number_antibody(
+        sequence, scheme="imgt", species=["human", "alpaca"]
+    )
+    completed = antibody.impute()
+    comparison = arpeggia.align_antibodies([antibody, completed], reference_index=1)
+    return antibody, comparison, comparison.format(color="never", reference_index=0)

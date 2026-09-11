@@ -1,0 +1,173 @@
+# Antibody numbering
+
+`number_antibody()` identifies one antibody variable domain, numbers its
+residues, assigns framework/CDR regions, and finds the closest bundled V and J
+references. `align_antibodies()` compares numbered positions across antibodies.
+Both accept protein sequences; no structure file or network connection is needed.
+
+## Python
+
+```python
+import arpeggia
+
+sequence = (
+    "EVQLVESGGGLVQPGGSLRLSCAASGFTFSSYAMSWVRQAPGKGLEWVSAISGSGGSTYYADSVKGR"
+    "FTISRDNSKNTLYLQMNSLRAEDTAVYYCAKDRGGYFDYWGQGTLVTVSS"
+)
+antibody = arpeggia.number_antibody(sequence, name="WT")
+print(antibody)
+print(antibody.cdr1, antibody.cdr2, antibody.cdr3)
+for residue in antibody.residues:
+    print(str(residue.position), residue.amino_acid, residue.input_index)
+
+variant = arpeggia.number_antibody(sequence.replace("SSYAMS", "SSYALS"), name="Mutant")
+alignment = arpeggia.align_antibodies([antibody, variant], reference_index=0)
+print(alignment.format(width=100, color="never", rulers=False))
+```
+
+`NumberedAntibody` and its residue/reference records have read-only properties.
+`input_sequence` retains the normalized complete input; `domain_span` is a
+zero-based, half-open interval in that input. `.sequence` contains the numbered
+residues only. `.fr1`, `.fr2`, `.fr3`, `.fr4`, `.cdr1`, `.cdr2`, and `.cdr3` are
+strings under the selected CDR definition. Each residue carries its numbered
+position, amino acid, original zero-based `input_index`, and region.
+
+`chain` is `H`, `K`, or `L`. `confidence` is the numbering engine's normalized
+alignment score, not a probability of correctness. `matched_profile_positions`
+measures domain evidence without counting insertions. Diagnostics remain in
+`.diagnostics`; Python also emits them as `UserWarning`.
+
+## CLI
+
+Set `sequence` to the amino-acid string above, then run:
+
+```bash
+arpeggia number-antibody "$sequence" --name WT --scheme imgt --species human,alpaca
+arpeggia number-antibody "$sequence" --scheme martin --cdr-definition chothia --json
+arpeggia align-antibodies "$sequence" "$sequence" --names WT,Replicate --reference-index 1
+```
+
+The positional arguments are sequence strings. `--names` assigns names in input
+order; omitted or empty entries become `Seq001`, `Seq002`, and so on. Excess
+names are an error. `--reference-index` is zero-based. `--json` emits plain
+structured data, including tied references and imputation provenance.
+
+## Numbering and CDR conventions
+
+IMGT is the default. `scheme` / `--scheme` also accepts `martin`, `aho`, and
+`kabat`; `chothia` is an alias for Martin/enhanced Chothia numbering.
+`cdr_definition="auto"` uses the associated boundaries below. To override them,
+explicitly provide both the numbering scheme and CDR definition.
+
+| CDR definition | Heavy CDR1 / CDR2 / CDR3 | Light CDR1 / CDR2 / CDR3 |
+| --- | --- | --- |
+| IMGT | 27–38 / 56–65 / 105–117 | 27–38 / 56–65 / 105–117 |
+| Martin/AbM | 26–35 / 50–58 / 95–102 | 24–34 / 50–56 / 89–97 |
+| AHo structural loops | 25–40 / 58–77 / 109–137 | 25–40 / 58–77 / 109–137 |
+| Kabat | 31–35 / 50–65 / 95–102 | 24–34 / 50–56 / 89–97 |
+| Explicit Chothia | 26–32 / 52–56 / 96–101 | 26–32 / 50–52 / 91–96 |
+
+Ranges are inclusive in each definition's native numbering, including insertions
+at boundary positions. Mixed conventions transfer regions through the original
+residue correspondence; they do not apply these numbers directly to labels from
+another scheme. Thus `scheme="chothia"` uses Martin numbering and Martin/AbM
+regions, while `scheme="martin", cdr_definition="chothia"` uses the distinct
+Chothia regions.
+
+Sources: [IMGT numbering](https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html),
+[Martin/AbM and Kabat definitions](https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/),
+[AHo structural loops](https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f),
+and the [upstream Chothia consensus table](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering/chothia.rs#L16).
+
+## Germline similarities
+
+Offline references cover human and mouse H/K/L and alpaca heavy chains, including
+VHH references. Search uses all bundled species by default; restrict it with
+`species="human"`, `species=["human", "alpaca"]`, or CLI `--species human,alpaca`.
+Reported species identify references, not the organism of the input antibody.
+See the [reference snapshot and attribution](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md)
+for source coverage, filtering, and known partial references.
+
+`.v_match` and `.j_match` separately retain the highest qualifying local
+BLOSUM62 score and all exact ties. V matching uses sequence through internal
+IMGT 104; J matching uses sequence after it and requires FR4 evidence. A V hit
+needs at least 50 known paired residues; J needs five known pairs within both
+reference and input FR4. Insufficient evidence returns `None` with a diagnostic.
+
+Each match's `.hits` groups references with identical sequence and coverage.
+A hit stores its actual `SeqAlignment`, reference metadata, and these measures:
+
+| Field | Meaning |
+| --- | --- |
+| `known_pairs`, `known_matches` | Paired canonical amino acids and identical pairs |
+| `known_identity` | Known matches / known pairs |
+| `reference_coverage` | Known pairs / known residues in the reference segment |
+| `query_coverage` | Known pairs / known residues in the input segment |
+| `query_input_start` | Input offset of the segment used by the alignment |
+| `imgt_positions` | Reference residue positions; unavailable labels are `None` |
+
+Ambiguous symbols and `U/O` do not count as known evidence. Metadata preserve
+species, gene, allele, accession, and a stable snapshot-specific reference ID.
+These are V/J similarities; they do not identify a unique ancestor or infer D.
+
+## Terminal imputation
+
+```python
+partial = arpeggia.number_antibody(sequence[5:-3], name="Partial")
+filled = partial.impute()
+added = [residue for residue in filled.residues if residue.input_index is None]
+```
+
+Imputation returns a new object and fills only missing beginnings of FR1 or ends
+of FR4. It preserves the supplied input, domain span, existing positions, internal
+gaps, CDRs, and unknown input residues. Added residues have `input_index=None`
+and `.imputed_from` reference IDs. Scores and coverage still describe the
+supplied input.
+
+Tied references must agree on a position's presence and known amino acid.
+Conflicts or unavailable coverage remain unresolved with diagnostics. To choose
+a specific tied reference, pass its exact `.references[i].id` to
+`.impute(v_reference=..., j_reference=...)`. CLI equivalents are `--impute`,
+`--v-reference`, and `--j-reference`; inspect `--json` to obtain IDs.
+
+## Display and antibody alignments
+
+A single antibody displays against a combined V/J row, with the V gene on the
+left and J gene on the right. Gray hyphens across the uncovered junction have
+blank operation markers. Separate V/J summaries retain their scores and ties.
+
+CDR1, CDR2, and CDR3 have distinct backgrounds and plain-text region labels.
+Matches have blank markers; insertions are green `+`, deletions red `-`,
+positive-BLOSUM62 substitutions blue `:`, and other mismatches yellow `x`.
+Unmatched tails are gray. Rulers use canonical numbered positions.
+
+Python `.format(width=None, color="auto", rulers=True)` and CLI `--width`,
+`--color auto|always|never`, and `--no-rulers` control the layout. Width includes
+names and position gutters; automatic color follows terminal support and
+`NO_COLOR`. Stored strings and JSON contain no ANSI escapes.
+
+`AntibodyAlignment` stores the ordered union of `.positions`, corresponding
+`.aligned_sequences`, original-order `.antibodies`, and `.reference_index`.
+All antibodies must use one numbering scheme and be all heavy or all light;
+K/L mixtures and differing per-row CDR definitions are allowed. Alignment follows
+numbered positions and has no multiple-alignment score.
+
+The selected reference displays first, followed by the remaining inputs in their
+original relative order. Germline rows are hidden, including for a one-antibody
+alignment. `.format(reference_index=...)` changes one display without changing
+stored rows, columns, or the default reference.
+
+## Scope and qualification
+
+The adapter uses Immunum 1.3.1's Rust core. Inputs must contain one recognizable
+variable domain spanning FR1 through FR4; modest terminal FR1/FR4 truncations
+are supported. Tags and constant-region tails are allowed but remain unnumbered.
+Detected additional domains, severe partial domains, and insertions exceeding
+the backend's single-letter representation produce errors. Recognition is a
+heuristic and does not establish biological origin or numbering correctness.
+
+Constant-region numbering, structure inputs, automatic multidomain handling,
+and additional germline species are deferred. The
+[qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
+records fixture agreement and limits; [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md)
+records the API decisions.

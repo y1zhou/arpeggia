@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Rust antibody variable-domain numbering with IMGT, Martin, AHo and Kabat,
+- `number_antibody()` / `number-antibody` provide antibody variable-domain numbering with IMGT, Martin, AHo and Kabat,
   explicit CDR conventions, residue/input correspondence, and guards for weak
   matches, severe truncations, multiple domains and unsupported insertions.
 - Offline human, mouse and alpaca V/J germline similarities, with explicit
@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserves original input indices and reference provenance. Tied references
   must agree, with optional explicit reference selection; internal gaps, CDRs
   and unknown input residues remain unchanged.
-- `AntibodyAlignment` aligns one or more numbered antibodies through the ordered
+- `align_antibodies()` / `align-antibodies` return `AntibodyAlignment` objects
+  for one or more numbered antibodies through the ordered
   union of positions, preserving input row order and per-row CDR definitions.
   Heavy/light mixing and incompatible schemes fail; K/L mixtures are supported.
 - Antibody displays combine V/J references with separate gene labels and gray

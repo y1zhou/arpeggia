@@ -514,3 +514,102 @@ def test_alignment_display_controls(monkeypatch):
         alignment.format(width=1)
     with pytest.raises(ValueError, match="color"):
         alignment.format(color="bad")  # ty: ignore[invalid-argument-type] -- verify runtime validation
+
+
+ANTIBODY_SEQUENCE = (
+    "QVQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGGVIPLLTITNYAPRFQ"
+    "GRITITADRSTSTAYLELNSLRPEDTAVYYCAREGTTGKPIGAFAHWGQGTLVTVSS"
+)
+
+
+def test_antibody_api_and_germline_correspondence():
+    """Expose immutable numbered residues and tied, attributed reference matches."""
+    import arpeggia
+    from arpeggia.ab_numbering import number_antibody
+
+    antibody = number_antibody(ANTIBODY_SEQUENCE, name="WT", species="human")
+    assert isinstance(antibody, arpeggia.NumberedAntibody)
+    assert antibody.chain == "H" and antibody.scheme == "imgt"
+    assert antibody.sequence == ANTIBODY_SEQUENCE
+    assert (
+        "".join([
+            antibody.fr1,
+            antibody.cdr1,
+            antibody.fr2,
+            antibody.cdr2,
+            antibody.fr3,
+            antibody.cdr3,
+            antibody.fr4,
+        ])
+        == antibody.sequence
+    )
+    assert antibody.residues[0].input_index == 0
+    assert str(antibody.residues[0].position) == "1"
+    assert antibody.v_match is not None and antibody.j_match is not None
+    hit = antibody.v_match.hits[0]
+    assert (
+        hit.alignment.query
+        == ANTIBODY_SEQUENCE[: antibody.j_match.hits[0].query_input_start]
+    )
+    assert hit.known_pairs >= 50 and 0 <= hit.known_identity <= 1
+    assert all(ref.species.startswith("Homo sapiens") for ref in hit.references)
+    with pytest.raises(AttributeError):
+        cast(Any, antibody).name = "changed"
+    with pytest.raises(AttributeError):
+        cast(Any, antibody.residues[0]).amino_acid = "X"
+    with pytest.raises(ValueError, match="explicit scheme"):
+        number_antibody(ANTIBODY_SEQUENCE, cdr_definition="chothia")
+    with pytest.raises(RuntimeError, match="multiple variable domains"):
+        number_antibody(ANTIBODY_SEQUENCE + "GGGGSGGGGS" + ANTIBODY_SEQUENCE)
+    alias = number_antibody(ANTIBODY_SEQUENCE, scheme="chothia", species=["human"])
+    assert alias.scheme == alias.cdr_definition == "martin"
+
+
+def test_antibody_imputation_is_explicit_and_preserves_input():
+    """Preserve observations when terminal imputation adds inferred residues."""
+    import arpeggia
+
+    original = ANTIBODY_SEQUENCE[5:-3]
+    with pytest.warns(UserWarning, match="PARTIAL_DOMAIN"):
+        partial = arpeggia.number_antibody(original, species="human")
+    assert partial.v_match is not None and partial.j_match is not None
+    completed = partial.impute(
+        v_reference=partial.v_match.hits[0].references[0].id,
+        j_reference=partial.j_match.hits[0].references[0].id,
+    )
+    assert completed.input_sequence == partial.input_sequence == original
+    assert completed.domain_span == partial.domain_span
+    assert len(completed.sequence) > len(original)
+    observed = [r for r in completed.residues if r.input_index is not None]
+    assert "".join(r.amino_acid for r in observed) == original
+    assert all(r.imputed_from for r in completed.residues if r.input_index is None)
+    assert all(r.input_index is not None for r in partial.residues)
+    assert "imputed residues:" in completed.format(color="never")
+
+
+def test_antibody_display_and_reference_override(monkeypatch):
+    """Keep presentation choices separate from stored rows and reference selection."""
+    import io
+    import sys
+
+    import arpeggia
+
+    first = arpeggia.number_antibody(ANTIBODY_SEQUENCE, name="first")
+    second = arpeggia.number_antibody(ANTIBODY_SEQUENCE, name="second")
+    alignment = arpeggia.align_antibodies([first, second], reference_index=0)
+    assert alignment.aligned_sequences[0].replace("-", "") == first.sequence
+    plain = alignment.format(width=60, color="never", rulers=False, reference_index=1)
+    assert plain.index("second") < plain.index("first")
+    assert "IGHV" not in plain and "IGHJ" not in plain
+    assert alignment.reference_index == 0 and alignment.antibodies[0].name == "first"
+    assert all(len(line) <= 60 for line in plain.splitlines())
+    assert "\x1b[" in alignment.format(color="always")
+    assert "CDR1" in first.format(color="never")
+    assert "IGHJ" in first.format(color="never")
+    with pytest.raises(ValueError, match="reference_index"):
+        alignment.format(reference_index=3)
+    with pytest.raises(ValueError, match="width"):
+        first.format(width=1)
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    assert "\x1b" not in repr(first)
+    assert "\x1b" not in repr(alignment)

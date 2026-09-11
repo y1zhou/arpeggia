@@ -37,6 +37,10 @@
   Structure clustering uses the resulting
   pairwise RMSD matrix and observed medoid structures; it does not perform
   sequence alignment or add missing atoms.
+- [Antibody numbering](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+  distinguishes numbered positions from CDR definitions. Separate V/J similarities
+  retain tied references; explicit imputation fills only supported terminal
+  framework residues and records their provenance.
 
 ## Contact-identification decision path
 
