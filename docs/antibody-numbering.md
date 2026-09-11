@@ -27,8 +27,10 @@ print(alignment.format(width=100, color="never", rulers=False))
 
 `NumberedAntibody` and its residue/reference records have read-only properties.
 `input_sequence` retains the normalized complete input; `domain_span` is a
-zero-based, half-open interval in that input. `.sequence` contains the numbered
-residues only. `.fr1`, `.fr2`, `.fr3`, `.fr4`, `.cdr1`, `.cdr2`, and `.cdr3` are
+zero-based, half-open interval in that input. For example, `(5, 125)` identifies
+input residues 6–125 in one-based notation: 120 supplied residues, excluding any
+flanking tags or constant sequence. Imputation preserves this original interval.
+`.sequence` contains the numbered residues only. `.fr1`, `.fr2`, `.fr3`, `.fr4`, `.cdr1`, `.cdr2`, and `.cdr3` are
 strings under the selected CDR definition. Each residue carries its numbered
 position, amino acid, original zero-based `input_index`, and region.
 
@@ -131,6 +133,12 @@ a specific tied reference, pass its exact `.references[i].id` to
 `--v-reference`, and `--j-reference`; inspect `--json` to obtain IDs.
 
 ## Display and antibody alignments
+
+A [display revision is being specified](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#11-display-revision-workplan).
+It will place the input above the germlines, highlight imputation, compact the
+CDR annotations, and replace antibody-numbering rulers with per-sequence rulers.
+CDR bands and the convention summary will follow the selected reference across
+all rows. The behavior described below is the current implementation.
 
 A single antibody displays against a combined V/J row, with the V gene on the
 left and J gene on the right. Gray hyphens across the uncovered junction have

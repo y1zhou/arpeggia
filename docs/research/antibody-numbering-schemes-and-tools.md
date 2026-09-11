@@ -699,6 +699,80 @@ additional germline species remain future work. The initial implementation
 does not require another engine, runtime downloads or a new general-purpose
 multiple sequence alignment API.
 
+## 11. Display revision workplan
+
+**Status, 11 September 2026:** the display specification is agreed; implementation
+has not started.
+The requested layout and styling are recorded in
+[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#numbered-antibody-display).
+The maintainer publishes the branch; pushes require a new explicit request.
+
+### Findings and agreed decisions
+
+Current rulers use canonical antibody labels, not input offsets or display
+width. Supplied residues already retain their original input indices; imputed
+residues have no original index. V/J alignment results retain source indices.
+V is limited through IMGT104 and J is a separate source, so a combined row must
+not imply a continuous ancestral sequence coordinate system.
+
+The domain input span is an interval in the supplied sequence. `[5, 125)` means
+one-based input residues 6–125 and excludes imputation. Proposed summary wording:
+`Numbered domain in supplied input: 6–125 (1-based)`; the API remains half-open.
+
+The review established these policies:
+
+1. **Imputed ruler positions — accepted.** Preserve original supplied-residue
+   coordinates and leave inferred ruler cells blank. Imputation does not advance
+   the source coordinate; five prepended residues leave the first supplied residue
+   at position 1. Numbered positions and imputation provenance remain available.
+2. **Matching mode — accepted.** Omit outer padding in the display and retain
+   local V/J matching. Reuse the existing matches, scores, ties, coverage and
+   imputation evidence; no semi-global recalculation is needed.
+3. **CDR bands across antibodies — accepted.** Use the selected reference's CDR
+   boundaries across all sequence and ruler rows. The summary names the reference,
+   its numbering scheme and its CDR definition, so the vertical bands and caption
+   describe the same convention. Changing the reference updates both. Each object
+   retains its own region annotations.
+
+The proposed germline ruler restarts independently for J and preserves V/J
+source identities. Summary tie lists show every gene/allele name, disambiguate
+species where necessary and wrap within the requested width. Display-name
+collapsing must not remove source records from structured results.
+
+### Implementation sequence
+
+1. **Correspondence and direction.** Keep canonical positions for column
+   correspondence, but derive rulers from each row's source coordinates under
+   the agreed imputation policy. Carry imputation provenance into display cells.
+   Put the input first with a neutral comparison foreground, direct operations
+   from input to germline, and distinguish outer blanks, unknown junction cells
+   and true alignment gaps. Reuse stored local V/J tracebacks.
+2. **Shared layout and styling.** Emit one CDR marker row at the top of each
+   wrapped block. Follow with each sequence's ruler and sequence; emit operations
+   below each non-reference row. Derive one CDR band mask from the selected
+   reference and paint it through marker/ruler/sequence cells. Keep operations
+   backgrounds plain and reverse imputed residue cells.
+   Style the summary count and CDR legend with the same rules. Wrap plain text
+   before applying ANSI styles so colors cannot corrupt width calculations.
+3. **Summaries and integration.** Name all tied V/J references, identify the
+   displayed representatives, clarify domain-span wording, and retain species
+   distinctions. Apply the layout to Rust, CLI and Python displays, including
+   per-format reference overrides that update the bands and convention summary
+   together, and hidden germlines in antibody comparisons.
+   Update Google-style docstrings and the user guide; revise the existing
+   unreleased changelog entry and cleanup-audit record when code changes land.
+4. **Validation and milestones.** Verify exact row order, per-row tenth-residue
+   labels across gaps and wraps, V/J coordinate restart, imputed cells, tails,
+   insertions and differing CDR definitions. Check styled legends, full CDR bands,
+   plain operations backgrounds, reverse-video counts at zero/nonzero, long tie
+   lists, Unicode names, color-disabled output and `--no-rulers`. Preserve existing
+   pairwise-alignment behavior. Rebuild the Python extension, run relevant Rust,
+   CLI and Python tests, type checks and pre-commit checks, then commit meaningful
+   milestones locally. Do not push without explicit authorization.
+
+All three display policies are settled. The next step is implementation of
+this workplan; no code or publishing changes have been made during the review.
+
 ## References and implementation records
 
 [^anarci]: Dunbar J, Deane CM. **ANARCI: antigen receptor numbering and receptor classification.** *Bioinformatics* 32, 298–300 (2016; online 2015). DOI: <https://doi.org/10.1093/bioinformatics/btv552>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/26424857/>.

@@ -269,6 +269,16 @@ A position within an antibody numbering scheme, including any insertion label.
 Its order follows the scheme rather than ordinary text or numeric sorting.
 _Avoid_: Input sequence offset, author residue number, alignment column
 
+**Source Residue Position**:
+The ordinal position of an amino acid in its own ungapped source sequence.
+Alignment gaps and residues belonging to another source do not advance it.
+_Avoid_: Alignment column, antibody numbered position, terminal width
+
+**Variable-Domain Input Span**:
+The interval of the supplied sequence assigned to the numbered variable domain.
+Its boundaries describe supplied residues and do not expand through imputation.
+_Avoid_: Alignment width, completed sequence length, germline coverage
+
 **CDR Definition**:
 A convention delimiting the three complementarity-determining regions and the
 framework regions of an antibody variable domain.
