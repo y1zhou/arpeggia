@@ -1,6 +1,8 @@
 # Use explicit antibody numbering conventions
 
-The design is agreed; implementation has not started as of 11 September 2026.
+The design is agreed; implementation began on 11 September 2026. The
+[implementation plan](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#10-implementation-plan)
+tracks completed milestones and remaining work.
 
 ## Inputs and result objects
 

@@ -11,6 +11,7 @@
 //! The library returns results as Polars `DataFrames`, which can be easily converted
 //! to various output formats or used directly in Python via `PyO3` bindings.
 
+pub mod ab_numbering;
 mod clustering;
 mod contacts;
 mod diagnostics;
@@ -25,6 +26,10 @@ mod structure;
 mod utils;
 
 // Re-export key public types
+pub use ab_numbering::{
+    CdrDefinition, NumberedAntibody, NumberedPosition, NumberedResidue, NumberingOptions,
+    NumberingScheme, number_antibody,
+};
 pub use clustering::{ClusterOptions, ClusteringMethod, cluster_pairwise_rmsd};
 pub use contacts::ProtonationMode;
 pub use diagnostics::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};

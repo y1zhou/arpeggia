@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Rust antibody variable-domain numbering with IMGT, Martin, AHo and Kabat,
+  explicit CDR conventions, residue/input correspondence, and guards for weak
+  matches, severe truncations, multiple domains and unsupported insertions.
 - Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI
   `align-seqs`: global, local, and query-full semi-global modes with BLOSUM62
   and configurable affine gap costs. `SeqAlignment` includes gapped strings,

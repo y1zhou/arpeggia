@@ -515,10 +515,11 @@ unchanged. This does not reconstruct coordinates or the full V/D/J junction.
 
 ## 10. Implementation plan
 
-**Status, 11 September 2026:** research and design documentation only.
-Implementation is paused at the maintainer's request. The accepted behavior is
+**Status, 11 September 2026:** implementation authorized and underway. The Rust
+numbering core is implemented; germline matching, imputation, antibody alignments,
+rendering and CLI/Python integration remain in progress. The accepted behavior is
 in [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
-the milestones below are the proposed execution plan, not completed work.
+the milestones below define the execution order and completion criteria.
 Work remains on `feat/antibody-numbering`, based on sequence-alignment PR
 [#25](https://github.com/y1zhou/arpeggia/pull/25) at `1ace91e`. The eventual
 antibody PR will be stacked on that branch, with its feature diff reviewed
