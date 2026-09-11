@@ -199,7 +199,7 @@ neither confidence nor endpoint classification guarantees stable numbering.
 The earlier modest FR1/FR4 truncations remain consistent in all 90 cases.
 Requiring raw coverage from FR1 through FR4 (`cons_start <= 26`,
 `cons_end >= 118`) would also reject ten original antibody-panel rows. This is
-a possible scope restriction, not an accepted policy or proof of correctness.
+the accepted initial scope restriction, not a proof of correctness.
 
 ## Implications for Arpeggia
 

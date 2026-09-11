@@ -280,6 +280,11 @@ in a shared numbering scheme. Rows are all heavy chains or all light chains;
 kappa and lambda may be mixed. Each row retains its own CDR Definition.
 _Avoid_: Multiple sequence alignment, automatic renumbering, paired antibody
 
+**Antibody Alignment Reference**:
+A selected member of an Antibody Alignment used as the comparison origin for
+the other rows. It is an input antibody, not necessarily a Germline Reference.
+_Avoid_: Inferred ancestor, germline assignment, numbering scheme
+
 **Germline Reference**:
 A catalogued unrearranged immunoglobulin gene-segment sequence, identified by
 species, gene and allele. A matching reference does not establish ancestry.

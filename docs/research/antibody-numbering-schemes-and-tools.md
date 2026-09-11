@@ -397,6 +397,12 @@ an amino-acid J comparison here would need to be labeled as similarity, not a
 unique gene call. Missing reference coverage must remain distinguishable from
 a true deletion.[^igblast]
 
+The accepted matching policy uses local BLOSUM62 with gap costs 10/0.5 in
+separate V and J windows, with known-residue coverage gates. This reuses
+Arpeggia's alignment contract without introducing uncalibrated E-values.
+See [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md)
+for the windows, thresholds and missing-match behavior.
+
 Protein sequences cannot distinguish some alleles: for example, retained human
 IGHJ4*01/*02/*03 have identical amino-acid sequences. Reference identity and
 provenance must survive sequence deduplication. Selecting a display representative
@@ -424,6 +430,14 @@ construct a dummy `SeqAlignment` with misleading scores. Actual V/J pairwise
 comparisons can still call `align_seqs()`. CDR backgrounds require named region
 boundaries and handling of gap/blank cells. Region identification must remain
 possible without color.[^arpeggia-alignment]
+
+The selected V and J references will share one display row, with the V name on
+the left and J name on the right. Retain their separate coverage and provenance
+behind the joining gaps. An `AntibodyAlignment` comparison reference is instead
+one of its antibody rows: changing that reference does not change the common
+numbered-position grid. The existing two-row renderer needs per-row operations
+and an optional right label; its wrapping, escaped names and color controls
+remain reusable.
 
 ### 9.4 Comparing engines and CDR definitions
 

@@ -9,11 +9,14 @@ distinct in the [scheme authors' numbering service](https://www.bioinf.org.uk/ab
 The initial CLI and Python APIs accept named amino-acid strings through
 `number_antibody()` / `number-antibody`. A `NumberedAntibody` represents one
 variable domain, retaining its input sequence and domain span. Terminal tags
-and constant-region tails are allowed;
-additional detected variable domains produce an error. Structure-file
-integration and constant-region numbering are deferred. Recognizable partial
-domains can return results with coverage and diagnostics; numbering itself
-does not fill missing sequence. Ordered, read-only `.residues` records contain
+and constant-region tails are allowed; additional detected variable domains
+produce an error. Structure-file integration and constant-region numbering
+are deferred. Initial partial-domain support is limited to truncation within
+terminal FR1/FR4, retaining the intervening variable-domain core. More severe
+truncations return an explicit error because length-based conversion can
+renumber cut loops incorrectly. Supported partial domains retain coverage and
+diagnostics; numbering itself does not fill missing sequence.
+Ordered, read-only `.residues` records contain
 the numbered position, amino acid, original input index and region. Derived
 sequence properties expose `.sequence`, `.cdr1`/`.cdr2`/`.cdr3` and
 `.fr1`/`.fr2`/`.fr3`/`.fr4`. Imputed residues have no original input index and
@@ -27,6 +30,21 @@ infer a D segment. References ship offline as a versioned, attributed IMGT
 subset covering human and mouse H/K/L and alpaca heavy-chain/VHH references.
 Search covers all bundled species by default and accepts an explicit species
 restriction. Report matched-reference species rather than presumed input origin.
+
+Rank V and J references separately by local BLOSUM62 alignment score, using
+the sequence module's gap costs of 10/0.5. The V search uses observed sequence
+through internal IMGT position 104; J searches after it and must reach FR4.
+Retain exact score ties and report identity and coverage separately. Initial
+qualification gates require 50 known paired V residues and five known paired
+FR4 residues for J. Ambiguous residues do not count as known evidence. If a
+segment lacks enough evidence, retain the numbered antibody with `v_match=None`
+or `j_match=None` and a diagnostic; imputation uses only supported references.
+
+Display the top aligned V and J references together on one row, joined by
+implicit gaps around CDR3. Show the V gene name on the left and J gene name on
+the right to identify their distinct sources. The combined row is a display
+of two reference matches, not an inferred ancestral sequence; their separate
+scores, coverage, ties and provenance remain available.
 
 `cdr_definition="auto"` selects the CDR convention associated with the chosen
 numbering scheme. A caller choosing a different CDR definition must explicitly
@@ -57,6 +75,19 @@ one or more numbered antibodies in one numbering scheme. Rows must all be heavy
 chains or all be light chains; kappa/lambda mixtures are allowed. Reject
 incompatible inputs explicitly. Each row retains its CDR definition because
 column correspondence follows numbered positions rather than region labels.
+Expose `.antibodies`, the ordered union of `.positions`, and corresponding
+`.aligned_sequences`, preserving input row order. Use a zero-based
+`reference_index`, defaulting to 0, to identify the antibody used for display
+comparisons. Accept it in `align_antibodies()` and as `--reference-index` in the
+CLI; `.format(reference_index=...)` can override it for one rendering. Changing
+the reference changes comparison direction and colors without renumbering or
+altering stored columns and rows. Reject out-of-range indices.
+
+The alignment CLI accepts positional sequence strings and comma-separated
+`--names`, such as `--names WT,Mutant`. Omitted names become `Seq001`, `Seq002`,
+and so on in input order. Missing or empty name entries use the default for
+their sequence position; excess names are an error. Reuse JSON output, width,
+color and ruler controls from sequence alignment.
 
 Engine qualification compares RIOT, Immunum and AntPack on the
 [AntPack test set](https://github.com/jlparkI/AntPack/tree/main/tests/test_data).
@@ -69,13 +100,16 @@ records the completed 26,365-input run and unresolved qualification issues.
 Use Immunum's native Rust core with default features disabled. Arpeggia owns
 the result types, Python bindings and CLI/display formatting. Its four required
 schemes and fixture agreement support this choice without establishing
-independent accuracy. Integration must correct the conversion/span defect,
-require meaningful aligned-domain coverage, and qualify long insertions and
+independent accuracy. Initial recognition requires confidence at least 0.5
+and 30 distinct matched profile positions, excluding query insertions.
+This gate rejects trivial matches; it does not guarantee correct numbering.
+Integration must correct the conversion/span defect and qualify long insertions and
 multiple-domain detection. Pin the qualified core version and record any
 upstream corrections. Reject unsupported insertion lengths before conversion
 with a clear error; the initial integration does not extend Immunum's
 single-letter insertion representation.
 
-Recognition thresholds, germline ranking and the remaining display/input
-details are open. Supporting evidence is in the
+The V/J join's operation styling and the selected reference's display order
+remain open.
+Supporting evidence is in the
 [numbering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md).
