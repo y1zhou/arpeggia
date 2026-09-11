@@ -112,9 +112,6 @@ impl crate::SeqAlignment {
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         self.format_python(py, None, "auto", true)
     }
-    fn __str__(&self, py: Python<'_>) -> PyResult<String> {
-        self.__repr__(py)
-    }
 }
 
 #[pymethods]

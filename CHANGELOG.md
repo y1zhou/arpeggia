@@ -61,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for full evaluation RMSD and `.core_rmsd` for retained fitting pairs. Rust
   `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`. CLI RMSD
   output reports details by default and supports structured `--json` output.
+- Python sequence and antibody displays share `__repr__` through Python's
+  standard `str()` fallback, with `.format()` for explicit display controls.
 - Expanded CLI help and Google-style Python/IDE docstrings with reference
   selection syntax, independent defaults, units, result semantics, and examples.
   Probe-radius guidance explains crevice access and how SASA changes depend on
