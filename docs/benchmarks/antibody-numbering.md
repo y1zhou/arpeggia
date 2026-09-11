@@ -204,11 +204,12 @@ the accepted initial scope restriction, not a proof of correctness.
 ## Implications for Arpeggia
 
 Immunum's Rust core was selected after this comparison: four requested schemes
-and strongest fixture-label agreement. Integration still requires resolving its
-conversion/span defect, requiring meaningful aligned-domain coverage,
-and addressing the long-insertion and multiple-domain limitations documented
-in the [numbering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md).
-RIOT is a useful comparator with stronger negative-control rejection here;
+and strongest fixture-label agreement. The adapter qualification below covers
+its conversion/span correction,
+aligned-domain coverage, insertion limits and multiple-domain guards.
+The [numbering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md)
+records the accepted scope. RIOT is a useful comparator with stronger
+negative-control rejection here;
 this panel does not show better positional accuracy than Immunum.
 
 The panel has no independent species-specific structural truth. Immunum's
@@ -218,3 +219,126 @@ germline matching or imputation. Runs used different interfaces and concurrent
 processes without repeated timing, so no comparative speed claim is made.
 Arpeggia owns the bindings and rendering under
 [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
+
+## Arpeggia adapter qualification
+
+On 11 September 2026, Arpeggia's release Python wheel repeated all 26,365 inputs
+in all four schemes: 105,460 calls, retaining errors, diagnostics and one position
+or null per input residue. This used the same pinned inputs and normalization
+above, default CDR conventions, and all bundled reference species. Numbering and
+matching were validated at implementation milestone `5b798a3`; the subsequent
+`a9f1337` change adds an imputation coverage diagnostic without changing numbering.
+
+Every scheme accepts 25,474 antibody inputs and rejects all 881 negative
+controls. The other ten rejections are the agreed severe-partial restriction:
+numbering rows 398, 599, 613, 671 and 1077; therapeutic row 1107; and V/J rows
+326, 333, 369 and 748. No other original positive input is lost.
+
+Every accepted IMGT/AHo map and chain matches the prior Immunum result. Martin
+and Kabat recover the nine light-chain span failures described above, leaving
+the unsupported terminal residue outside the numbered domain; all other accepted
+maps remain identical. The 90 modest truncations retain parent consistency.
+There are no unexplained numbering changes in this panel.
+
+| Scheme | Exact maps / original valid fixture arrays | Identical labels / compared accepted residues |
+| --- | ---: | ---: |
+| IMGT | 1,454/1,483 | 169,566/169,645 |
+| Martin | 1,456/1,484 | 169,509/169,645 |
+| Kabat | 1,456/1,483 | 169,561/169,645 |
+| AHo | 1,473/1,484 | 169,616/169,645 |
+
+The exact-map denominators retain rejected inputs as nonmatches and keep the
+original malformed-array exclusions. Lower totals than raw Immunum reflect
+scope rejection, not changed accepted labels. These remain fixture-agreement
+measures rather than independent accuracy estimates.
+
+Every accepted input has a qualifying V match. Five lack the required J evidence:
+numbering row 720 and COVID rows 4244, 4617, 10960 and 13044. They return
+`j_match=None` with a diagnostic, preserving their numbering. No ancestral or
+species-specific accuracy conclusion follows from these similarities.
+
+Additional checks reconstruct the displayed query from the original input plus
+imputed residues for all 1,569 accepted numbering/truncation rows in each scheme.
+All 12,552 before/after renderings preserve sequence and the requested 80-column
+width; repeating imputation preserves residue positions and amino acids.
+Repository tests cover tied-reference disagreement, unavailable endpoints,
+unknown symbols, partial references, mixed CDR definitions, multiple domains,
+long-insertion conversion limits, numbered insertion ordering, immutable Python
+results, and reference-dependent display order.
+
+### Runtime and reuse
+
+Measurements use Linux x86-64, an AMD Ryzen 9 9950X3D, Rust 1.96.0, CPython
+3.13.13 and locked release builds. Each process was pinned to the same allowed
+CPU. Imports and warm-up are excluded; timings are medians of seven serial
+batches after five warm-up calls. No competing qualification process was running.
+The parent is sequence-alignment PR #25 at `1ace91e`; feature timings use
+`5b798a3`. These are workload-specific measurements, not cross-engine speed claims.
+
+For the first 32 numbering-fixture inputs, align each sequence globally against
+itself with input index 30 changed to Y (F when already Y). Each batch repeats
+32 alignments 100 times; formatting repeats the first result 1,000 times at
+width 80, plain color, with rulers.
+
+| Operation | Parent | Antibody branch |
+| --- | ---: | ---: |
+| 32 pairwise sequence alignments | 1.818 ms | 1.807 ms |
+| One pairwise alignment display | 3.08 μs | 7.51 μs |
+| One numbered antibody display | — | 16.57 μs |
+
+Calculation time is unchanged within measurement variability. The shared
+annotated renderer adds about 4.4 μs to this pairwise display, reflecting its
+per-cell coordinate labels and general row layout.
+
+Numbering the same 32 inputs with eager V/J matching takes 295.58 ms per batch
+(9.24 ms/input). An isolated build with only the private germline-matching call
+omitted takes 4.46 ms (0.139 ms/input), retaining the recognition and conversion
+work. This temporary measurement does not add a public skip-matching option.
+Matching accounts for about 98.5% of this workload's elapsed time.
+
+For broader chain coverage, take the first ten H, K and L numbering fixtures
+according to the prior Immunum results. Each batch repeats ten numbering calls
+20 times, searching all reference species:
+
+| Chain | Median per input |
+| --- | ---: |
+| H | 9.10 ms |
+| K | 2.19 ms |
+| L | 1.08 ms |
+
+Bundled profiles and encoded references are reused across calls. Aligning ten
+already-numbered heavy chains takes 69.65 μs; imputing the first stored result
+takes 8.51 μs, each measured over 1,000 calls per batch. Neither operation repeats
+V/J alignment. The full four-scheme quality run used concurrent processes and
+therefore supplies no additional comparative timing result.
+
+### Packaging and final checks
+
+The final `a9f1337` source and parent were built on the same machine with
+`maturin build --release --features python --locked` and
+`cargo build --release --locked`, without an additional strip step. Sizes are
+bytes; gzip measurements compress the executable alone at level 9 with zero mtime,
+not a release archive containing extra files.
+
+| Artifact | Parent | Antibody branch | Increase |
+| --- | ---: | ---: | ---: |
+| CPython 3.13 wheel | 9,606,369 | 9,893,436 | 287,067 (2.99%) |
+| Python extension, unpacked | 34,904,672 | 36,107,808 | 1,203,136 (3.45%) |
+| CLI executable | 51,288,144 | 52,561,568 | 1,273,424 (2.48%) |
+| CLI executable, gzip | 12,333,380 | 12,616,583 | 283,203 (2.30%) |
+
+The runtime reference subset is 255,885 bytes. The lockfile adds Immunum 1.3.1,
+strum 0.27.2 and strum_macros 0.27.2 without upgrading existing dependencies.
+Immunum's default features are disabled; its CLI and Python layers are unused.
+
+The installed wheel numbers antibodies, finds V/J matches, and constructs an
+antibody alignment offline. It includes IMGT attribution; the source distribution
+includes both attribution and the reference FASTA. Both exclude `docs/`; the
+Rust package file list also retains the reference assets and excludes docs.
+The source distribution does not bundle benchmark fixtures.
+CLI release archives include the same attribution alongside the executable.
+
+Final validation passes 199 Rust library tests, 3 binary tests, 17 CLI tests,
+8 doctests, 21 Python tests, Python type checking, and the repository's required
+format/lint checks. The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+describes the supported scope and remaining limitations.

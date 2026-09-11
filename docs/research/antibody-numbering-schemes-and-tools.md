@@ -518,16 +518,17 @@ unchanged. This does not reconstruct coordinates or the full V/D/J junction.
 
 ## 10. Implementation plan
 
-**Status, 11 September 2026:** implementation authorized and underway. The Rust
-numbering core, offline V/J matching, terminal imputation, antibody position
-alignments, shared rendering, and CLI/Python APIs are implemented. Release
-qualification is in progress. The accepted behavior is
+**Status, 11 September 2026:** implementation and release qualification are
+complete. Rust, CLI and Python support numbering, offline V/J matching, terminal
+imputation, numbered antibody alignments and shared styled displays. The
+[qualification results](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#arpeggia-adapter-qualification)
+record the full panel, runtime, package growth and remaining scientific limits. The accepted behavior is
 in [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
 the milestones below define the execution order and completion criteria.
-Work remains on `feat/antibody-numbering`, based on sequence-alignment PR
-[#25](https://github.com/y1zhou/arpeggia/pull/25) at `1ace91e`. The eventual
-antibody PR will be stacked on that branch, with its feature diff reviewed
-against the parent and the combined release changes described against `master`.
+The feature branch is `feat/antibody-numbering`, based on sequence-alignment PR
+[#25](https://github.com/y1zhou/arpeggia/pull/25) at `1ace91e`. Its feature diff is
+reviewed against that parent; combined release changes are described against
+`master`.
 
 ### Integration boundaries
 
@@ -683,14 +684,14 @@ timings for numbering alone, eager V/J matching and batch reuse. No performance
 or species-specific accuracy claim follows from the earlier concurrent
 three-engine comparison.
 
-### Remaining engineering choices and deferred scope
+### Resolved integration choices and deferred scope
 
-Choose private field layouts, public supporting-record names, explicit-reference
-selector syntax for imputation, and the CDR background palette while implementing
-the agreed behavior. Document the exact coverage denominators and retain their
-counts. These choices must preserve tied-reference provenance and readable plain
-output. Return to the maintainer if qualification requires changing an accepted
-semantic rule or dropping a supported scheme; do not silently relax the guards.
+The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+defines the public supporting records, exact reference-ID selectors and coverage
+denominators. CDR1/2/3 use distinct white/magenta/cyan backgrounds with plain
+region labels. The renderer shares layout without manufacturing optimal
+alignment scores; imputation reuses stored correspondence and reference coverage.
+Qualification required no change to the agreed scheme support or acceptance gates.
 
 Constant-region numbering, structure-file input, severe partial domains,
 automatic handling of multiple domains, multi-letter insertion support and

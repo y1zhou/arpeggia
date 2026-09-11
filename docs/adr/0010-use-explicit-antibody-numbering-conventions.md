@@ -1,17 +1,18 @@
 # Use explicit antibody numbering conventions
 
-The design is agreed; implementation began on 11 September 2026. The
-[implementation plan](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#10-implementation-plan)
-tracks completed milestones and remaining work.
+Implemented and qualified on 11 September 2026. The
+[implementation record](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#10-implementation-plan)
+records milestones; the [qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#arpeggia-adapter-qualification)
+records validation and limits.
 
 ## Inputs and result objects
 
-Arpeggia will accept `chothia` as an alias for Martin/enhanced Chothia numbering,
+Arpeggia accepts `chothia` as an alias for Martin/enhanced Chothia numbering,
 as requested for the antibody-numbering API. This deliberately favors the
 structurally corrected convention over compatibility with historical Chothia
 outputs. The alias is an Arpeggia API choice: the original conventions remain
 distinct in the [scheme authors' numbering service](https://www.bioinf.org.uk/abs/abnum/).
-IMGT is the default; Martin, AHo and Kabat are also supported by the planned API.
+IMGT is the default; Martin, AHo and Kabat are also supported.
 
 The initial CLI and Python APIs accept named amino-acid strings through
 `number_antibody()` / `number-antibody`. A `NumberedAntibody` represents one
@@ -147,7 +148,7 @@ Pin the dataset and tool versions, retain failures, and distinguish agreement
 with fixture labels from independent numbering accuracy. Report residue
 numbering, domain coverage and failures separately.
 The [comparison report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
-records the completed 26,365-input run and unresolved qualification issues.
+records the 26,365-input engine comparison and qualified adapter results.
 
 Use Immunum 1.3.1's native Rust core with default features disabled. Arpeggia owns
 the `ab_numbering` module, result types, Python bindings and CLI/display
@@ -155,7 +156,7 @@ formatting. Its four required schemes and fixture agreement support this choice
 without establishing independent accuracy. Initial recognition requires confidence at least 0.5
 and 30 distinct matched profile positions, excluding query insertions.
 This gate rejects trivial matches; it does not guarantee correct numbering.
-Integration must correct the conversion/span defect and qualify long insertions and
+The adapter corrects the conversion/span defect and guards long insertions and
 multiple-domain detection. Pin the qualified core version and record any
 upstream corrections. Reject unsupported insertion lengths before conversion
 with a clear error; the initial integration does not extend Immunum's
