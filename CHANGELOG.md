@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and CDR conversion to avoid relabeling surviving loop residues.
 - Offline human, mouse and alpaca V/J germline similarities, with explicit
   species restrictions, known-residue coverage, tied gene/allele references,
-  and attributed IMGT release 202636-7 data.
+  and attributed IMGT release 202636-7 data. Binary release archives include
+  the project README and a distinct `IMGT-GERMLINES.md` attribution file.
 - Explicit terminal FR1/FR4 imputation returns a new numbered antibody and
   preserves original input indices and reference provenance. Tied references
   must agree, with optional explicit reference selection; internal gaps, CDRs
