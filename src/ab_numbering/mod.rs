@@ -1,8 +1,10 @@
 //! Antibody variable-domain numbering with explicit region conventions.
 
+mod alignment;
 mod core;
 mod germline;
 mod impute;
+pub use alignment::{AntibodyAlignment, align_antibodies};
 pub use germline::{GermlineHit, GermlineMatch, GermlineReference, GermlineSpecies};
 
 use crate::{ArpeggiaError, ArpeggiaResult};

@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserves original input indices and reference provenance. Tied references
   must agree, with optional explicit reference selection; internal gaps, CDRs
   and unknown input residues remain unchanged.
+- `AntibodyAlignment` aligns one or more numbered antibodies through the ordered
+  union of positions, preserving input row order and per-row CDR definitions.
+  Heavy/light mixing and incompatible schemes fail; K/L mixtures are supported.
 - Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI
   `align-seqs`: global, local, and query-full semi-global modes with BLOSUM62
   and configurable affine gap costs. `SeqAlignment` includes gapped strings,
