@@ -22,11 +22,13 @@ detected variable domains produce an error. Structure-file integration and const
 are deferred. Initial partial-domain support is limited to truncation within
 terminal FR1/FR4, retaining the intervening variable-domain core. More severe
 truncations return an explicit error because length-based conversion can
-renumber cut loops incorrectly. Both the numbering scheme and CDR definition
-require complete source windows for count-based core conversion rules. For example,
-Kabat heavy-chain conversion needs IMGT 24–40 even though some of those residues
-are framework. AHo retains its upstream terminal-FR1 rule. This whole-domain
-coverage check does not apply to standalone V/J reference segments.
+renumber cut loops incorrectly. Require profile coverage spanning IMGT 23–118,
+including the [FR1 Cys23 and FR4 W/F118 anchor positions](https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html).
+Loss of the FR1 anchor can shift the raw alignment before conversion. This
+interval also contains every count-based core conversion window for the supported
+numbering and CDR definitions in Immunum 1.3.1, including Kabat heavy 24–40.
+AHo retains its upstream terminal-FR1 rule. This whole-domain coverage check
+does not apply to standalone V/J reference segments.
 Supported partial domains retain coverage and
 diagnostics; numbering itself does not fill missing sequence.
 Ordered, read-only `.residues` records contain

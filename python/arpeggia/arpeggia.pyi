@@ -712,8 +712,8 @@ def number_antibody(
 
     Args:
         sequence (str): Unaligned amino-acid input; tags and constant tails are
-            retained. Terminal FR1/FR4 truncations must preserve the framework
-            context needed by both numbering and CDR conversion.
+            retained. Terminal FR1/FR4 truncations must span IMGT profile positions
+            23–118 to preserve framework-anchor context for alignment and conversion.
         name (str): Display name, default Seq001.
         scheme (str | None): IMGT by default; Martin, AHo and Kabat are supported.
             Chothia aliases Martin numbering.

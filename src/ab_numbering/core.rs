@@ -77,21 +77,9 @@ pub(super) fn convert(
     chain: Chain,
     input_length: usize,
 ) -> ArpeggiaResult<Vec<NumberedPosition>> {
-    // Count-based rules cannot distinguish a cut loop from an internal deletion.
-    // Require their whole source window for both numbering and CDR conversion.
-    // AHo's rule starting at 1 explicitly handles missing N-terminal FR1 residues.
-    // Germline V/J segments use convert_states directly: they are not full domains.
-    for rule in rules(scheme, chain) {
-        if rule.align_start > 1
-            && !matches!(rule.insertion, Insertion::None)
-            && (alignment.cons_start > rule.align_start || alignment.cons_end < rule.align_end)
-        {
-            return Err(failure(format!(
-                "partial domain lacks {scheme} conversion context at IMGT positions {}–{}; supply the surrounding framework sequence",
-                rule.align_start, rule.align_end
-            )));
-        }
-    }
+    // Whole-domain callers retain IMGT 23–118 before conversion. This covers
+    // every count-based core window in the pinned numbering/CDR rules.
+    // V/J reference segments use convert_states directly and have separate coverage.
     let aligned = &alignment.positions[alignment.query_start..=alignment.query_end];
     let mut converted = convert_states(aligned, scheme, chain)?;
     // Preserve Immunum's AHo light-chain tail rule; this residue has no raw
@@ -240,9 +228,12 @@ pub(super) fn number(
             }
         }
     }
-    if alignment.cons_start > 26 || alignment.cons_end < 118 {
+    // Keep coverage of the conserved FR1 Cys23 and FR4 W/F118 anchors. Without
+    // the FR1 anchor, a terminal fragment can shift during profile alignment;
+    // count-based conversion cannot distinguish that shift from a shorter loop.
+    if alignment.cons_start > 23 || alignment.cons_end < 118 {
         return Err(failure(
-            "partial domain lacks the complete FR1-through-FR4 core; only terminal FR1/FR4 truncations are supported",
+            "partial domain lacks the IMGT 23–118 framework-anchor interval; retain the FR1 and FR4 anchors when truncating terminal sequence",
         ));
     }
     let scheme = options.scheme.unwrap_or_default();
@@ -451,22 +442,19 @@ mod tests {
             number_antibody(&HEAVY[23..], &kabat)
                 .unwrap_err()
                 .to_string()
-                .contains("IMGT positions 24–40")
+                .contains("IMGT 23–118")
         );
-        // A safe numbering scheme must not bypass an unsafe CDR-definition conversion.
-        for scheme in [
-            NumberingScheme::Imgt,
-            NumberingScheme::Martin,
-            NumberingScheme::Aho,
-            NumberingScheme::Kabat,
-        ] {
-            let options = NumberingOptions {
-                scheme: Some(scheme),
-                cdr_definition: CdrDefinition::Kabat,
-                ..Default::default()
-            };
-            assert!(number_antibody(&HEAVY[23..], &options).is_err());
-        }
+        // AntPack fixture 791: removing Cys23 makes the upstream raw alignment
+        // move surviving FR1 residues into CDR1, before scheme conversion.
+        let lambda = "QSVLTQPPSVSVAPGQTARITCGGNNIGSKSVHWYQQKPGQAPVLVVYDDSDRPSGIPERFSGSNSGNTATLTISRVEAGDEADYYCQVWDSSSDHVVFGGGTKLTVL";
+        assert!(number_antibody(&lambda[22..], &NumberingOptions::default()).is_err());
+        // Selecting IMGT labels must not admit the same unsafe Kabat CDR conversion.
+        let mixed = NumberingOptions {
+            scheme: Some(NumberingScheme::Imgt),
+            cdr_definition: CdrDefinition::Kabat,
+            ..Default::default()
+        };
+        assert!(number_antibody(&HEAVY[23..], &mixed).is_err());
     }
 
     #[test]

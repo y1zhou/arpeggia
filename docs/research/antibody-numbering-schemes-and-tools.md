@@ -692,8 +692,11 @@ defines the public supporting records, exact reference-ID selectors and coverage
 denominators. CDR1/2/3 use distinct gray/pink/cyan backgrounds with plain
 region labels. The renderer shares layout without manufacturing optimal
 alignment scores; imputation reuses stored correspondence and reference coverage.
-Scheme-aware coverage checks reject truncations that cut count-based conversion
-windows, including framework context outside the named CDRs.
+An IMGT 23–118 profile-coverage requirement retains framework anchors and
+contains all count-based core conversion windows in the pinned backend. It
+rejects fragments that can shift during alignment or conversion; the
+[terminal-fragment follow-up](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#terminal-framework-regression-follow-up)
+records the additional cases.
 
 Constant-region numbering, structure-file input, severe partial domains,
 automatic handling of multiple domains, multi-letter insertion support and

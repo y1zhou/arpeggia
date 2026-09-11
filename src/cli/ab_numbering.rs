@@ -48,7 +48,7 @@ impl NumberingArgs {
 
 #[derive(Parser, Debug, Clone)]
 #[command(
-    after_help = "Example: arpeggia number-antibody SEQUENCE --name VHH --scheme imgt --species human,alpaca\nSupply an unaligned amino-acid string, not a FASTA file. One variable domain is required;\ntags and constant tails are allowed. Only terminal FR1/FR4 truncations are supported.\nV/J results are reference similarities, with exact ties retained; they do not infer ancestry.\nThe input appears above stitched V/J germlines. Input rulers preserve original coordinates; the germline\nruler counts V then J continuously, ignoring gaps. Imputed positions are blank; yellow marks imputation.\nConventions and examples: https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md"
+    after_help = "Example: arpeggia number-antibody SEQUENCE --name VHH --scheme imgt --species human,alpaca\nSupply an unaligned amino-acid string, not a FASTA file. One variable domain is required;\ntags and constant tails are allowed. Terminal truncations must retain IMGT 23–118 anchor coverage.\nV/J results are reference similarities, with exact ties retained; they do not infer ancestry.\nThe input appears above stitched V/J germlines. Input rulers preserve original coordinates; the germline\nruler counts V then J continuously, ignoring gaps. Imputed positions are blank; yellow marks imputation.\nConventions and examples: https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md"
 )]
 pub(crate) struct NumberArgs {
     /// One unaligned antibody amino-acid sequence

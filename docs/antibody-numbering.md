@@ -198,9 +198,10 @@ including the reference.
 
 The adapter uses Immunum 1.3.1's Rust core. Inputs must contain one recognizable
 variable domain spanning FR1 through FR4; modest terminal FR1/FR4 truncations
-are supported when both the numbering scheme and CDR definition retain the
-framework context needed to convert their loops. For example, Kabat heavy-chain
-conversion requires the IMGT 24–40 window; an input cut inside it is rejected.
+are supported when the profile alignment spans IMGT 23–118, retaining coverage
+of the FR1 and FR4 anchor positions. This preserves the framework context needed
+for alignment and for both numbering and CDR conversion. Inputs cut past these
+anchors are rejected; numbering cannot reliably infer the missing loop context.
 Tags and constant-region tails are allowed but remain unnumbered.
 Detected additional domains, severe partial domains, and insertions exceeding
 the backend's single-letter representation produce errors. Recognition is a

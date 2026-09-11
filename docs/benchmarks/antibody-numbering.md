@@ -385,3 +385,23 @@ not measured wheel or executable growth. Source records and their ordering are
 reproduced by the [preparation script](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/prepare.py);
 the [attribution file](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md)
 records the expanded subset checksum.
+
+## Terminal framework regression follow-up
+
+A terminal sweep on 11 September 2026 used the first ten accepted H, K and L
+numbering fixtures whose original IMGT maps start at 1 and end at 127/128.
+Remove 1, 5, 9, 20, 22, 23, 24, 25 or 26 N-terminal residues and three C-terminal
+residues, then compare each surviving residue's label and region against its
+full parent in all four schemes: 1,080 calls.
+
+Checking conversion windows alone left six inconsistent outputs from two lambda
+parents (numbering rows 791 and 845, cut by 22 residues) in IMGT, Martin and
+Kabat. The raw profile alignment had already shifted surviving framework
+residues into CDR1 after losing coverage of Cys23. Requiring the profile span
+to include IMGT 23–118 rejects these fragments and also protects every count-based
+core conversion window in the pinned backend. All 520 accepted results preserve
+parent numbering and regions; the remaining 560 produce explicit coverage errors.
+Each scheme accepts 130 and rejects 140. This is a conservative supported-input
+boundary, not proof that every rejected fragment is intrinsically unnumberable.
+The saved accepted IMGT maps from the original qualification already span this
+interval; the new sweep exercises a boundary absent from that panel.

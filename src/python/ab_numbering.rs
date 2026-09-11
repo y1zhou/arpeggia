@@ -24,8 +24,8 @@ fn warnings(py: Python<'_>, diagnostics: &[String]) -> PyResult<()> {
 ///     sequence (str): Unaligned amino-acid string, 30–10000 residues. Lowercase
 ///         is normalized; B/Z/X/U/O are accepted. Gaps, whitespace and stops fail.
 ///         Tags and constant tails are retained, but a second detected domain fails.
-///         Partial inputs must retain the core from FR1 through FR4, including
-///         framework context required by both numbering and CDR conversion.
+///         Partial inputs must span IMGT profile positions 23–118, retaining
+///         framework-anchor context for alignment and numbering/CDR conversion.
 ///     name (str): Display name, default "Seq001".
 ///     scheme (str | None): "imgt" (default), "martin", "aho", or "kabat".
 ///         "chothia" is an alias for Martin/enhanced Chothia numbering.
