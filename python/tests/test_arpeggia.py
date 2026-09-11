@@ -606,6 +606,18 @@ def test_antibody_display_and_reference_override(monkeypatch):
     assert "\x1b[" in alignment.format(color="always")
     assert "CDR1" in first.format(color="never")
     assert "IGHJ" in first.format(color="never")
+    for result, top_name in [(first, "first"), (alignment, "first")]:
+        with_rulers = result.format(width=60, color="never")
+        without_rulers = result.format(width=60, color="never", rulers=False)
+        blocks = with_rulers.split("\n\n")[1:]
+        compact_blocks = without_rulers.split("\n\n")[1:]
+        assert len(blocks) == len(compact_blocks)
+        for full, compact in zip(blocks, compact_blocks, strict=True):
+            rows = full.splitlines()
+            assert len(rows) == 6
+            assert rows[2].startswith(top_name)
+            assert compact.splitlines() == [rows[i] for i in [0, 2, 4, 5]]
+        assert "\x1b[7mimputed residues: 0\x1b[0m" in result.format(color="always")
     with pytest.raises(ValueError, match="reference_index"):
         alignment.format(reference_index=3)
     with pytest.raises(ValueError, match="width"):

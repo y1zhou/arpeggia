@@ -57,8 +57,7 @@ reference sequences with identical coverage may share alignment work.
 
 ## Numbered-antibody display
 
-The following display revision was requested on 11 September 2026 and awaits
-implementation. The [agreed workplan](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#11-display-revision-workplan)
+The display contract agreed on 11 September 2026 is implemented. The [workplan](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#11-display-revision-workplan)
 records the accepted coordinate, matching and reference-defined CDR-band policies.
 
 Display the input antibody first as the comparison reference, followed by one
@@ -85,7 +84,7 @@ Rulers report each sequence's own residue positions, ignoring alignment gaps,
 with right-aligned labels every tenth residue and block endpoint labels.
 Antibody scheme labels still define alignment columns and remain in the result
 objects. V and J are separate source sequences rather than a synthetic ancestor;
-the proposed ruler uses a separate coordinate origin for each segment. Supplied
+the ruler uses a separate coordinate origin for each segment. Supplied
 antibody residues retain their original one-based input coordinates. Imputed
 residues have blank ruler positions and do not advance the input coordinate;
 prepending five imputed residues leaves the first supplied residue at position 1.

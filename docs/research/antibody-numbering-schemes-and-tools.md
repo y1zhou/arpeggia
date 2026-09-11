@@ -701,78 +701,49 @@ multiple sequence alignment API.
 
 ## 11. Display revision workplan
 
-**Status, 11 September 2026:** implementation is underway. Source-coordinate
-rulers, reference-first rows, shared CDR bands and imputed-residue highlighting
-pass targeted Rust checks; summary styling and API documentation remain in progress.
-The requested layout and styling are recorded in
-[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#numbered-antibody-display).
-The maintainer publishes the branch; pushes require a new explicit request.
+**Status, 11 September 2026:** implemented. The display contract is recorded in
+[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#numbered-antibody-display);
+the [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#display-and-antibody-alignments)
+describes the layout and controls.
 
-### Findings and agreed decisions
+### Coordinate findings and decisions
 
-Current rulers use canonical antibody labels, not input offsets or display
-width. Supplied residues already retain their original input indices; imputed
-residues have no original index. V/J alignment results retain source indices.
-V is limited through IMGT104 and J is a separate source, so a combined row must
-not imply a continuous ancestral sequence coordinate system.
+Canonical antibody labels determine correspondence, but rulers now use source
+coordinates. Supplied residues retain their original input indices; imputed
+residues have no original index and leave their ruler positions blank. The domain
+span remains a zero-based, half-open input interval: `[5, 125)` is displayed as
+`Numbered domain in supplied input: 6–125 (1-based)`.
 
-The domain input span is an interval in the supplied sequence. `[5, 125)` means
-one-based input residues 6–125 and excludes imputation. Proposed summary wording:
-`Numbered domain in supplied input: 6–125 (1-based)`; the API remains half-open.
+V/J alignments already retain source indices. V is limited through IMGT104 and
+J is a separate source, so its ruler restarts independently. Outer display
+padding is blank; local matches, scores, ties, coverage and imputation evidence
+remain unchanged. The selected input defines the comparison direction and one
+CDR band map across every row; each antibody retains its own region annotations.
 
-The review established these policies:
+### Implementation and validation
 
-1. **Imputed ruler positions — accepted.** Preserve original supplied-residue
-   coordinates and leave inferred ruler cells blank. Imputation does not advance
-   the source coordinate; five prepended residues leave the first supplied residue
-   at position 1. Numbered positions and imputation provenance remain available.
-2. **Matching mode — accepted.** Omit outer padding in the display and retain
-   local V/J matching. Reuse the existing matches, scores, ties, coverage and
-   imputation evidence; no semi-global recalculation is needed.
-3. **CDR bands across antibodies — accepted.** Use the selected reference's CDR
-   boundaries across all sequence and ruler rows. The summary names the reference,
-   its numbering scheme and its CDR definition, so the vertical bands and caption
-   describe the same convention. Changing the reference updates both. Each object
-   retains its own region annotations.
+- The shared renderer accepts numeric source coordinates, imputation flags and
+  one reference-derived CDR band map. It emits input-first comparisons and one
+  CDR marker per block, with plain operation backgrounds.
+- Summary wrapping counts visible characters before applying styles. The reverse
+  imputation count and colored CDR legend survive wrapping; tied gene/allele names
+  retain species distinctions and all structured source records.
+- Rust, CLI and Python use the same layout, including reference overrides and
+  ruler suppression. Google-style docstrings, CLI help, the guide, changelog and
+  cleanup audit document the behavior.
+- Validation passed: 202 Rust library tests, 3 binary tests, 18 CLI tests,
+  8 doctests and 21 Python tests. Checks cover exact row order and tenth-residue
+  coordinates across gaps and wraps, independent V/J origins, blank imputed
+  coordinates, reference-defined CDR bands, reverse styling, tied names and
+  Unicode width. Existing pairwise displays remain covered.
+- Six representative AntPack full/truncated inputs were rendered before and
+  after imputation under all four schemes: 48 displays preserved supplied and
+  imputed sequence content, respected width, and retained idempotent imputation.
+  This display revision did not repeat the full numbering benchmark.
 
-The proposed germline ruler restarts independently for J and preserves V/J
-source identities. Summary tie lists show every gene/allele name, disambiguate
-species where necessary and wrap within the requested width. Display-name
-collapsing must not remove source records from structured results.
-
-### Implementation sequence
-
-1. **Correspondence and direction.** Keep canonical positions for column
-   correspondence, but derive rulers from each row's source coordinates under
-   the agreed imputation policy. Carry imputation provenance into display cells.
-   Put the input first with a neutral comparison foreground, direct operations
-   from input to germline, and distinguish outer blanks, unknown junction cells
-   and true alignment gaps. Reuse stored local V/J tracebacks.
-2. **Shared layout and styling.** Emit one CDR marker row at the top of each
-   wrapped block. Follow with each sequence's ruler and sequence; emit operations
-   below each non-reference row. Derive one CDR band mask from the selected
-   reference and paint it through marker/ruler/sequence cells. Keep operations
-   backgrounds plain and reverse imputed residue cells.
-   Style the summary count and CDR legend with the same rules. Wrap plain text
-   before applying ANSI styles so colors cannot corrupt width calculations.
-3. **Summaries and integration.** Name all tied V/J references, identify the
-   displayed representatives, clarify domain-span wording, and retain species
-   distinctions. Apply the layout to Rust, CLI and Python displays, including
-   per-format reference overrides that update the bands and convention summary
-   together, and hidden germlines in antibody comparisons.
-   Update Google-style docstrings and the user guide; revise the existing
-   unreleased changelog entry and cleanup-audit record when code changes land.
-4. **Validation and milestones.** Verify exact row order, per-row tenth-residue
-   labels across gaps and wraps, V/J coordinate restart, imputed cells, tails,
-   insertions and differing CDR definitions. Check styled legends, full CDR bands,
-   plain operations backgrounds, reverse-video counts at zero/nonzero, long tie
-   lists, Unicode names, color-disabled output and `--no-rulers`. Preserve existing
-   pairwise-alignment behavior. Rebuild the Python extension, run relevant Rust,
-   CLI and Python tests, type checks and pre-commit checks, then commit meaningful
-   milestones locally. Do not push without explicit authorization.
-
-All three display policies are settled. Implementation follows the milestones
-above; publishing remains the maintainer's responsibility.
+The editable Python extension was rebuilt; Python type and pre-commit checks
+passed. Milestones are committed locally; publishing remains the maintainer's
+responsibility.
 
 ## References and implementation records
 

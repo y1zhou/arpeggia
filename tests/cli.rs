@@ -515,6 +515,55 @@ fn antibody_cli_preserves_names_and_structured_numbering() {
 }
 
 #[test]
+fn antibody_cli_ruler_flag_preserves_compact_reference_first_blocks() {
+    for command in ["number-antibody", "align-antibodies"] {
+        let run = |rulers: bool| {
+            let mut args = vec![command, ANTIBODY_SEQUENCE];
+            if command == "number-antibody" {
+                args.extend(["--name", "WT"]);
+            } else {
+                args.extend([
+                    ANTIBODY_SEQUENCE,
+                    "--names",
+                    "Mutant,WT",
+                    "--reference-index",
+                    "1",
+                ]);
+            }
+            args.extend(["--width", "80", "--color", "never"]);
+            if !rulers {
+                args.push("--no-rulers");
+            }
+            let output = arpeggia().args(args).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8(output.stdout).unwrap()
+        };
+        let full = run(true);
+        let compact = run(false);
+        assert!(full.contains("Reference: WT"));
+        assert!(!full.contains('\x1b'));
+        assert!(full.lines().all(|l| l.len() <= 80));
+        let full_blocks: Vec<_> = full.split("\n\n").skip(1).collect();
+        let compact_blocks: Vec<_> = compact.split("\n\n").skip(1).collect();
+        assert!(!full_blocks.is_empty());
+        assert_eq!(full_blocks.len(), compact_blocks.len());
+        for (full, compact) in full_blocks.iter().zip(compact_blocks) {
+            let rows: Vec<_> = full.lines().collect();
+            assert_eq!(rows.len(), 6);
+            assert!(rows[2].starts_with("WT "));
+            assert_eq!(
+                compact.lines().collect::<Vec<_>>(),
+                [rows[0], rows[2], rows[4], rows[5]]
+            );
+        }
+    }
+}
+
+#[test]
 fn antibody_cli_rejects_invalid_names_and_conventions() {
     for options in [
         vec!["align-antibodies", ANTIBODY_SEQUENCE, "--names", "one,two"],

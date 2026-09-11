@@ -1,9 +1,10 @@
 use super::*;
 use crate::AlignmentColor;
 use crate::seq_alignment::display::{
-    DisplayRow, color_enabled, display_name, render_rows, wrap_summary,
+    DisplayRow, color_enabled, display_name, region_style, render_rows, wrap_styled_summary,
 };
-use std::collections::HashMap;
+use clap::builder::styling::Style;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::IsTerminal;
 
 fn dimensions(width: Option<usize>, color: AlignmentColor) -> (usize, bool) {
@@ -33,6 +34,30 @@ fn cdr_bands(mut regions: Vec<u8>) -> Vec<u8> {
         }
     }
     regions
+}
+
+fn summary(intro: &str, imputed: usize, details: &str, width: usize, color: bool) -> String {
+    let count = format!("imputed residues: {imputed}");
+    wrap_styled_summary(
+        [
+            (intro, Style::new()),
+            (count.as_str(), Style::new().invert()),
+            ("\nCDR regions: ", Style::new()),
+            ("1 = CDR1", region_style(1)),
+            (", ", Style::new()),
+            ("2 = CDR2", region_style(2)),
+            (", ", Style::new()),
+            ("3 = CDR3", region_style(3)),
+            ("\n", Style::new()),
+            (details, Style::new()),
+        ],
+        width,
+        color,
+    )
+}
+
+fn gene_name(reference: &GermlineReference) -> String {
+    format!("{}*{}", reference.gene, reference.allele)
 }
 
 impl AntibodyAlignment {
@@ -130,17 +155,22 @@ impl AntibodyAlignment {
             })
             .collect();
         let body = render_rows(&rows, width, color, rulers, &cdr_bands(regions))?;
-        let mut output = wrap_summary(
-            &format!(
-                "{} antibodies; {} positions\nReference: {}; {} numbering; {} CDR definition\nCDR regions: 1 = CDR1, 2 = CDR2, 3 = CDR3",
-                self.antibodies.len(),
-                self.positions.len(),
-                display_name(&self.antibodies[reference].name),
-                self.antibodies[reference].scheme,
-                self.antibodies[reference].cdr_definition
-            ),
-            width,
+        let selected = &self.antibodies[reference];
+        let intro = format!(
+            "{} antibodies; {} positions\nReference: {}; {} numbering; {} CDR definition\nAll rows; ",
+            self.antibodies.len(),
+            self.positions.len(),
+            display_name(&selected.name),
+            selected.scheme,
+            selected.cdr_definition,
         );
+        let imputed = self
+            .antibodies
+            .iter()
+            .flat_map(|a| &a.residues)
+            .filter(|r| r.input_index.is_none())
+            .count();
+        let mut output = summary(&intro, imputed, "", width, color);
         output.push_str(&body);
         Ok(output.trim_end_matches('\n').into())
     }
@@ -160,10 +190,12 @@ struct Column {
 }
 
 impl NumberedAntibody {
-    /// Format the input against a combined V/J reference, with distinct CDR backgrounds.
+    /// Format the input above combined V/J germlines, with distinct CDR backgrounds.
     ///
     /// Gray junction gaps mark unavailable reference sequence. V/J scores remain
     /// separate similarities measured on the supplied input, including after imputation.
+    /// Rulers use original input and independent V/J source coordinates; imputed
+    /// positions are blank and their residues use reverse video.
     pub fn format(
         &self,
         width: Option<usize>,
@@ -331,31 +363,31 @@ impl NumberedAntibody {
                 || absent.into(),
                 |m| {
                     let r = &m.hits[0].references[0];
-                    format!("{}*{}", r.gene, r.allele)
+                    gene_name(r)
                 },
             )
         };
         let rows: Vec<_> = [false, true]
             .into_iter()
-            .map(|reference| DisplayRow {
-                name: if reference {
+            .map(|germline| DisplayRow {
+                name: if germline {
                     name(&self.v_match, "V unavailable")
                 } else {
                     self.name.clone()
                 },
-                right_name: if reference {
+                right_name: if germline {
                     name(&self.j_match, "J unavailable")
                 } else {
                     String::new()
                 },
                 cells: combined
                     .iter()
-                    .map(|c| if reference { c.reference } else { c.query })
+                    .map(|c| if germline { c.reference } else { c.query })
                     .collect(),
                 positions: combined
                     .iter()
                     .map(|c| {
-                        (if reference {
+                        (if germline {
                             c.reference_index
                         } else {
                             c.input_index
@@ -366,7 +398,7 @@ impl NumberedAntibody {
                 operations: combined
                     .iter()
                     .map(|c| {
-                        if reference {
+                        if germline {
                             match c.operation {
                                 b'+' => b'-',
                                 b'-' => b'+',
@@ -379,40 +411,75 @@ impl NumberedAntibody {
                         }
                     })
                     .collect(),
-                imputed: if reference {
+                imputed: if germline {
                     Vec::new()
                 } else {
                     combined.iter().map(|c| c.imputed).collect()
                 },
-                show_operations: reference,
+                show_operations: germline,
             })
             .collect();
         let body = render_rows(&rows, width, color, rulers, &regions)?;
-        let mut summary = format!(
-            "{} chain; {} numbering; {} CDR definition\nConfidence: {:.3}; matched profile positions: {}\nDomain input span: [{}, {}); imputed residues: {}\nCDR regions: 1 = CDR1, 2 = CDR2, 3 = CDR3",
+        let intro = format!(
+            "Reference: {}; {} chain; {} numbering; {} CDR definition\nConfidence: {:.3}; matched profile positions: {}\nNumbered domain in supplied input: {}–{} (1-based)\n",
+            display_name(&self.name),
             self.chain,
             self.scheme,
             self.cdr_definition,
             self.confidence,
             self.matched_profile_positions,
-            self.domain_span.0,
+            self.domain_span.0 + 1,
             self.domain_span.1,
-            self.residues
-                .iter()
-                .filter(|r| r.input_index.is_none())
-                .count()
         );
+        let imputed = self
+            .residues
+            .iter()
+            .filter(|r| r.input_index.is_none())
+            .count();
+        let mut details = String::new();
         for (segment, matching) in [("V", &self.v_match), ("J", &self.j_match)] {
             if let Some(matching) = matching {
                 let hit = &matching.hits[0];
-                summary.push_str(&format!("\n{segment} input similarity: score {}; known identity {:.3}; reference/query coverage {:.3}/{:.3}; {} tied references",matching.score,hit.known_identity,hit.reference_coverage,hit.query_coverage,matching.hits.iter().map(|h| h.references.len()).sum::<usize>()));
+                let shown = &hit.references[0];
+                // Names may identify several accession records. Group display
+                // names by species while retaining every source in the result.
+                let mut names: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+                let mut records = 0;
+                for reference in matching.hits.iter().flat_map(|h| &h.references) {
+                    names
+                        .entry(&reference.species)
+                        .or_default()
+                        .insert(gene_name(reference));
+                    records += 1;
+                }
+                let names = names
+                    .into_iter()
+                    .map(|(species, genes)| {
+                        format!(
+                            "{}: {}",
+                            display_name(species),
+                            genes
+                                .into_iter()
+                                .map(|gene| display_name(&gene))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                let record_label = if records == 1 { "record" } else { "records" };
+                details.push_str(&format!(
+                    "{segment} input similarity (shown: {} {}): score {}; known identity {:.3}; germline/input coverage {:.3}/{:.3}\nTied {segment} references ({records} {record_label}): {names}\n",
+                    display_name(&shown.species), display_name(&gene_name(shown)),
+                    matching.score, hit.known_identity, hit.reference_coverage, hit.query_coverage,
+                ));
             }
         }
         for diagnostic in &self.diagnostics {
-            summary.push('\n');
-            summary.push_str(diagnostic);
+            details.push_str(&display_name(diagnostic));
+            details.push('\n');
         }
-        let mut output = wrap_summary(&summary, width);
+        let mut output = summary(&intro, imputed, &details, width, color);
         output.push_str(&body);
         Ok(output.trim_end_matches('\n').into())
     }
@@ -497,6 +564,86 @@ mod tests {
             }
         }
         result
+    }
+
+    #[test]
+    fn summary_legends_and_all_tied_names_survive_styled_wrapping() {
+        let ab = number_antibody(
+            &SEQUENCE.replace("REGTTGKPIGAFAH", "KDRGGYFDY"),
+            &NumberingOptions {
+                name: "野生型".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            ab.j_match
+                .as_ref()
+                .unwrap()
+                .hits
+                .iter()
+                .map(|h| h.references.len())
+                .sum::<usize>(),
+            3
+        );
+        let before = serde_json::to_string(&ab).unwrap();
+        for width in [40, 80] {
+            let colored = ab.render(width, true, false).unwrap();
+            let plain = ab.render(width, false, false).unwrap();
+            let decoded: String = styled_cells(&colored).iter().map(|c| c.0).collect();
+            assert_eq!(decoded, plain);
+            assert!(plain.lines().all(|l| l.width() <= width));
+            let summary = colored.split("\n\n").next().unwrap();
+            // Each wrapped line must restore terminal styles before its newline.
+            let cells: Vec<_> = summary.lines().flat_map(styled_cells).collect();
+            let text: String = cells.iter().map(|c| c.0).collect();
+            // Locate by characters because names can occupy several UTF-8 bytes.
+            let byte = text.find("imputed residues: 0").unwrap();
+            let start = text[..byte].chars().count();
+            assert!(
+                cells[start..start + "imputed residues: 0".len()]
+                    .iter()
+                    .all(|c| c.2)
+            );
+            assert!(cells[..start].iter().all(|c| !c.2));
+            assert!(
+                cells[start + "imputed residues: 0".len()..]
+                    .iter()
+                    .all(|c| !c.2)
+            );
+            for (label, background) in [("1 = CDR1", 47), ("2 = CDR2", 105), ("3 = CDR3", 106)] {
+                let byte = text.find(label).unwrap();
+                let start = text[..byte].chars().count();
+                assert!(
+                    cells[start..start + label.len()]
+                        .iter()
+                        .all(|c| c.1 == Some(background))
+                );
+            }
+            for (segment, matching) in [("V", &ab.v_match), ("J", &ab.j_match)] {
+                let references: Vec<_> = matching
+                    .as_ref()
+                    .unwrap()
+                    .hits
+                    .iter()
+                    .flat_map(|h| &h.references)
+                    .collect();
+                assert!(text.contains(&format!(
+                    "Tied {segment} references ({} record",
+                    references.len()
+                )));
+                for r in references {
+                    assert!(text.contains(&r.species));
+                    assert!(text.contains(&format!("{}*{}", r.gene, r.allele)));
+                }
+            }
+            assert!(text.contains(&format!(
+                "Numbered domain in supplied input: {}–{} (1-based)",
+                ab.domain_span.0 + 1,
+                ab.domain_span.1,
+            )));
+        }
+        assert_eq!(serde_json::to_string(&ab).unwrap(), before);
     }
 
     #[test]
@@ -617,6 +764,15 @@ mod tests {
             let text = alignment.render(250, true, true, Some(reference)).unwrap();
             let lines: Vec<_> = text.lines().collect();
             let selected = &alignment.antibodies[reference];
+            let imputed = alignment
+                .antibodies
+                .iter()
+                .flat_map(|a| &a.residues)
+                .filter(|r| r.input_index.is_none())
+                .count();
+            assert!(text.contains(&format!(
+                "All rows; \x1b[7mimputed residues: {imputed}\x1b[0m"
+            )));
             assert!(text.contains(&format!(
                 "{} numbering; {} CDR definition",
                 selected.scheme, selected.cdr_definition

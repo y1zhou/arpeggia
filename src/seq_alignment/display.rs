@@ -282,19 +282,45 @@ pub(crate) fn render_rows(
 }
 
 pub(crate) fn wrap_summary(summary: &str, width: usize) -> String {
+    wrap_styled_summary([(summary, Style::new())], width, false)
+}
+
+/// Wrap visible text before emitting styles; ANSI bytes never consume columns.
+pub(crate) fn wrap_styled_summary<'a>(
+    parts: impl IntoIterator<Item = (&'a str, Style)>,
+    width: usize,
+    color: bool,
+) -> String {
     use unicode_width::UnicodeWidthChar;
     let mut output = String::new();
-    for line in summary.lines() {
-        let mut used = 0;
-        for c in line.chars() {
+    let mut used = 0;
+    for (text, style) in parts {
+        let mut active = false;
+        for c in text.chars() {
             let size = c.width().unwrap_or(0);
-            if used + size > width {
+            if c == '\n' || used + size > width {
+                if active {
+                    write!(output, "{}", style.render_reset()).expect("String write");
+                    active = false;
+                }
                 output.push('\n');
                 used = 0;
+                if c == '\n' {
+                    continue;
+                }
+            }
+            if color && !style.is_plain() && !active {
+                write!(output, "{style}").expect("String write");
+                active = true;
             }
             output.push(c);
             used += size;
         }
+        if active {
+            write!(output, "{}", style.render_reset()).expect("String write");
+        }
+    }
+    if !output.is_empty() && !output.ends_with('\n') {
         output.push('\n');
     }
     output

@@ -48,7 +48,7 @@ impl NumberingArgs {
 
 #[derive(Parser, Debug, Clone)]
 #[command(
-    after_help = "Example: arpeggia number-antibody SEQUENCE --name VHH --scheme imgt --species human,alpaca\nSupply an unaligned amino-acid string, not a FASTA file. One variable domain is required;\ntags and constant tails are allowed. Only terminal FR1/FR4 truncations are supported.\nV/J results are reference similarities, with exact ties retained; they do not infer ancestry.\nConventions and examples: https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md"
+    after_help = "Example: arpeggia number-antibody SEQUENCE --name VHH --scheme imgt --species human,alpaca\nSupply an unaligned amino-acid string, not a FASTA file. One variable domain is required;\ntags and constant tails are allowed. Only terminal FR1/FR4 truncations are supported.\nV/J results are reference similarities, with exact ties retained; they do not infer ancestry.\nThe input appears above stitched V/J germlines. Rulers use original input and independent V/J\nsource positions; imputed positions are blank. Reverse video marks imputation.\nConventions and examples: https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md"
 )]
 pub(crate) struct NumberArgs {
     /// One unaligned antibody amino-acid sequence
@@ -67,7 +67,7 @@ pub(crate) struct NumberArgs {
 
 #[derive(Parser, Debug, Clone)]
 #[command(
-    after_help = "Example: arpeggia align-antibodies SEQUENCE1 SEQUENCE2 --names WT,Mutant --reference-index 1\nInputs must share a numbering scheme and be all heavy or all light chains (K/L may mix).\n--names preserves empty entries: --names WT,,Mutant assigns Seq002 to the second input.\nThe selected reference is displayed first; JSON rows stay in input order. Germline rows are hidden.\nConventions and examples: https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md"
+    after_help = "Example: arpeggia align-antibodies SEQUENCE1 SEQUENCE2 --names WT,Mutant --reference-index 1\nInputs must share a numbering scheme and be all heavy or all light chains (K/L may mix).\n--names preserves empty entries: --names WT,,Mutant assigns Seq002 to the second input.\nThe selected reference is displayed first and defines CDR bands across all rows.\nRulers use each original input; imputed positions are blank. Germlines are hidden.\nJSON rows stay in input order.\nConventions and examples: https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md"
 )]
 pub(crate) struct AlignArgs {
     /// One or more unaligned antibody amino-acid sequences

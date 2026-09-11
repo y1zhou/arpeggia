@@ -862,18 +862,30 @@ class NumberedAntibody:
         color: Literal["auto", "always", "never"] = "auto",
         rulers: bool = True,
     ) -> str:
-        """Render wrapped sequences with CDR regions and optional numbered rulers.
+        """Render the input above its combined V/J germlines, with CDR highlighting.
+
+        Each block contains one CDR marker row, input ruler and sequence, germline
+        ruler and sequence, then operations relative to the input. CDR1/2/3 bands
+        are gray/pink/cyan across every row except operations. Reverse video marks
+        imputed residues and their summary count. All tied reference names appear
+        in the summary; only representative V/J sequences are shown.
 
         Args:
             width (int | None): Total columns including labels; None detects
                 terminal width with an 80-column fallback.
             color (str): Auto uses terminal support and NO_COLOR; always/never
                 override it. Stored fields remain plain.
-            rulers (bool): Show numbered rulers by default; endpoint numbers
-                and plain CDR region labels remain when False.
+            rulers (bool): Show one-based source positions at every tenth residue.
+                Supplied-input coordinates survive imputation; imputed positions
+                are blank. V and J have independent source coordinates. False
+                hides rulers but retains endpoint numbers and CDR markers.
 
         Returns:
-            str: Styled or plain alignment text.
+            str: Wrapped sequence rows and separate V/J similarities for the supplied
+                input. Outer germline padding is blank; unknown junction hyphens
+                are gray with blank operations. A '+' marks a germline insertion,
+                '-' a deletion, ':' a positive-BLOSUM62 substitution, and 'x' any
+                other mismatch. Matches have blank operations.
 
         Raises:
             ValueError: Invalid display options or insufficient width.
@@ -906,15 +918,20 @@ class AntibodyAlignment:
         *,
         reference_index: int | None = None,
     ) -> str:
-        """Render wrapped sequences with CDR regions and optional numbered rulers.
+        """Render comparisons with the selected reference first and germlines hidden.
+
+        The selected reference defines the shared CDR bands and the convention
+        summary. Each row retains its own original input coordinates. Imputed
+        residues use reverse video; the summary count includes all rows.
 
         Args:
             width (int | None): Total columns including labels; None detects
                 terminal width with an 80-column fallback.
             color (str): Auto uses terminal support and NO_COLOR; always/never
                 override it. Stored fields remain plain.
-            rulers (bool): Show numbered rulers by default; endpoint numbers
-                and plain CDR region labels remain when False.
+            rulers (bool): Show one-based original input positions at every tenth
+                residue. Imputed positions are blank. False hides rulers while
+                retaining endpoint numbers and the single CDR marker row per block.
             reference_index (int | None): Zero-based reference override for
                 this rendering, preserving stored row order and reference.
 

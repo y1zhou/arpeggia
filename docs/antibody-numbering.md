@@ -134,20 +134,36 @@ a specific tied reference, pass its exact `.references[i].id` to
 
 ## Display and antibody alignments
 
-A [display revision is being specified](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#11-display-revision-workplan).
-It will place the input above the germlines, highlight imputation, compact the
-CDR annotations, and replace antibody-numbering rulers with per-sequence rulers.
-CDR bands and the convention summary will follow the selected reference across
-all rows. The behavior described below is the current implementation.
+The supplied antibody appears above one combined V/J germline row, with the V
+gene on the left and J gene on the right. Each wrapped block has this order:
 
-A single antibody displays against a combined V/J row, with the V gene on the
-left and J gene on the right. Gray hyphens across the uncovered junction have
-blank operation markers. Separate V/J summaries retain their scores and ties.
+1. CDR marker
+2. Input ruler and sequence
+3. Germline ruler and sequence
+4. Operations relative to the input
 
-CDR1, CDR2, and CDR3 have distinct backgrounds and plain-text region labels.
-Matches have blank markers; insertions are green `+`, deletions red `-`,
-positive-BLOSUM62 substitutions blue `:`, and other mismatches yellow `x`.
-Unmatched tails are gray. Rulers use canonical numbered positions.
+Only the representative V/J sequences are shown. The separate V/J summaries
+identify them and list every tied gene/allele name, grouped by species. Duplicate
+names collapse in the display; all source records remain in the result.
+
+The top legend and vertical bands use gray for CDR1, pink for CDR2 and cyan for
+CDR3. Bands cover markers, rulers and sequences, including gaps, but exclude
+operations and name gutters. Reverse video marks imputed residues and the
+`imputed residues` count, including zero.
+
+Rulers show each sequence's one-based source coordinates, with every tenth
+position right-aligned above its residue. Endpoint numbers flank each row.
+Original input coordinates survive imputation: prepending five inferred residues
+leaves the first supplied residue at position 1. Imputed positions are blank.
+The germline ruler uses independent V and J coordinates and restarts for J.
+Canonical antibody numbering remains available through `.residues[i].position`.
+
+Matches have blank operations; germline insertions relative to the input are
+green `+`, deletions red `-`, positive-BLOSUM62 substitutions blue `:`, and other
+mismatches yellow `x`. Unknown V/J junctions have gray hyphens and blank operations.
+Outer germline padding is blank where the input extends beyond germline coverage;
+unmatched sequence tails are gray. These display choices preserve the local
+V/J matches, scores, coverage and imputation evidence.
 
 Python `.format(width=None, color="auto", rulers=True)` and CLI `--width`,
 `--color auto|always|never`, and `--no-rulers` control the layout. Width includes
@@ -163,7 +179,11 @@ numbered positions and has no multiple-alignment score.
 The selected reference displays first, followed by the remaining inputs in their
 original relative order. Germline rows are hidden, including for a one-antibody
 alignment. `.format(reference_index=...)` changes one display without changing
-stored rows, columns, or the default reference.
+stored rows, columns, or the default reference. The selected reference defines
+the CDR bands across every sequence and ruler; the summary names that reference,
+its numbering scheme and CDR definition. Each antibody retains its own region
+annotations. Rulers follow each original input, and the imputation count includes
+all rows.
 
 ## Scope and qualification
 

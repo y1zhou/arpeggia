@@ -201,19 +201,30 @@ impl NumberedAntibody {
         Ok(result)
     }
 
-    /// Render the antibody against its combined V/J references, with CDR highlighting.
+    /// Render the input above its combined V/J germlines, with CDR highlighting.
+    ///
+    /// Each block contains one CDR marker row, input ruler and sequence, germline
+    /// ruler and sequence, then operations relative to the input. CDR1/2/3 bands
+    /// are gray/pink/cyan across every row except operations. Reverse video marks
+    /// imputed residues and their summary count. All tied reference names appear
+    /// in the summary; only representative V/J sequences are shown.
     ///
     /// Args:
     ///     width (int | None): Total visible columns including both gene labels.
     ///         None detects terminal width or falls back to 80.
     ///     color (str): "auto", "always", or "never". Auto uses sys.stdout and
     ///         respects NO_COLOR. Stored data remain plain.
-    ///     rulers (bool): Show numbered-position ticks by default. False hides
-    ///         rulers while retaining endpoint numbers and CDR region labels.
+    ///     rulers (bool): Show one-based source positions at every tenth residue.
+    ///         Supplied-input coordinates survive imputation; imputed positions
+    ///         are blank. V and J have independent source coordinates. False
+    ///         hides rulers but retains endpoint numbers and CDR markers.
     ///
     /// Returns:
     ///     str: Wrapped sequence rows and separate V/J similarities for the supplied
-    ///         input. Gray junction hyphens have blank operation markers.
+    ///         input. Outer germline padding is blank; unknown junction hyphens
+    ///         are gray with blank operations. A '+' marks a germline insertion,
+    ///         '-' a deletion, ':' a positive-BLOSUM62 substitution, and 'x' any
+    ///         other mismatch. Matches have blank operations.
     ///
     /// Raises:
     ///     ValueError: Invalid color policy or insufficient width.
@@ -240,11 +251,17 @@ impl NumberedAntibody {
 impl AntibodyAlignment {
     /// Render antibody comparisons with the selected reference first and germlines hidden.
     ///
+    /// The selected reference defines the shared CDR bands and the convention
+    /// summary. Each row retains its own original input coordinates. Imputed
+    /// residues use reverse video; the summary count includes all rows.
+    ///
     /// Args:
     ///     width (int | None): Total visible width, detected from the terminal
     ///         when omitted, with an 80-column fallback.
     ///     color (str): "auto" (default), "always", or "never".
-    ///     rulers (bool): Show numbered-position rulers by default.
+    ///     rulers (bool): Show one-based original input positions at every tenth
+    ///         residue. Imputed positions are blank. False hides rulers while
+    ///         retaining endpoint numbers and the single CDR marker row per block.
     ///     reference_index (int | None): Override the zero-based comparison row
     ///         for this display. None uses the object's stored reference_index.
     ///
