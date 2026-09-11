@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AntibodyAlignment` aligns one or more numbered antibodies through the ordered
   union of positions, preserving input row order and per-row CDR definitions.
   Heavy/light mixing and incompatible schemes fail; K/L mixtures are supported.
+- Antibody displays combine V/J references with separate gene labels and gray
+  uncovered junctions, highlight CDRs with backgrounds and plain region labels,
+  and support numbered rulers, wrapping and color controls. Multi-antibody views
+  show the selected antibody reference first and hide germline rows.
 - Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI
   `align-seqs`: global, local, and query-full semi-global modes with BLOSUM62
   and configurable affine gap costs. `SeqAlignment` includes gapped strings,

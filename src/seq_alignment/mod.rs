@@ -2,7 +2,7 @@
 
 use crate::{Analysis, AnalysisWarning, ArpeggiaError, ArpeggiaResult, WarningCode};
 use serde::Serialize;
-mod display;
+pub(crate) mod display;
 mod matrices;
 pub use display::AlignmentColor;
 #[cfg(feature = "python")]
@@ -181,10 +181,41 @@ pub(crate) fn encode(sequence: &str) -> ArpeggiaResult<Vec<u8>> {
         ));
     }
     sequence.bytes().map(|b| {
-        let b = match b.to_ascii_uppercase() { b'U' => b'C', b'O' => b'K', c => c };
-        matrices::BLOSUM62_ALPHABET.iter().position(|a| *a == b).map(|i| i as u8)
+        encode_letter(b)
             .ok_or_else(|| ArpeggiaError::InvalidArgument("sequences must contain only amino-acid letters (including B/Z/X/U/O), without gaps, whitespace, or stops".into()))
     }).collect()
+}
+
+fn encode_letter(letter: u8) -> Option<u8> {
+    let letter = match letter.to_ascii_uppercase() {
+        b'U' => b'C',
+        b'O' => b'K',
+        c => c,
+    };
+    matrices::BLOSUM62_ALPHABET
+        .iter()
+        .position(|a| *a == letter)
+        .map(|i| i as u8)
+}
+
+// Both callers supply validated amino-acid symbols or alignment gap cells.
+pub(crate) fn operation(reference: u8, query: u8) -> u8 {
+    if reference == query {
+        return b' ';
+    }
+    if reference == b'-' {
+        return b'+';
+    }
+    if query == b'-' {
+        return b'-';
+    }
+    let row = usize::from(encode_letter(reference).expect("validated reference residue"));
+    let column = usize::from(encode_letter(query).expect("validated query residue"));
+    if matrices::BLOSUM62[row * 23 + column] > 0 {
+        b':'
+    } else {
+        b'x'
+    }
 }
 
 pub(crate) fn backend_error(error: hyalite::Error) -> ArpeggiaError {
@@ -247,13 +278,7 @@ pub fn align_seqs(
                 let same = reference.as_bytes()[i] == query.as_bytes()[j];
                 aligned_reference.push(reference.as_bytes()[i] as char);
                 aligned_query.push(query.as_bytes()[j] as char);
-                operations.push(if same {
-                    ' '
-                } else if scoring.score(first[i] as usize, second[j] as usize) > 0 {
-                    ':'
-                } else {
-                    'x'
-                });
+                operations.push(operation(reference.as_bytes()[i], query.as_bytes()[j]) as char);
                 paired += 1;
                 matches += usize::from(same);
                 i += 1;

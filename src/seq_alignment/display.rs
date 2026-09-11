@@ -40,23 +40,6 @@ impl SeqAlignment {
     }
 
     pub(crate) fn render(&self, width: usize, color: bool, rulers: bool) -> ArpeggiaResult<String> {
-        let digits = self.reference.len().max(self.query.len()).to_string().len();
-        let names = [
-            display_name(&self.reference_name),
-            display_name(&self.query_name),
-        ];
-        let label_width = names.iter().map(|n| n.width()).max().unwrap_or(0);
-        let prefix = label_width + 2 + digits; // label, start coordinate, spaces
-        let overhead = prefix + 1 + digits;
-        let block_width = width
-            .checked_sub(overhead)
-            .filter(|v| *v > 0)
-            .ok_or_else(|| {
-                ArpeggiaError::InvalidArgument(format!(
-                    "alignment width must be at least {} columns",
-                    overhead + 1
-                ))
-            })?;
         let ratio =
             |value: Option<f64>| value.map_or_else(|| "undefined".into(), |v| format!("{v:.4}"));
         let summary = format!(
@@ -79,17 +62,6 @@ impl SeqAlignment {
             self.alignment_length,
             self.shorter_length
         );
-        let mut output = String::new();
-        // ASCII summaries are unstyled; wrapping also bounds long numeric values.
-        for line in summary
-            .lines()
-            .chain((self.alignment_length == 0).then_some("No positive-scoring alignment"))
-        {
-            for chunk in line.as_bytes().chunks(width) {
-                output.push_str(std::str::from_utf8(chunk).expect("ASCII summary"));
-                output.push('\n');
-            }
-        }
         let leading = self.reference_span.0.max(self.query_span.0);
         let trailing = (self.reference.len() - self.reference_span.1)
             .max(self.query.len() - self.query_span.1);
@@ -116,57 +88,205 @@ impl SeqAlignment {
             self.operations,
             ".".repeat(trailing)
         );
-        let mut positions = [0usize; 2];
-        for start in (0..operations.len()).step_by(block_width) {
-            let end = start.saturating_add(block_width).min(operations.len());
-            let ops = &operations.as_bytes()[start..end];
-            output.push('\n');
-            for (row, (label, sequence)) in
-                [(names[0].as_str(), &first), (names[1].as_str(), &second)]
-                    .into_iter()
-                    .enumerate()
-            {
-                let cells = &sequence.as_bytes()[start..end];
-                let mut ruler = vec![b' '; prefix + cells.len()];
-                let mut begin = None;
-                for (column, &cell) in cells.iter().enumerate() {
-                    if cell != b'-' && cell != b' ' {
-                        positions[row] += 1;
-                        begin.get_or_insert(positions[row]);
-                        if rulers && positions[row].is_multiple_of(10) {
-                            let number = positions[row].to_string();
-                            let stop = prefix + column + 1;
-                            // Left gutter accommodates ticks at wrap boundaries.
-                            ruler[stop - number.len()..stop].copy_from_slice(number.as_bytes());
+        let rows: Vec<_> = [(&self.reference_name, first), (&self.query_name, second)]
+            .into_iter()
+            .enumerate()
+            .map(|(index, (name, cells))| {
+                let mut position = 0usize;
+                let labels = cells
+                    .bytes()
+                    .map(|cell| {
+                        if cell == b'-' || cell == b' ' {
+                            None
+                        } else {
+                            position += 1;
+                            Some(PositionLabel {
+                                text: position.to_string(),
+                                tick: position.is_multiple_of(10),
+                            })
                         }
-                    }
+                    })
+                    .collect();
+                DisplayRow {
+                    name: name.clone(),
+                    right_name: String::new(),
+                    cells: cells.into_bytes(),
+                    positions: labels,
+                    operations: operations.as_bytes().to_vec(),
+                    regions: Vec::new(),
+                    show_operations: index == 1,
                 }
-                if rulers {
-                    output.push_str(std::str::from_utf8(&ruler).expect("ASCII ruler").trim_end());
-                    output.push('\n');
-                }
-                let first_number = begin.map_or_else(String::new, |n| n.to_string());
-                let last_number = begin.map_or_else(String::new, |_| positions[row].to_string());
-                output.push_str(label);
-                output.push_str(&" ".repeat(label_width - label.width()));
-                output.push_str(&format!(" {first_number:>digits$} "));
-                for (&cell, &op) in cells.iter().zip(ops) {
-                    paint(&mut output, cell, op, color);
-                }
-                output.push_str(&format!(" {last_number:>digits$}\n"));
-            }
-            output.push_str(&" ".repeat(prefix));
-            for &op in ops {
-                paint(&mut output, if op == b'.' { b' ' } else { op }, op, color);
-            }
-            output.push('\n');
+            })
+            .collect();
+        let body = render_rows(&rows, width, color, rulers)?;
+        let mut output = wrap_summary(&summary, width);
+        if self.alignment_length == 0 {
+            output.push_str(&wrap_summary("No positive-scoring alignment", width));
         }
+        output.push_str(&body);
         Ok(output.trim_end_matches('\n').into())
     }
 }
 
+/// A coordinate label at a particular display cell, independent of input offsets.
+pub(crate) struct PositionLabel {
+    pub(crate) text: String,
+    pub(crate) tick: bool,
+}
+
+/// Internal display data. Cells, positions and operations have equal lengths;
+/// regions are either empty or one CDR index (0–3) per cell.
+pub(crate) struct DisplayRow {
+    pub(crate) name: String,
+    pub(crate) right_name: String,
+    pub(crate) cells: Vec<u8>,
+    pub(crate) positions: Vec<Option<PositionLabel>>,
+    pub(crate) operations: Vec<u8>,
+    pub(crate) regions: Vec<u8>,
+    pub(crate) show_operations: bool,
+}
+
+pub(crate) fn render_rows(
+    rows: &[DisplayRow],
+    width: usize,
+    color: bool,
+    rulers: bool,
+) -> ArpeggiaResult<String> {
+    let names: Vec<_> = rows.iter().map(|r| display_name(&r.name)).collect();
+    let right_names: Vec<_> = rows.iter().map(|r| display_name(&r.right_name)).collect();
+    let label_width = names.iter().map(|n| n.width()).max().unwrap_or(0);
+    let right_width = right_names.iter().map(|n| n.width()).max().unwrap_or(0);
+    let digits = rows
+        .iter()
+        .flat_map(|r| r.positions.iter().flatten())
+        .map(|p| p.text.len())
+        .max()
+        .unwrap_or(1);
+    let prefix = label_width + 2 + digits;
+    let overhead = prefix + 1 + digits + if right_width == 0 { 0 } else { right_width + 1 };
+    let block_width = width
+        .checked_sub(overhead)
+        .filter(|v| *v > 0)
+        .ok_or_else(|| {
+            ArpeggiaError::InvalidArgument(format!(
+                "alignment width must be at least {} columns",
+                overhead + 1
+            ))
+        })?;
+    let length = rows.first().map_or(0, |r| r.cells.len());
+    debug_assert!(rows.iter().all(|r| r.cells.len() == length
+        && r.operations.len() == length
+        && r.positions.len() == length
+        && (r.regions.is_empty() || r.regions.len() == length)));
+    let mut output = String::new();
+    for start in (0..length).step_by(block_width) {
+        let end = start.saturating_add(block_width).min(length);
+        output.push('\n');
+        for (index, row) in rows.iter().enumerate() {
+            let cells = &row.cells[start..end];
+            let coordinates = &row.positions[start..end];
+            if !row.regions.is_empty() && row.regions[start..end].iter().any(|r| *r > 0) {
+                output.push_str(&" ".repeat(prefix));
+                let mut labels = vec![b' '; cells.len()];
+                let mut offset = 0;
+                for run in row.regions[start..end].chunk_by(|a, b| a == b) {
+                    if run[0] > 0 {
+                        labels[offset..offset + run.len()].fill(b'-');
+                        let name = format!("CDR{}", run[0]);
+                        if run.len() >= name.len() {
+                            let at = offset + (run.len() - name.len()) / 2;
+                            labels[at..at + name.len()].copy_from_slice(name.as_bytes());
+                        } else {
+                            labels[offset..offset + run.len()].fill(b'0' + run[0]);
+                        }
+                    }
+                    offset += run.len();
+                }
+                output.push_str(
+                    std::str::from_utf8(&labels)
+                        .expect("ASCII region labels")
+                        .trim_end(),
+                );
+                output.push('\n');
+            }
+            if rulers {
+                let mut ruler = vec![b' '; prefix + cells.len()];
+                for (column, label) in coordinates.iter().enumerate() {
+                    if let Some(label) = label.as_ref().filter(|p| p.tick) {
+                        let stop = prefix + column + 1;
+                        ruler[stop - label.text.len()..stop].copy_from_slice(label.text.as_bytes());
+                    }
+                }
+                output.push_str(std::str::from_utf8(&ruler).expect("ASCII ruler").trim_end());
+                output.push('\n');
+            }
+            let begin = coordinates
+                .iter()
+                .flatten()
+                .next()
+                .map_or("", |p| p.text.as_str());
+            let last = coordinates
+                .iter()
+                .flatten()
+                .next_back()
+                .map_or("", |p| p.text.as_str());
+            output.push_str(&names[index]);
+            output.push_str(&" ".repeat(label_width - names[index].width()));
+            write!(output, " {begin:>digits$} ").expect("String write");
+            for (column, &cell) in cells.iter().enumerate() {
+                paint(
+                    &mut output,
+                    cell,
+                    row.operations[start + column],
+                    row.regions.get(start + column).copied().unwrap_or(0),
+                    color,
+                );
+            }
+            write!(output, " {last:>digits$}").expect("String write");
+            if right_width > 0 {
+                write!(output, " {}", right_names[index]).expect("String write");
+            }
+            output.push('\n');
+            if row.show_operations {
+                output.push_str(&" ".repeat(prefix));
+                for column in start..end {
+                    let op = row.operations[column];
+                    paint(
+                        &mut output,
+                        if op == b'.' { b' ' } else { op },
+                        op,
+                        row.regions.get(column).copied().unwrap_or(0),
+                        color,
+                    );
+                }
+                output.push('\n');
+            }
+        }
+    }
+    Ok(output)
+}
+
+pub(crate) fn wrap_summary(summary: &str, width: usize) -> String {
+    use unicode_width::UnicodeWidthChar;
+    let mut output = String::new();
+    for line in summary.lines() {
+        let mut used = 0;
+        for c in line.chars() {
+            let size = c.width().unwrap_or(0);
+            if used + size > width {
+                output.push('\n');
+                used = 0;
+            }
+            output.push(c);
+            used += size;
+        }
+        output.push('\n');
+    }
+    output
+}
+
 // Labels are metadata; escape controls only in the human-readable rendering.
-fn display_name(name: &str) -> String {
+pub(crate) fn display_name(name: &str) -> String {
     let mut label = String::new();
     for c in name.chars() {
         if c.is_control() {
@@ -178,8 +298,8 @@ fn display_name(name: &str) -> String {
     label
 }
 
-fn paint(output: &mut String, cell: u8, operation: u8, color: bool) {
-    let style = match operation {
+fn paint(output: &mut String, cell: u8, operation: u8, region: u8, color: bool) {
+    let mut style = match operation {
         b'+' => AnsiColor::Green.on_default(),
         b'-' => AnsiColor::Red.on_default(),
         b':' => AnsiColor::Blue.on_default(),
@@ -187,7 +307,18 @@ fn paint(output: &mut String, cell: u8, operation: u8, color: bool) {
         b'.' => AnsiColor::BrightBlack.on_default(),
         _ => Style::new(),
     };
-    if color && cell != b' ' && !style.is_plain() {
+    if region > 0 {
+        let background = match region {
+            1 => AnsiColor::BrightWhite,
+            2 => AnsiColor::BrightMagenta,
+            _ => AnsiColor::BrightCyan,
+        };
+        style = style.bg_color(Some(background.into()));
+        if operation == b' ' {
+            style = style.fg_color(Some(AnsiColor::Black.into()));
+        }
+    }
+    if color && (cell != b' ' || region > 0) && !style.is_plain() {
         write!(
             output,
             "{style}{}{reset}",

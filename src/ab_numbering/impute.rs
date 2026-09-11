@@ -1,5 +1,4 @@
 use super::*;
-use immunum::alignment::AlignedPosition;
 use std::collections::{HashMap, HashSet};
 
 impl NumberedAntibody {
@@ -129,31 +128,22 @@ fn project(
     chain: Chain,
     region: &str,
 ) -> ArpeggiaResult<HashMap<NumberedPosition, char>> {
-    // V metadata provide IMGT positions through 104; J metadata provide FR4
-    // positions only. Unavailable reference ends have no states to impute.
-    let source: Vec<_> = hit
-        .imgt_positions
-        .iter()
-        .enumerate()
-        .filter_map(|(i, p)| p.map(|p| (i, AlignedPosition::Aligned(p.number))))
-        .collect();
-    let states: Vec<_> = source.iter().map(|(_, state)| *state).collect();
-    let positions = core::convert_states(&states, scheme, chain)?;
+    let positions = germline::reference_positions(hit, scheme, chain)?;
     let regions = if definition == scheme {
         positions.clone()
     } else {
-        core::convert_states(&states, definition, chain)?
+        germline::reference_positions(hit, definition, chain)?
     };
     Ok(positions
         .into_iter()
         .enumerate()
-        .filter_map(|(i, p)| {
-            let assigned = regions.get(i).map_or_else(
+        .filter_map(|(i, position)| {
+            let position = position?;
+            let assigned = regions[i].map_or_else(
                 || "FR4".into(),
                 |p| core::region(p.number, definition, chain),
             );
-            (assigned == region)
-                .then(|| (p, hit.alignment.reference.as_bytes()[source[i].0] as char))
+            (assigned == region).then(|| (position, hit.alignment.reference.as_bytes()[i] as char))
         })
         .collect())
 }

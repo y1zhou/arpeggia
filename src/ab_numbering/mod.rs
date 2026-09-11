@@ -2,6 +2,7 @@
 
 mod alignment;
 mod core;
+mod display;
 mod germline;
 mod impute;
 pub use alignment::{AntibodyAlignment, align_antibodies};

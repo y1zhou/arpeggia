@@ -314,6 +314,29 @@ pub(super) fn matches(
     Ok(())
 }
 
+pub(super) fn reference_positions(
+    hit: &GermlineHit,
+    scheme: Scheme,
+    chain: Chain,
+) -> ArpeggiaResult<Vec<Option<NumberedPosition>>> {
+    if scheme == Scheme::IMGT {
+        return Ok(hit.imgt_positions.clone());
+    }
+    let source: Vec<_> = hit
+        .imgt_positions
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| p.map(|p| (i, immunum::alignment::AlignedPosition::Aligned(p.number))))
+        .collect();
+    let states: Vec<_> = source.iter().map(|(_, p)| *p).collect();
+    let converted = core::convert_states(&states, scheme, chain)?;
+    let mut result = vec![None; hit.imgt_positions.len()];
+    for ((i, _), p) in source.into_iter().zip(converted) {
+        result[i] = Some(p);
+    }
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
