@@ -78,8 +78,34 @@ pub(super) fn convert(
     input_length: usize,
 ) -> ArpeggiaResult<Vec<NumberedPosition>> {
     let aligned = &alignment.positions[alignment.query_start..=alignment.query_end];
+    let mut converted = convert_states(aligned, scheme, chain)?;
+    // Preserve Immunum's AHo light-chain tail rule; this residue has no raw
+    // profile state when the alignment ends at IMGT 127.
+    if scheme == Scheme::Aho
+        && chain != Chain::IGH
+        && converted.last()
+            == Some(&NumberedPosition {
+                number: 148,
+                insertion: None,
+            })
+        && alignment.query_start + converted.len() < input_length
+    {
+        converted.push(NumberedPosition {
+            number: 149,
+            insertion: None,
+        });
+    }
+    Ok(converted)
+}
+
+pub(super) fn convert_states(
+    aligned: &[AlignedPosition],
+    scheme: Scheme,
+    chain: Chain,
+) -> ArpeggiaResult<Vec<NumberedPosition>> {
     // Match upstream's insertion inheritance to validate rule capacities before
-    // calling its unchecked converter. Only recognized H/K/L domains reach here.
+    // calling its unchecked converter. States must be ordered H/K/L profile or
+    // germline positions, with insertions following an aligned position.
     let mut previous = 0;
     let inherited: Vec<_> = aligned
         .iter()
@@ -126,7 +152,7 @@ pub(super) fn convert(
             "{scheme} cannot represent an internal profile position"
         )));
     }
-    let mut converted: Vec<NumberedPosition> =
+    let converted: Vec<NumberedPosition> =
         immunum::numbering::apply_numbering(&aligned[..end], scheme, chain)
             .into_iter()
             .map(Into::into)
@@ -141,26 +167,10 @@ pub(super) fn convert(
     {
         return Err(failure(format!("inconsistent {scheme} conversion")));
     }
-    // Preserve Immunum's AHo light-chain tail rule; this residue has no raw
-    // profile state when the alignment ends at IMGT 127.
-    if scheme == Scheme::Aho
-        && chain != Chain::IGH
-        && converted.last()
-            == Some(&NumberedPosition {
-                number: 148,
-                insertion: None,
-            })
-        && alignment.query_start + end < input_length
-    {
-        converted.push(NumberedPosition {
-            number: 149,
-            insertion: None,
-        });
-    }
     Ok(converted)
 }
 
-fn region(position: u8, scheme: Scheme, chain: Chain) -> String {
+pub(super) fn region(position: u8, scheme: Scheme, chain: Chain) -> String {
     // Published AHo structural loops; upstream explicitly marks its table
     // unverified. Other definitions reuse upstream's cited region tables.
     let definition = if scheme == Scheme::Aho {
@@ -244,6 +254,7 @@ pub(super) fn number(
                 amino_acid: sequence.as_bytes()[start + offset] as char,
                 input_index: Some(start + offset),
                 region,
+                imputed_from: Vec::new(),
             }
         })
         .collect();

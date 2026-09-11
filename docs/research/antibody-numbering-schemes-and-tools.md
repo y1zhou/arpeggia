@@ -519,7 +519,7 @@ unchanged. This does not reconstruct coordinates or the full V/D/J junction.
 ## 10. Implementation plan
 
 **Status, 11 September 2026:** implementation authorized and underway. The Rust
-numbering core and offline V/J matching are implemented; imputation, antibody alignments,
+numbering core, offline V/J matching and terminal imputation are implemented; antibody alignments,
 rendering and CLI/Python integration remain in progress. The accepted behavior is
 in [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
 the milestones below define the execution order and completion criteria.
@@ -538,6 +538,13 @@ known paired/identical counts, identity over known pairs, and separate coverage
 over known reference/input segment lengths. Score-only candidate ranking uses
 Hyalite's reusable scratch; tracebacks are constructed until the highest
 qualifying score and all exact ties are resolved.
+
+`NumberedAntibody.impute(v_reference=None, j_reference=None)` accepts exact
+`GermlineReference.id` selectors from tied hits. It reuses stored matches and
+converts their IMGT reference positions through the upstream rules without
+repeating sequence alignment. Added residues have `input_index=None` and
+`imputed_from` source IDs. Unsupported reference conversion leaves the affected
+end unresolved with a diagnostic; it never alters existing residue labels.
 
 Keep numbering, germline matching and imputation in `ab_numbering`. Use
 Immunum's public alignment/conversion functions and rules, with Arpeggia

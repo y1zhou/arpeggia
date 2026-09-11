@@ -2,6 +2,7 @@
 
 mod core;
 mod germline;
+mod impute;
 pub use germline::{GermlineHit, GermlineMatch, GermlineReference, GermlineSpecies};
 
 use crate::{ArpeggiaError, ArpeggiaResult};
@@ -146,6 +147,8 @@ pub struct NumberedResidue {
     pub input_index: Option<usize>,
     /// FR1, CDR1, FR2, CDR2, FR3, CDR3 or FR4.
     pub region: String,
+    /// Source reference IDs for an imputed residue; empty for supplied residues.
+    pub imputed_from: Vec<String>,
 }
 
 /// One variable domain, retaining the complete input and original domain span.
@@ -194,6 +197,35 @@ impl NumberedAntibody {
             .filter(|r| r.region.eq_ignore_ascii_case(region))
             .map(|r| r.amino_acid)
             .collect()
+    }
+
+    /// First framework sequence.
+    pub fn fr1(&self) -> String {
+        self.region_sequence("FR1")
+    }
+    /// First complementarity-determining region sequence.
+    pub fn cdr1(&self) -> String {
+        self.region_sequence("CDR1")
+    }
+    /// Second framework sequence.
+    pub fn fr2(&self) -> String {
+        self.region_sequence("FR2")
+    }
+    /// Second complementarity-determining region sequence.
+    pub fn cdr2(&self) -> String {
+        self.region_sequence("CDR2")
+    }
+    /// Third framework sequence.
+    pub fn fr3(&self) -> String {
+        self.region_sequence("FR3")
+    }
+    /// Third complementarity-determining region sequence.
+    pub fn cdr3(&self) -> String {
+        self.region_sequence("CDR3")
+    }
+    /// Final framework sequence.
+    pub fn fr4(&self) -> String {
+        self.region_sequence("FR4")
     }
 }
 
