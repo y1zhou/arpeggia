@@ -29,8 +29,8 @@ definitions. Martin uses AbM/Martin boundaries, as in the
 [Martin group's study](https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/).
 AHo uses CDR1 25–40, CDR2 58–77 and CDR3 109–137 from the published
 [structural-loop convention](https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f).
-Public docstrings must cite these definitions. Whether `chothia` also aliases
-Martin in the CDR-definition argument is deferred until engine selection.
+Public docstrings must cite these definitions. The meaning of an explicit
+`chothia` CDR-definition argument remains open.
 
 An explicit imputation method returns a new `NumberedAntibody` and preserves
 the original object and supplied sequence. It fills only missing chunks at the
@@ -49,5 +49,13 @@ numbering, domain coverage and failures separately.
 The [comparison report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
 records the completed 26,365-input run and unresolved qualification issues.
 
-Engine selection and the remaining result contract are open. Supporting evidence is in the
+Use Immunum's native Rust core with default features disabled. Arpeggia owns
+the result types, Python bindings and CLI/display formatting. Its four required
+schemes and fixture agreement support this choice without establishing
+independent accuracy. Integration must correct the conversion/span defect,
+require meaningful aligned-domain coverage, and qualify long insertions and
+multiple-domain detection. Pin the qualified core version and record any
+upstream corrections.
+
+The remaining result contract is open. Supporting evidence is in the
 [numbering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md).

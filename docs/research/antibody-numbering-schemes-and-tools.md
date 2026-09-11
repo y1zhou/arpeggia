@@ -269,6 +269,8 @@ For reference labels, use structurally curated cases where a correspondence is d
 
 These findings inform the design interview. Accepted scope and API decisions are recorded in
 [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
+The selected backend is Immunum's Rust core with default features disabled;
+Arpeggia supplies its own result objects, Python bindings and CLI rendering.
 
 ### 9.1 Native engine qualification
 
@@ -318,6 +320,22 @@ would add profile construction, domain detection and insertion-rule maintenance
 without evidence of improved accuracy.
 Constant-region numbering remains separate work: IMGT defines a distinct
 C-domain system, and this engine models variable domains only.[^imgt-constant]
+
+Source inspection identifies a public integration path: load the H/K/L
+`ScoringMatrix` profiles, call `align()` with reusable `AlignBuffer` storage,
+retain the winning raw `Alignment`, then call `apply_numbering()`. This exposes
+domain evidence and source-position runs before conversion. `Annotator::number()`
+hides that alignment and converts before checking confidence, so validating
+only its final result cannot prevent the insertion failure. The lower-level
+path reuses upstream scoring, alignment and scheme rules; it needs only the
+chain-selection and validation orchestration.[^immunum-core-api]
+
+The raw alignment also supports cheap conversion into a separate CDR definition's
+native scheme, transferring region membership through input offsets without
+another alignment. Conversion lengths need explicit handling: Martin/Kabat
+can omit a light-chain terminal source position, while the high-level AHo path
+can append light-chain position 149 from the next input residue. Keep these
+boundary rules separate from CDR membership.[^immunum-annotator][^immunum-numbering]
 
 ### 9.2 Germline data and interpretation
 
@@ -415,8 +433,13 @@ The Martin group's 2024 study supports pairing AbM boundaries with Martin
 numbering. The selected AHo structural-loop convention agrees with the core
 boundaries illustrated by Honegger and Plückthun, but is not universal across
 tools and differs from Immunum's unverified table. Public docstrings will cite
-these sources. The `chothia` CDR-definition alias remains deferred until engine
-selection.[^martin-loops][^aho-loops][^aho-original]
+these sources.[^martin-loops][^aho-loops][^aho-original]
+
+Immunum's explicit Chothia CDR table follows the 2021 consensus: heavy
+26–32 / 52–56 / 96–101 and light 26–32 / 50–52 / 91–96. These differ from its
+Martin/AbM boundaries. Whether Arpeggia exposes that distinct definition as
+`cdr_definition="chothia"` or aliases it to Martin remains an API decision;
+the accepted numbering alias alone does not settle it.[^immunum-chothia]
 
 ### 9.5 Explicit germline imputation
 
@@ -467,6 +490,7 @@ unchanged. This does not reconstruct coordinates or the full V/D/J junction.
 [^immunum-numbering]: Immunum **numbering rules and insertion generation**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering.rs>.
 [^immunum-aho]: Immunum **AHo numbering and unverified region table**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering/aho.rs>.
 [^imgt-constant]: IMGT **unique numbering for C domains**: <https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVCsuperfamily.html>.
+[^immunum-core-api]: Immunum 1.3.1 public [alignment state and API](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/alignment.rs#L35) and [scheme conversion](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering.rs#L79).
 [^imgt-terms]: IMGT **terms of use**, retrieved 10 September 2026: <https://www.imgt.org/about/termsofuse.php>.
 [^imgt-download]: IMGT **GENE-DB downloads**: <https://www.imgt.org/download/GENE-DB/>; [release](https://www.imgt.org/download/GENE-DB/RELEASE); [gapped amino-acid references](https://www.imgt.org/download/GENE-DB/IMGTGENEDB-ReferenceSequences.fasta-AA-WithGaps-F%2BORF%2BinframeP).
 [^imgt-alpaca]: IMGT direct alpaca exports: [IGHV](https://www.imgt.org/genedb/GENElect?query=7.3+IGHV&species=Vicugna+pacos), [IGHJ](https://www.imgt.org/genedb/GENElect?query=7.6+IGHJ&species=Vicugna+pacos). Unfiltered exports contain 84 V and 7 J records; section 9 counts use the stated functional filter.
@@ -478,4 +502,5 @@ unchanged. This does not reconstruct coordinates or the full V/D/J junction.
 [^martin-loops]: Martin group, **Do antibody CDR loops change conformation upon binding?** (2024), Martin numbering with AbM CDR boundaries: <https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/>.
 [^aho-loops]: Xu et al., **Functional clustering of B cell receptors using sequence and structural features** (2019), Methods: BCR notation: <https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f>.
 [^aho-original]: Honegger and Plückthun (2001), original AHo paper, Figure 3: [author-hosted PDF](https://plueckthun.bioc.uzh.ch/wp-content/uploads/Publications/APpub0204.pdf).
+[^immunum-chothia]: Immunum 1.3.1 [Chothia CDR definitions and cited 2021 consensus](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering/chothia.rs#L16).
 [^antid-imputation]: antid [terminal imputation](https://github.com/y1zhou/antid/blob/cbae1717f8bdb87fd504066dd6e3e3730de0dfe9/src/antid/numbering/antibody.py#L592-L642).

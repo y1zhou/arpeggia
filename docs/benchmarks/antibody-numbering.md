@@ -157,8 +157,8 @@ organisms or structural numbering labels.
 
 ## Implications for Arpeggia
 
-Immunum remains the integration candidate: native Rust, four requested schemes
-and strongest fixture-label agreement. Adoption still requires resolving its
+Immunum's Rust core was selected after this comparison: four requested schemes
+and strongest fixture-label agreement. Integration still requires resolving its
 conversion/span defect, requiring meaningful aligned-domain coverage,
 and addressing the long-insertion and multiple-domain limitations documented
 in the [numbering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md).
@@ -170,5 +170,5 @@ positive domain spans are 80–139 residues; these inputs do not qualify
 extreme loop lengths, severe partial domains, multidomain rejection,
 germline matching or imputation. Runs used different interfaces and concurrent
 processes without repeated timing, so no comparative speed claim is made.
-Engine selection remains open under
+Arpeggia owns the bindings and rendering under
 [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
