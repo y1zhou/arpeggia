@@ -866,7 +866,7 @@ class NumberedAntibody:
 
         Each block contains one CDR marker row, input ruler and sequence, germline
         ruler and sequence, then operations relative to the input. CDR1/2/3 bands
-        are gray/pink/cyan across every row except operations. Reverse video marks
+        are gray/pink/cyan across every row except operations. Yellow backgrounds mark
         imputed residues and their summary count. All tied reference names appear
         in the summary; only representative V/J sequences are shown.
 
@@ -875,9 +875,9 @@ class NumberedAntibody:
                 terminal width with an 80-column fallback.
             color (str): Auto uses terminal support and NO_COLOR; always/never
                 override it. Stored fields remain plain.
-            rulers (bool): Show one-based source positions at every tenth residue.
+            rulers (bool): Show one-based residue positions at every tenth residue.
                 Supplied-input coordinates survive imputation; imputed positions
-                are blank. V and J have independent source coordinates. False
+                are blank. Germline counts continue from V through J, ignoring gaps. False
                 hides rulers but retains endpoint numbers and CDR markers.
 
         Returns:
@@ -922,7 +922,7 @@ class AntibodyAlignment:
 
         The selected reference defines the shared CDR bands and the convention
         summary. Each row retains its own original input coordinates. Imputed
-        residues use reverse video; the summary count includes all rows.
+        residues have yellow backgrounds; the summary count totals all antibodies.
 
         Args:
             width (int | None): Total columns including labels; None detects

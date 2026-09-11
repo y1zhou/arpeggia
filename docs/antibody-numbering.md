@@ -148,14 +148,19 @@ names collapse in the display; all source records remain in the result.
 
 The top legend and vertical bands use gray for CDR1, pink for CDR2 and cyan for
 CDR3. Bands cover markers, rulers and sequences, including gaps, but exclude
-operations and name gutters. Reverse video marks imputed residues and the
-`imputed residues` count, including zero.
+operations and name gutters. Yellow backgrounds mark imputed residues and the
+`imputed residues` count, including zero. Imputation highlighting takes precedence
+over a CDR background at the same residue.
 
-Rulers show each sequence's one-based source coordinates, with every tenth
-position right-aligned above its residue. Endpoint numbers flank each row.
+Rulers show one-based residue positions, with every tenth position right-aligned
+above its residue. Endpoint numbers flank each row.
 Original input coordinates survive imputation: prepending five inferred residues
 leaves the first supplied residue at position 1. Imputed positions are blank.
-The germline ruler uses independent V and J coordinates and restarts for J.
+The germline ruler counts continuously through V then J, ignoring alignment
+gaps and the unknown junction. If V ends at 96, J starts at 97. This is a display
+count; each stored V/J alignment retains its own source coordinates. The endpoint
+and J name follow the visible germline sequence with two spaces between each,
+without padding to the input's right edge.
 Canonical antibody numbering remains available through `.residues[i].position`.
 
 Matches have blank operations; germline insertions relative to the input are
@@ -182,8 +187,9 @@ alignment. `.format(reference_index=...)` changes one display without changing
 stored rows, columns, or the default reference. The selected reference defines
 the CDR bands across every sequence and ruler; the summary names that reference,
 its numbering scheme and CDR definition. Each antibody retains its own region
-annotations. Rulers follow each original input, and the imputation count includes
-all rows.
+annotations. Rulers follow each original input. The header
+`Total imputed residues: N` sums imputation across every antibody in the alignment,
+including the reference.
 
 ## Scope and qualification
 

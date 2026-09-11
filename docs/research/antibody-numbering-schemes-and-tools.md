@@ -708,24 +708,26 @@ describes the layout and controls.
 
 ### Coordinate findings and decisions
 
-Canonical antibody labels determine correspondence, but rulers now use source
-coordinates. Supplied residues retain their original input indices; imputed
+Canonical antibody labels determine correspondence; input rulers use original
+source coordinates. Supplied residues retain their original input indices; imputed
 residues have no original index and leave their ruler positions blank. The domain
 span remains a zero-based, half-open input interval: `[5, 125)` is displayed as
 `Numbered domain in supplied input: 6–125 (1-based)`.
 
-V/J alignments already retain source indices. V is limited through IMGT104 and
-J is a separate source, so its ruler restarts independently. Outer display
-padding is blank; local matches, scores, ties, coverage and imputation evidence
+V/J alignments retain separate source indices. V is limited through IMGT104.
+The stitched germline ruler counts V then J continuously, ignoring gaps and
+unknown junction cells; this display count does not replace source coordinates.
+The endpoint and J label follow the visible sequence with two-space separators.
+Outer padding is blank; local matches, scores, ties, coverage and imputation evidence
 remain unchanged. The selected input defines the comparison direction and one
 CDR band map across every row; each antibody retains its own region annotations.
 
 ### Implementation and validation
 
-- The shared renderer accepts numeric source coordinates, imputation flags and
+- The shared renderer accepts numeric row coordinates, imputation flags and
   one reference-derived CDR band map. It emits input-first comparisons and one
   CDR marker per block, with plain operation backgrounds.
-- Summary wrapping counts visible characters before applying styles. The reverse
+- Summary wrapping counts visible characters before applying styles. The yellow
   imputation count and colored CDR legend survive wrapping; tied gene/allele names
   retain species distinctions and all structured source records.
 - Rust, CLI and Python use the same layout, including reference overrides and
@@ -733,9 +735,9 @@ CDR band map across every row; each antibody retains its own region annotations.
   cleanup audit document the behavior.
 - Validation passed: 202 Rust library tests, 3 binary tests, 18 CLI tests,
   8 doctests and 21 Python tests. Checks cover exact row order and tenth-residue
-  coordinates across gaps and wraps, independent V/J origins, blank imputed
-  coordinates, reference-defined CDR bands, reverse styling, tied names and
-  Unicode width. Existing pairwise displays remain covered.
+  coordinates across gaps and wraps, continuous V/J counts, blank imputed
+  coordinates, reference-defined CDR bands, yellow imputation backgrounds, tied
+  names and Unicode width. Existing pairwise displays remain covered.
 - Six representative AntPack full/truncated inputs were rendered before and
   after imputation under all four schemes: 48 displays preserved supplied and
   imputed sequence content, respected width, and retained idempotent imputation.

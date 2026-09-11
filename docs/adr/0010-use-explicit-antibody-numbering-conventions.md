@@ -61,7 +61,9 @@ The display contract agreed on 11 September 2026 is implemented. The [workplan](
 records the accepted coordinate, matching and reference-defined CDR-band policies.
 
 Display the input antibody first as the comparison reference, followed by one
-combined V/J germline row. Show the V gene on the left and J gene on the right.
+combined V/J germline row. Show the V gene on the left. The endpoint count and
+J gene follow the visible germline sequence with two spaces between each; omit
+trailing padding to the input row's right edge.
 The combined row retains two distinct sources, with gray hyphens and blank
 operation markers across the uncovered junction. Omit outer padding hyphens
 where the input extends beyond the reference ends. This is a display-only change;
@@ -73,19 +75,22 @@ Each wrapped block has this order: one CDR marker row, input ruler, input
 sequence, germline ruler, germline sequence, operations. Background bands are
 gray for CDR1, pink for CDR2 and cyan for CDR3; they cover the marker, ruler and
 sequence cells, including intervening spaces, but not the operations row or
-name gutters. Apply the same colors to the summary's CDR legend. Reverse-video
-styling identifies imputed residues and the summary's imputed-residue count,
-including zero. Plain output retains the marker row, legend text and count.
+name gutters. Apply the same colors to the summary's CDR legend. Yellow
+backgrounds identify imputed residues and the summary's imputed-residue count,
+including zero; this highlighting overrides CDR backgrounds. Plain output retains
+the marker row, legend text and count.
 The top input reference supplies the CDR boundaries for every row, producing
 vertically aligned bands. The summary names that reference and its numbering
 scheme and CDR definition; changing the display reference updates all three.
 
-Rulers report each sequence's own residue positions, ignoring alignment gaps,
+Input rulers report original residue positions, ignoring alignment gaps,
 with right-aligned labels every tenth residue and block endpoint labels.
 Antibody scheme labels still define alignment columns and remain in the result
-objects. V and J are separate source sequences rather than a synthetic ancestor;
-the ruler uses a separate coordinate origin for each segment. Supplied
-antibody residues retain their original one-based input coordinates. Imputed
+objects. The germline ruler counts continuously through V then J, skipping gaps
+and unknown junction cells: a V ending at 96 gives J a starting count of 97.
+This display count leaves the separate V/J source coordinates in the result
+unchanged and does not imply a synthetic ancestor. Supplied antibody residues
+retain their original one-based input coordinates. Imputed
 residues have blank ruler positions and do not advance the input coordinate;
 prepending five imputed residues leaves the first supplied residue at position 1.
 
@@ -152,6 +157,7 @@ comparisons. Accept it in `align_antibodies()` and as `--reference-index` in the
 CLI; `.format(reference_index=...)` can override it for one rendering. Changing
 the reference changes comparison direction and colors without renumbering or
 altering stored columns and rows. Reject out-of-range indices.
+Label the imputation count as a total across all antibodies, including the reference.
 Display the selected reference first, followed by the other antibodies in their
 original relative order. Hide germline sequences in this view, including a
 single-antibody alignment. The reference has neutral foreground coloring and

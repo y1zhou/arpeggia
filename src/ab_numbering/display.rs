@@ -1,7 +1,8 @@
 use super::*;
 use crate::AlignmentColor;
 use crate::seq_alignment::display::{
-    DisplayRow, color_enabled, display_name, region_style, render_rows, wrap_styled_summary,
+    DisplayRow, color_enabled, display_name, imputed_style, region_style, render_rows,
+    wrap_styled_summary,
 };
 use clap::builder::styling::Style;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -41,7 +42,7 @@ fn summary(intro: &str, imputed: usize, details: &str, width: usize, color: bool
     wrap_styled_summary(
         [
             (intro, Style::new()),
-            (count.as_str(), Style::new().invert()),
+            (count.as_str(), imputed_style()),
             ("\nCDR regions: ", Style::new()),
             ("1 = CDR1", region_style(1)),
             (", ", Style::new()),
@@ -157,7 +158,7 @@ impl AntibodyAlignment {
         let body = render_rows(&rows, width, color, rulers, &cdr_bands(regions))?;
         let selected = &self.antibodies[reference];
         let intro = format!(
-            "{} antibodies; {} positions\nReference: {}; {} numbering; {} CDR definition\nAll rows; ",
+            "{} antibodies; {} positions\nReference: {}; {} numbering; {} CDR definition\nTotal ",
             self.antibodies.len(),
             self.positions.len(),
             display_name(&selected.name),
@@ -184,7 +185,6 @@ struct Column {
     input_index: Option<usize>,
     query_position: Option<NumberedPosition>,
     reference_position: Option<NumberedPosition>,
-    reference_index: Option<usize>,
     imputed: bool,
     region: u8,
 }
@@ -194,8 +194,8 @@ impl NumberedAntibody {
     ///
     /// Gray junction gaps mark unavailable reference sequence. V/J scores remain
     /// separate similarities measured on the supplied input, including after imputation.
-    /// Rulers use original input and independent V/J source coordinates; imputed
-    /// positions are blank and their residues use reverse video.
+    /// Rulers use original input positions and a continuous V-then-J residue count.
+    /// Imputed input positions are blank and their residues have yellow backgrounds.
     pub fn format(
         &self,
         width: Option<usize>,
@@ -223,7 +223,6 @@ impl NumberedAntibody {
                 input_index: Some(i),
                 query_position: by_input.get(&i).map(|r| r.position),
                 reference_position: None,
-                reference_index: None,
                 imputed: false,
                 region: by_input.get(&i).map_or(0, |r| region(&r.region)),
             })
@@ -249,7 +248,6 @@ impl NumberedAntibody {
                     columns[index].reference =
                         r.map_or(b'-', |i| alignment.reference.as_bytes()[i]);
                     columns[index].reference_position = r.and_then(|i| reference_positions[i]);
-                    columns[index].reference_index = r;
                     columns[index].operation = op;
                     cursor = index + 1;
                 } else if let Some(r) = r {
@@ -260,7 +258,6 @@ impl NumberedAntibody {
                         input_index: None,
                         query_position: None,
                         reference_position: reference_positions[r],
-                        reference_index: Some(r),
                         imputed: false,
                         region: 0,
                     });
@@ -289,7 +286,6 @@ impl NumberedAntibody {
                     let column = &mut columns[hit.query_input_start + q as usize];
                     column.reference = alignment.reference.as_bytes()[r];
                     column.reference_position = reference_positions[r];
-                    column.reference_index = Some(r);
                 } else {
                     let at = hit.query_input_start + if q < 0 { 0 } else { alignment.query.len() };
                     before[at].push(Column {
@@ -299,7 +295,6 @@ impl NumberedAntibody {
                         input_index: None,
                         query_position: None,
                         reference_position: reference_positions[r],
-                        reference_index: Some(r),
                         imputed: false,
                         region: 0,
                     });
@@ -340,15 +335,14 @@ impl NumberedAntibody {
                         input_index: None,
                         query_position: Some(residue.position),
                         reference_position: None,
-                        reference_index: None,
                         imputed: true,
                         region: 0,
                     },
                 );
             }
         }
-        let first_reference = combined.iter().position(|c| c.reference_index.is_some());
-        let last_reference = combined.iter().rposition(|c| c.reference_index.is_some());
+        let first_reference = combined.iter().position(|c| c.reference != b'-');
+        let last_reference = combined.iter().rposition(|c| c.reference != b'-');
         for (index, column) in combined.iter_mut().enumerate() {
             if first_reference.is_none_or(|first| index < first)
                 || last_reference.is_none_or(|last| index > last)
@@ -386,13 +380,15 @@ impl NumberedAntibody {
                     .collect(),
                 positions: combined
                     .iter()
-                    .map(|c| {
-                        (if germline {
-                            c.reference_index
+                    .scan(0, |position, c| {
+                        Some(if germline {
+                            c.reference.is_ascii_alphabetic().then(|| {
+                                *position += 1;
+                                *position
+                            })
                         } else {
-                            c.input_index
+                            c.input_index.map(|i| i + 1)
                         })
-                        .map(|i| i + 1)
                     })
                     .collect(),
                 operations: combined
@@ -603,13 +599,13 @@ mod tests {
             assert!(
                 cells[start..start + "imputed residues: 0".len()]
                     .iter()
-                    .all(|c| c.2)
+                    .all(|c| c.1 == Some(43) && !c.2)
             );
-            assert!(cells[..start].iter().all(|c| !c.2));
+            assert!(cells[..start].iter().all(|c| c.1 != Some(43) && !c.2));
             assert!(
                 cells[start + "imputed residues: 0".len()..]
                     .iter()
-                    .all(|c| !c.2)
+                    .all(|c| c.1 != Some(43) && !c.2)
             );
             for (label, background) in [("1 = CDR1", 47), ("2 = CDR2", 105), ("3 = CDR3", 106)] {
                 let byte = text.find(label).unwrap();
@@ -680,9 +676,26 @@ mod tests {
                     )
                 );
                 assert!(!lines[line_index + 1].contains("CDR"));
-                let reference_cells = &germline[prefix..prefix + cells.len()];
+                let (row, j_name) = germline.rsplit_once("  ").unwrap();
+                let (row, last) = row.rsplit_once("  ").unwrap();
+                assert_eq!(
+                    j_name,
+                    ab.j_match.as_ref().unwrap().hits[0]
+                        .alignment
+                        .reference_name
+                );
+                assert!(!row.ends_with(' '));
+                let visible = &row[prefix..];
+                let reference_cells = format!("{visible:width$}", width = cells.len());
                 let ops = &lines[line_index + 3][prefix..prefix + cells.len()];
-                reference_sequence.push_str(reference_cells);
+                reference_sequence.push_str(&reference_cells);
+                assert_eq!(
+                    last.parse::<usize>().unwrap(),
+                    reference_sequence
+                        .bytes()
+                        .filter(u8::is_ascii_alphabetic)
+                        .count()
+                );
                 operations.push_str(ops);
                 for (column, residue) in cells.bytes().enumerate() {
                     if residue != b'-' {
@@ -714,17 +727,19 @@ mod tests {
                 let input_cells = lines[index].split_whitespace().nth(2).unwrap();
                 let prefix = lines[index].find(input_cells).unwrap();
                 let mut column = 0;
+                let mut position = 0usize;
                 for matching in [&ab.v_match, &ab.j_match] {
                     let hit = &matching.as_ref().unwrap().hits[0];
-                    for (position, residue) in hit.alignment.reference.bytes().enumerate() {
+                    for residue in hit.alignment.reference.bytes() {
                         while reference_sequence.as_bytes()[column] == b' '
                             || reference_sequence.as_bytes()[column] == b'-'
                         {
                             column += 1;
                         }
                         assert_eq!(reference_sequence.as_bytes()[column], residue);
-                        if (position + 1).is_multiple_of(10) {
-                            let label = (position + 1).to_string();
+                        position += 1;
+                        if position.is_multiple_of(10) {
+                            let label = position.to_string();
                             let stop = prefix + column + 1;
                             assert_eq!(&lines[index + 1][stop - label.len()..stop], label);
                         }
@@ -770,9 +785,8 @@ mod tests {
                 .flat_map(|a| &a.residues)
                 .filter(|r| r.input_index.is_none())
                 .count();
-            assert!(text.contains(&format!(
-                "All rows; \x1b[7mimputed residues: {imputed}\x1b[0m"
-            )));
+            let header: String = styled_cells(lines[2]).iter().map(|c| c.0).collect();
+            assert_eq!(header, format!("Total imputed residues: {imputed}"));
             assert!(text.contains(&format!(
                 "{} numbering; {} CDR definition",
                 selected.scheme, selected.cdr_definition
@@ -789,10 +803,12 @@ mod tests {
             for offset in [top - 1, top, top + 1, top + 2] {
                 let row = styled_cells(lines[offset]);
                 for column in prefix..prefix + alignment.positions.len() {
-                    assert_eq!(
-                        row[column].1, marker[column].1,
-                        "CDR band at column {column}"
-                    );
+                    if row[column].1 != Some(43) {
+                        assert_eq!(
+                            row[column].1, marker[column].1,
+                            "CDR band at column {column}"
+                        );
+                    }
                 }
             }
             assert!(marker.iter().any(|c| c.1 == Some(47)));
@@ -816,7 +832,11 @@ mod tests {
                         .iter()
                         .position(|p| *p == residue.position)
                         .unwrap();
-                    assert_eq!(row[prefix + column].2, residue.input_index.is_none());
+                    assert_eq!(
+                        row[prefix + column].1 == Some(43),
+                        residue.input_index.is_none()
+                    );
+                    assert!(!row[prefix + column].2);
                     if let Some(position) = residue
                         .input_index
                         .map(|i| i + 1)

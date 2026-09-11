@@ -27,9 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Antibody displays place the input above combined V/J references, with separate
   gene labels, gray uncovered junctions and blank outer padding. Per-sequence
   rulers preserve original input coordinates through imputation; reference-defined
-  CDR bands span the marker, ruler and sequence rows, and reverse video identifies
-  imputed residues and their count. Summaries provide colored CDR legends and
-  tied V/J names. Multi-antibody views show the selected reference first and hide
+  CDR bands span the marker, ruler and sequence rows, and yellow backgrounds identify
+  imputed residues and their count. Germline rulers count continuously through
+  V then J, with endpoint and gene labels beside the visible sequence.
+  Summaries provide colored CDR legends and tied V/J names.
+  Multi-antibody views show the selected reference first and hide
   germlines, with wrapping and color/ruler controls.
 - Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI
   `align-seqs`: global, local, and query-full semi-global modes with BLOSUM62

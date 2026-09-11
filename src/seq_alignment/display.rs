@@ -126,7 +126,7 @@ impl SeqAlignment {
 }
 
 /// Internal display data. Cells, positions and operations have equal lengths;
-/// imputed is either empty or one flag per cell. Source coordinates are one-based.
+/// imputed is either empty or one flag per cell. Row coordinates are one-based.
 pub(crate) struct DisplayRow {
     pub(crate) name: String,
     pub(crate) right_name: String,
@@ -155,7 +155,7 @@ pub(crate) fn render_rows(
         .max()
         .unwrap_or(1);
     let prefix = label_width + 2 + digits;
-    let overhead = prefix + 1 + digits + if right_width == 0 { 0 } else { right_width + 1 };
+    let overhead = prefix + 1 + digits + if right_width == 0 { 0 } else { right_width + 3 };
     let block_width = width
         .checked_sub(overhead)
         .filter(|v| *v > 0)
@@ -246,6 +246,13 @@ pub(crate) fn render_rows(
             output.push_str(&names[index]);
             output.push_str(&" ".repeat(label_width - names[index].width()));
             write!(output, " {begin:>digits$} ").expect("String write");
+            // A stitched germline's endpoint and gene label follow its visible
+            // sequence, without the outer padding used to align it to the input.
+            let cells = if right_names[index].is_empty() {
+                cells
+            } else {
+                &cells[..cells.iter().rposition(|b| *b != b' ').map_or(0, |i| i + 1)]
+            };
             for (column, &cell) in cells.iter().enumerate() {
                 paint(
                     &mut output,
@@ -256,9 +263,10 @@ pub(crate) fn render_rows(
                     color,
                 );
             }
-            write!(output, " {last:>digits$}").expect("String write");
-            if right_width > 0 {
-                write!(output, " {}", right_names[index]).expect("String write");
+            if right_names[index].is_empty() {
+                write!(output, " {last:>digits$}").expect("String write");
+            } else {
+                write!(output, "  {last}  {}", right_names[index]).expect("String write");
             }
             output.push('\n');
             if row.show_operations {
@@ -349,6 +357,10 @@ pub(crate) fn region_style(region: u8) -> Style {
     AnsiColor::Black.on(background)
 }
 
+pub(crate) fn imputed_style() -> Style {
+    AnsiColor::Black.on(AnsiColor::Yellow)
+}
+
 fn paint(output: &mut String, cell: u8, operation: u8, region: u8, imputed: bool, color: bool) {
     let mut style = region_style(region);
     let foreground = match operation {
@@ -363,7 +375,7 @@ fn paint(output: &mut String, cell: u8, operation: u8, region: u8, imputed: bool
         style = style.fg_color(Some(foreground.into()));
     }
     if imputed {
-        style = style.invert();
+        style = imputed_style();
     }
     if color && (cell != b' ' || region > 0) && !style.is_plain() {
         write!(
