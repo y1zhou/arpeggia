@@ -155,6 +155,52 @@ Immunum/RIOT and 559 AntPack/RIOT comparisons; all return heavy-chain mappings.
 These are reference-species annotations, not independently verified input
 organisms or structural numbering labels.
 
+## Recognition follow-up and partial loops
+
+On 11 September, a native probe repeated all 26,365 inputs through Immunum's
+public raw-alignment API. It reproduced every confidence decision and the
+accepted chains/spans. All 25,484 positive inputs matched 80–121 distinct
+profile positions; the 42 false hits matched only 1–6. Requiring 30 matched
+positions alongside confidence 0.5 rejected all 881 negative controls without
+losing an original positive input. Any threshold from 7 through 80 separated
+this panel, so it does not establish an optimal threshold. Insertions do not
+count as matched profile positions.
+
+For each of the earlier 30 H/K/L parents, retain the first or last 20, 30, 40,
+60 or 80 residues, producing 300 additional fragments. Compare safely converted
+IMGT labels with each parent's cropped numbering, including unnumbered positions.
+These are consistency references, not independent accuracy labels. The table
+uses the tentative 30-position gate plus confidence 0.5; each group has 30 inputs.
+The 60 diagnostic 20-residue inputs fall below the high-level engine's minimum
+input length and fail the combined acceptance check.
+
+| Retained length | First residues: pass gates | Preserve parent labels | Last residues: pass gates | Preserve parent labels |
+| --- | ---: | ---: | ---: | ---: |
+| 30 | 30/30 | 0/30 | 21/30 | 21/21 |
+| 40 | 30/30 | 30/30 | 29/30 | 29/29 |
+| 60 | 29/30 | 25/29 | 30/30 | 25/30 |
+| 80 | 30/30 | 30/30 | 30/30 | 11/30 |
+
+All fragments retain their parent chain classification. Among the 229 passing
+fragments, only 171 preserve final numbering. Of these passing fragments, 28
+have unchanged raw alignment states but changed final labels: the length-based
+converter can treat a terminally cut CDR as a complete shorter loop. For
+numbering parent 10's first 30 residues, surviving IMGT 30/31 become 37/38.
+
+Using IMGT CDR ranges 27–38, 56–65 and 105–117, only 7/64 passing fragments
+with a raw endpoint inside a CDR preserve parent labels. Framework endpoints
+fare better, at 164/165, but are insufficient: parent 12's first 60 residues
+have raw endpoints 1–66 while their last five residues change from parent
+61–65 to 62–66. The inferred endpoint has moved just into FR3.
+
+A coverage gate rejects trivial matches but does not resolve missing loop
+context. Partial-domain support needs an explicit scope and diagnostic policy;
+neither confidence nor endpoint classification guarantees stable numbering.
+The earlier modest FR1/FR4 truncations remain consistent in all 90 cases.
+Requiring raw coverage from FR1 through FR4 (`cons_start <= 26`,
+`cons_end >= 118`) would also reject ten original antibody-panel rows. This is
+a possible scope restriction, not an accepted policy or proof of correctness.
+
 ## Implications for Arpeggia
 
 Immunum's Rust core was selected after this comparison: four requested schemes

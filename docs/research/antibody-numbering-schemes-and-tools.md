@@ -3,7 +3,10 @@
 **Research dates:** Initial survey 8 September 2026; Immunum and IMGT implementation follow-up 10 September 2026 (section 9). Other package release records retain the initial survey's cutoff.
 **Scope:** Antibody variable-domain numbering, structural correspondence and insertion placement, performance evidence, and Python/Rust integration.
 **Evidence:** Primary papers, official package records, source files, and maintainer issue discussions.
-**Validation status:** Section 9 records a small Rust integration/boundary probe and downloaded reference-data counts. No comparative accuracy or throughput benchmark was run; published measurements remain attributed to their authors.
+**Validation status:** Section 9 records Rust integration probes and reference-data
+counts. The [three-engine comparison](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
+covers 26,365 protein inputs, measuring fixture agreement and recognition
+behavior rather than independent accuracy or comparative throughput.
 
 ## Executive assessment
 
@@ -11,7 +14,10 @@ There have been meaningful improvements, but two different questions need separa
 
 For structural correspondence, **Martin/enhanced Chothia and AHo are important improvements over simpler historical conventions**, although they are not new in 2026. A 2024 structural/statistical study still found limitations among commonly used schemes rather than establishing one universally correct successor.[^martin][^aho][^evaluation2024]
 
-For engines, my current shortlist is **AntPack for fast CPU numbering of conventional antibody sequences**, **ANARCII for difficult or unusual sequences and GPU batch processing**, and **Immunum for a Rust-native/Python/Polars deployment**. RIOT merits attention when numbering is part of a broader nucleotide/amino-acid germline-annotation workflow.[^antpack-paper][^anarcii-paper][^immunum-source][^riot]
+Arpeggia selected Immunum's Rust core following the fixture comparison.
+AntPack remains a CPU comparator, ANARCII provides evidence on difficult or
+unusual sequences, and RIOT provides protein V/J-based numbering comparisons.
+Published performance claims below remain attributed to their authors.[^antpack-paper][^anarcii-paper][^immunum-source][^riot]
 
 **I did not find adequate evidence to declare that a newer tool universally surpasses AntPack in both speed and accuracy.** ANARCII provides published evidence of advantages on challenging sequence classes. Immunum is a serious engineering alternative, but its maintainers explicitly identify weaknesses in their AntPack parallel benchmark and in the independence of their correctness benchmark.[^anarcii-paper][^immunum-speed-issue][^immunum-truth-issue]
 
@@ -369,6 +375,14 @@ estimate. A reproducible bundle needs release ID, download date, checksum,
 attribution and transformation rules. Exact species matching alone would
 discard most mouse records.
 
+The three-species subset contains 1,212 V and 58 J records. All retained J
+references are complete, 12–20 amino acids long. V references span 48–105
+ungapped residues; 45 have missing 5′ sequence represented by leading padding.
+Four human V references contain six `X` characters. Preserve reference coverage
+separately from internal alignment gaps, and exclude ambiguous residues from
+known-residue evidence and imputation. Ordinary `SeqAlignment` identity retains
+its existing literal-symbol semantics.
+
 The snapshot contains alpaca heavy-chain V/J references but no alpaca K/L
 references. Of the 73 retained alpaca V references, 66 are marked partial at the
 3′ end around Cys104; discarding all partial entries would remove most coverage.
@@ -382,6 +396,11 @@ operation. NCBI's IgBLAST reports D/J assignment only for nucleotide searches;
 an amino-acid J comparison here would need to be labeled as similarity, not a
 unique gene call. Missing reference coverage must remain distinguishable from
 a true deletion.[^igblast]
+
+Protein sequences cannot distinguish some alleles: for example, retained human
+IGHJ4*01/*02/*03 have identical amino-acid sequences. Reference identity and
+provenance must survive sequence deduplication. Selecting a display representative
+must not discard tied references used for imputation.
 
 ### 9.3 Position correspondence and display reuse
 
@@ -437,9 +456,9 @@ these sources.[^martin-loops][^aho-loops][^aho-original]
 
 Immunum's explicit Chothia CDR table follows the 2021 consensus: heavy
 26–32 / 52–56 / 96–101 and light 26–32 / 50–52 / 91–96. These differ from its
-Martin/AbM boundaries. Whether Arpeggia exposes that distinct definition as
-`cdr_definition="chothia"` or aliases it to Martin remains an API decision;
-the accepted numbering alias alone does not settle it.[^immunum-chothia]
+Martin/AbM boundaries. Arpeggia exposes the distinct definition through explicit
+`cdr_definition="chothia"`; the numbering argument's `chothia` alias still
+resolves to Martin. This preserves intentional mixed conventions.[^immunum-chothia]
 
 ### 9.5 Explicit germline imputation
 

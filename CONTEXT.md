@@ -274,6 +274,12 @@ A convention delimiting the three complementarity-determining regions and the
 framework regions of an antibody variable domain.
 _Avoid_: Numbering scheme, experimentally determined antigen-contact residues
 
+**Antibody Alignment**:
+One or more Numbered Antibodies whose columns correspond to numbered positions
+in a shared numbering scheme. Rows are all heavy chains or all light chains;
+kappa and lambda may be mixed. Each row retains its own CDR Definition.
+_Avoid_: Multiple sequence alignment, automatic renumbering, paired antibody
+
 **Germline Reference**:
 A catalogued unrearranged immunoglobulin gene-segment sequence, identified by
 species, gene and allele. A matching reference does not establish ancestry.
