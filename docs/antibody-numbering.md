@@ -83,9 +83,12 @@ and the [upstream Chothia consensus table](https://github.com/ENPICOM/immunum/bl
 
 ## Germline similarities
 
-Offline references cover human and mouse H/K/L and alpaca heavy chains, including
+Offline references cover human, mouse, rat and rabbit H/K/L and alpaca heavy chains, including
 VHH references. Search uses all bundled species by default; restrict it with
-`species="human"`, `species=["human", "alpaca"]`, or CLI `--species human,alpaca`.
+`species="rabbit"`, `species=["rat", "rabbit"]`, or CLI `--species rat,rabbit`.
+The same generic H/K/L profiles number every input; the species option restricts
+germline comparisons only. Adding species can change the best matches and ties
+in an unrestricted search. It does not establish species-specific numbering accuracy.
 Reported species identify references, not the organism of the input antibody.
 See the [reference snapshot and attribution](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md)
 for source coverage, filtering, and known partial references.
@@ -204,7 +207,7 @@ the backend's single-letter representation produce errors. Recognition is a
 heuristic and does not establish biological origin or numbering correctness.
 
 Constant-region numbering, structure inputs, automatic multidomain handling,
-and additional germline species are deferred. The
+multi-letter insertions, and species beyond the five bundled here are deferred. The
 [qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
 records fixture agreement and limits; [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md)
 records the API decisions.

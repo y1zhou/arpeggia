@@ -21,7 +21,15 @@ def main() -> None:
         sequence = "".join(lines)
         if (
             fields[1].startswith(("IGHV", "IGKV", "IGLV", "IGHJ", "IGKJ", "IGLJ"))
-            and fields[2].startswith(("Homo sapiens", "Mus musculus", "Vicugna pacos"))
+            and fields[2].startswith(
+                (
+                    "Homo sapiens",
+                    "Mus musculus",
+                    "Vicugna pacos",
+                    "Rattus norvegicus",
+                    "Oryctolagus cuniculus",
+                )
+            )
             and fields[3].strip("()[]") == "F"
             and "*" not in sequence
         ):

@@ -34,7 +34,8 @@ fn warnings(py: Python<'_>, diagnostics: &[String]) -> PyResult<()> {
 ///         an explicit scheme. Martin uses AbM; explicit Chothia uses the distinct
 ///         2021 consensus boundaries. Mixed conventions retain the requested labels.
 ///     species (str | Sequence[str] | None): Restrict references to "human",
-///         "mouse", or "alpaca", or a sequence of these names. None searches all.
+///         "mouse", "alpaca", "rat", "rabbit", or a sequence of these names.
+///         None searches all bundled species.
 ///         Alpaca references cover heavy chains; species describe matched references.
 ///
 /// Returns:
@@ -89,7 +90,7 @@ fn number_antibody(
         )?,
         species: species
             .iter()
-            .map(|s| value_enum(s, "species must be human, mouse, or alpaca"))
+            .map(|s| value_enum(s, "species must be human, mouse, alpaca, rat, or rabbit"))
             .collect::<PyResult<Vec<_>>>()?,
     };
     let result = py

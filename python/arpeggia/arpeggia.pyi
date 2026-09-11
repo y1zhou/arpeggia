@@ -719,7 +719,7 @@ def number_antibody(
             Chothia aliases Martin numbering.
         cdr_definition (str): Auto follows the scheme. An explicit definition
             requires an explicit scheme; Chothia uses distinct consensus regions.
-        species (str | Sequence[str] | None): Human, mouse, alpaca, or a sequence
+        species (str | Sequence[str] | None): Human, mouse, alpaca, rat, rabbit, or a sequence
             of these names. None searches all bundled references.
 
     Returns:

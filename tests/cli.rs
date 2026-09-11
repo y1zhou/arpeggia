@@ -471,7 +471,7 @@ fn antibody_cli_preserves_names_and_structured_numbering() {
             "--scheme",
             "chothia",
             "--species",
-            "human",
+            "rat,rabbit",
             "--json",
         ])
         .output()
@@ -486,7 +486,17 @@ fn antibody_cli_preserves_names_and_structured_numbering() {
     assert_eq!(result["scheme"], "martin");
     assert_eq!(result["cdr_definition"], "martin");
     assert!(result["residues"].as_array().unwrap().len() > 100);
-    assert!(result["v_match"]["hits"].is_array());
+    for segment in ["v_match", "j_match"] {
+        for hit in result[segment]["hits"].as_array().unwrap() {
+            for reference in hit["references"].as_array().unwrap() {
+                let species = reference["species"].as_str().unwrap();
+                assert!(
+                    species.starts_with("Rattus norvegicus")
+                        || species.starts_with("Oryctolagus cuniculus")
+                );
+            }
+        }
+    }
     assert!(!output.stdout.contains(&0x1b));
     let output = arpeggia()
         .args([

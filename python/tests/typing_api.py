@@ -35,7 +35,7 @@ def antibody_api_types(
 ) -> tuple[arpeggia.NumberedAntibody, arpeggia.AntibodyAlignment, str]:
     """Check antibody classes, region views, imputation and numbered alignments."""
     antibody = arpeggia.number_antibody(
-        sequence, scheme="imgt", species=["human", "alpaca"]
+        sequence, scheme="imgt", species=["human", "alpaca", "rat", "rabbit"]
     )
     completed = antibody.impute()
     comparison = arpeggia.align_antibodies([antibody, completed], reference_index=1)

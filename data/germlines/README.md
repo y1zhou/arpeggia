@@ -12,13 +12,15 @@ The [gapped amino-acid source](https://www.imgt.org/download/GENE-DB/IMGTGENEDB-
 has SHA-256
 `3cb6b0b8cb8940b3b2a9b105771a6a74aa67c06e3ca39eaea0d2030c90e7efd0`.
 The subset retains functional IGHV/IGKV/IGLV and IGHJ/IGKJ/IGLJ records for human,
-mouse (including strain/subspecies names), and alpaca. Bracketed/parenthesized
+mouse, alpaca, rat and rabbit, including strain/subspecies names. Bracketed/parenthesized
 functional labels are included; stop-containing sequences are excluded.
 Original headers, partial sequences, ambiguity symbols and IMGT gaps are retained.
-There are 1,212 V and 58 J records; alpaca references cover heavy chains only.
+There are 1,603 V and 91 J records. Human, mouse, rat and rabbit cover H/K/L;
+alpaca references cover heavy chains only. Rat contributes 268 V / 13 J records
+and rabbit 123 V / 20 J records.
 
 The subset SHA-256 is
-`382f9da600bee9351029585881967e481044f7caebc8864f3bbabeadb4d10d2a`.
+`e87e18cdfae839957b454edb47445d024b95d7eb2ac1b4b655796cad924d8698`.
 Regenerate from the pinned download using
 [prepare.py](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/prepare.py):
 

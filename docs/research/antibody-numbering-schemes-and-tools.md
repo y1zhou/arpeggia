@@ -389,14 +389,15 @@ partial records and original IMGT gaps, and did not deduplicate:
 | Rat | 268 | 13 | 281 |
 | Rabbit | 123 | 20 | 143 |
 
-The required three-species subset occupied **255,885 bytes raw / 35,217 bytes
-gzip**, retaining full headers and one sequence line per record (`mtime=0`).
-These are research-file sizes, not a final filtering policy or package size
-estimate. A reproducible bundle needs release ID, download date, checksum,
-attribution and transformation rules. Exact species matching alone would
-discard most mouse records.
+The bundled five-species subset contains 1,603 V and 91 J records and occupies
+349,651 bytes raw. Its release, checksum, attribution and exact transformation
+are recorded with the [runtime data](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
+Strain/subspecies suffixes are retained; exact species-name matching would
+discard most mouse and rat references. The
+[expansion benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#rat-and-rabbit-reference-expansion)
+compares three- and five-species search costs on the same build.
 
-The three-species subset contains 1,212 V and 58 J records. All retained J
+In the original human/mouse/alpaca subset of 1,212 V and 58 J records, all retained J
 references lack partial-record flags and are 12–20 amino acids long; the alpaca
 IGHJ5*01 sequence nevertheless ends before IMGT 128. FR4 coverage therefore
 follows the observed W/F118 anchor and available residues, not a completeness
@@ -585,7 +586,7 @@ and displays must remain unchanged.
 
 2. **Offline references and V/J matching** —
    `ab_numbering: match bundled V/J germlines`.
-   Package the three-species subset described in section 9.2 with reproducible
+   Package the five-species subset described in section 9.2 with reproducible
    filtering, release/hash metadata and IMGT attribution. Keep runtime assets
    outside `docs/`, which release packages omit. Preserve partial-reference
    coverage and all source metadata. Add eager, separate V/J matching and the
@@ -688,16 +689,28 @@ three-engine comparison.
 
 The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
 defines the public supporting records, exact reference-ID selectors and coverage
-denominators. CDR1/2/3 use distinct white/magenta/cyan backgrounds with plain
+denominators. CDR1/2/3 use distinct gray/pink/cyan backgrounds with plain
 region labels. The renderer shares layout without manufacturing optimal
 alignment scores; imputation reuses stored correspondence and reference coverage.
-Qualification required no change to the agreed scheme support or acceptance gates.
+Scheme-aware coverage checks reject truncations that cut count-based conversion
+windows, including framework context outside the named CDRs.
 
 Constant-region numbering, structure-file input, severe partial domains,
 automatic handling of multiple domains, multi-letter insertion support and
-additional germline species remain future work. The initial implementation
+species beyond human, mouse, alpaca, rat and rabbit remain future work.
+Rat and rabbit reuse the same pinned IMGT snapshot and matching path; see the
+[coverage and matching benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#rat-and-rabbit-reference-expansion). The implementation
 does not require another engine, runtime downloads or a new general-purpose
 multiple sequence alignment API.
+
+The next decisions worth revisiting are:
+
+| Topic | Recommendation |
+| --- | --- |
+| Numbering without germline matching | Discuss an explicit opt-out for numbering-only callers: matching dominates runtime, and adding species increases candidate work. Keep current eager results as the default until the API is agreed. |
+| Structure-file input and numbered RMSD correspondence | Next feature candidate. Reuse observed chain sequences and retain residue/atom correspondence; imputed sequence must not imply coordinates. |
+| Independent structural validation | Prioritize curated H/K/L and VHH examples across species and difficult loops. Fixture agreement and synthetic germline tests do not establish accuracy. |
+| Constant regions, multiple domains and multi-letter insertions | Retain the current deferral until a concrete input requires them; each changes the supported domain or position model. |
 
 ## 11. Display revision workplan
 

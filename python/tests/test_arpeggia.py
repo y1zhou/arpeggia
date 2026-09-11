@@ -563,6 +563,17 @@ def test_antibody_api_and_germline_correspondence():
         number_antibody(ANTIBODY_SEQUENCE + "GGGGSGGGGS" + ANTIBODY_SEQUENCE)
     alias = number_antibody(ANTIBODY_SEQUENCE, scheme="chothia", species=["human"])
     assert alias.scheme == alias.cdr_definition == "martin"
+    for result, prefix in [
+        (number_antibody(ANTIBODY_SEQUENCE, species="rat"), "Rattus norvegicus"),
+        (number_antibody(ANTIBODY_SEQUENCE, species="rabbit"), "Oryctolagus cuniculus"),
+    ]:
+        assert result.v_match is not None and result.j_match is not None
+        for matching in [result.v_match, result.j_match]:
+            assert all(
+                ref.species.startswith(prefix)
+                for hit in matching.hits
+                for ref in hit.references
+            )
 
 
 def test_antibody_imputation_is_explicit_and_preserves_input():

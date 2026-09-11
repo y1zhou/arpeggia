@@ -44,7 +44,9 @@ The numbering call computes germline matches once, returning separate V and J
 reference similarities, coverage and tied references for display and imputation.
 It does not reconstruct a unique ancestral antibody or
 infer a D segment. References ship offline as a versioned, attributed IMGT
-subset covering human and mouse H/K/L and alpaca heavy-chain/VHH references.
+subset covering human, mouse, rat and rabbit H/K/L and alpaca heavy-chain/VHH
+references. Numbering uses shared H/K/L profiles; species restrictions affect
+germline matching only. The expanded default search may change top hits and ties.
 Search covers all bundled species by default and accepts an explicit species
 restriction. Report matched-reference species rather than presumed input origin.
 
@@ -204,4 +206,4 @@ single-letter insertion representation.
 The [numbering research and implementation plan](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md#10-implementation-plan)
 record the integration sequence, validation criteria and remaining engineering
 choices. Constant-region numbering, structure-file integration and additional
-species beyond human, mouse and alpaca remain deferred.
+species beyond human, mouse, alpaca, rat and rabbit remain deferred.

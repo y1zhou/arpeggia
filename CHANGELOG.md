@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matches, severe truncations, multiple domains and unsupported insertions.
   Partial domains must retain the framework context required by both numbering
   and CDR conversion to avoid relabeling surviving loop residues.
-- Offline human, mouse and alpaca V/J germline similarities, with explicit
+- Offline human, mouse, alpaca, rat and rabbit V/J germline similarities, with explicit
   species restrictions, known-residue coverage, tied gene/allele references,
   and attributed IMGT release 202636-7 data. Binary release archives include
   the project README and a distinct `IMGT-GERMLINES.md` attribution file.

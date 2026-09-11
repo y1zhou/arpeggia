@@ -225,7 +225,8 @@ Arpeggia owns the bindings and rendering under
 On 11 September 2026, Arpeggia's release Python wheel repeated all 26,365 inputs
 in all four schemes: 105,460 calls, retaining errors, diagnostics and one position
 or null per input residue. This used the same pinned inputs and normalization
-above, default CDR conventions, and all bundled reference species. Numbering and
+above, default CDR conventions, and the then-bundled human, mouse and alpaca
+reference species. Numbering and
 matching were validated at implementation milestone `5b798a3`; the subsequent
 `a9f1337` change adds an imputation coverage diagnostic without changing numbering.
 
@@ -342,3 +343,45 @@ Final validation passes 199 Rust library tests, 3 binary tests, 17 CLI tests,
 8 doctests, 21 Python tests, Python type checking, and the repository's required
 format/lint checks. The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
 describes the supported scope and remaining limitations.
+
+## Rat and rabbit reference expansion
+
+The same pinned IMGT release now supplies rat (268 V / 13 J) and rabbit
+(123 V / 20 J) references, including strain metadata and H/K/L for both species.
+The bundle totals 1,603 V / 91 J records. All added J records contain the
+expected W/F-G anchor: heavy-chain coverage ends at IMGT 128, light-chain
+coverage at 127. Missing reference positions remain unavailable to imputation.
+Synthetic V/junction/J cases test matching, species restrictions and terminal
+imputation for both species, every chain class and all four numbering schemes.
+These checks exercise reference integration; they do not establish biological
+numbering or germline-assignment accuracy.
+
+On 11 September 2026, the same locked release Python extension compared
+`species=["human", "mouse", "alpaca"]` with the expanded default search.
+Use the first ten accepted H, K and L numbering fixtures in input order,
+classified by the initial IMGT adapter results. Each of seven batches numbers
+those ten sequences ten times per setting, alternating setting order between
+batches after five warm-up calls per setting. The process was pinned to CPU 0
+on the runtime host described above, with no concurrent test or benchmark load.
+Times include numbering, eager matching and Python result construction, excluding
+imports, warm-up and rendering; report the median per input.
+
+| Chain | Three species | Five species | Increase |
+| --- | ---: | ---: | ---: |
+| H | 9.138 ms | 10.863 ms | 18.9% |
+| K | 2.198 ms | 4.156 ms | 89.1% |
+| L | 1.088 ms | 1.433 ms | 31.8% |
+
+Numbering and V reference sets are unchanged in these 30 cases; six J reference
+sets change. Expanding the search can add ties or change a best match, so callers
+needing a fixed search scope should specify species. An unrestricted search
+pays for the additional candidates; the measured increase is approximately
+1.73 ms for H, 1.96 ms for K and 0.35 ms for L.
+
+The raw reference file grows from 255,885 to 349,651 bytes (+93,766).
+Compressing each exact bundled file with Python `gzip.compress`, level 9 and
+`mtime=0`, gives 35,752 and 51,355 bytes (+15,603). These are data-file sizes,
+not measured wheel or executable growth. Source records and their ordering are
+reproduced by the [preparation script](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/prepare.py);
+the [attribution file](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md)
+records the expanded subset checksum.

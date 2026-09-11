@@ -12,6 +12,10 @@ pub enum GermlineSpecies {
     Mouse,
     /// Alpaca heavy-chain/VHH references.
     Alpaca,
+    /// Rat H/K/L references, including strains.
+    Rat,
+    /// Rabbit H/K/L references, including strains.
+    Rabbit,
 }
 
 /// Source metadata for a bundled gene/allele reference.
@@ -103,6 +107,10 @@ fn reference_groups() -> Vec<ReferenceGroup> {
             GermlineSpecies::Human
         } else if fields[2].starts_with("Mus musculus") {
             GermlineSpecies::Mouse
+        } else if fields[2].starts_with("Rattus norvegicus") {
+            GermlineSpecies::Rat
+        } else if fields[2].starts_with("Oryctolagus cuniculus") {
+            GermlineSpecies::Rabbit
         } else {
             GermlineSpecies::Alpaca
         };
@@ -346,7 +354,7 @@ mod tests {
         let groups = reference_groups();
         assert_eq!(
             groups.iter().map(|g| g.references.len()).sum::<usize>(),
-            1270
+            1694
         );
         assert_eq!(
             groups
@@ -354,7 +362,7 @@ mod tests {
                 .filter(|g| g.segment == b'J')
                 .map(|g| g.references.len())
                 .sum::<usize>(),
-            58
+            91
         );
         assert!(groups.iter().any(|g| g.span.0 > 1 && g.segment == b'V'));
         assert!(
@@ -383,6 +391,112 @@ mod tests {
                 && g.segment == b'J'
                 && g.span.1 == 128)
         );
+        for (species, prefix, expected) in [
+            (GermlineSpecies::Rat, "Rattus norvegicus", 281),
+            (GermlineSpecies::Rabbit, "Oryctolagus cuniculus", 143),
+        ] {
+            let references: Vec<_> = groups
+                .iter()
+                .filter(|g| g.species == species)
+                .flat_map(|g| &g.references)
+                .collect();
+            assert_eq!(references.len(), expected);
+            assert!(references.iter().all(|r| r.species.starts_with(prefix)));
+            assert!(references.iter().any(|r| r.species != prefix));
+        }
+    }
+
+    #[test]
+    fn rat_and_rabbit_matches_support_all_chain_classes_and_terminal_imputation() {
+        let groups = reference_groups();
+        for (species, prefix) in [
+            (GermlineSpecies::Rat, "Rattus norvegicus"),
+            (GermlineSpecies::Rabbit, "Oryctolagus cuniculus"),
+        ] {
+            for chain in [Chain::IGH, Chain::IGK, Chain::IGL] {
+                let v = groups
+                    .iter()
+                    .find(|g| {
+                        g.species == species
+                            && g.chain == chain
+                            && g.segment == b'V'
+                            && g.span == (1, 105)
+                            && g.sequence.bytes().all(known)
+                    })
+                    .unwrap();
+                let j = groups
+                    .iter()
+                    .find(|g| {
+                        g.species == species
+                            && g.chain == chain
+                            && g.segment == b'J'
+                            && g.span.1 >= 128
+                            && g.sequence.bytes().all(known)
+                    })
+                    .unwrap();
+                // Synthetic V/junction/J inputs exercise data plumbing, not species accuracy.
+                let sequence = format!("{}ARGGG{}", v.sequence, j.sequence);
+                for scheme in [
+                    NumberingScheme::Imgt,
+                    NumberingScheme::Martin,
+                    NumberingScheme::Aho,
+                    NumberingScheme::Kabat,
+                ] {
+                    let options = NumberingOptions {
+                        species: vec![species],
+                        scheme: Some(scheme),
+                        ..Default::default()
+                    };
+                    let full = number_antibody(&sequence, &options).unwrap();
+                    assert_eq!(full.chain, chain.to_string());
+                    for (matching, source) in [(&full.v_match, v), (&full.j_match, j)] {
+                        let matching = matching.as_ref().unwrap();
+                        assert!(matching.hits.iter().all(|h| h.known_identity == 1.0));
+                        assert!(
+                            matching
+                                .hits
+                                .iter()
+                                .flat_map(|h| &h.references)
+                                .any(|r| r.id == source.references[0].id)
+                        );
+                        assert!(
+                            matching
+                                .hits
+                                .iter()
+                                .flat_map(|h| &h.references)
+                                .all(|r| r.species.starts_with(prefix))
+                        );
+                    }
+                    let partial =
+                        number_antibody(&sequence[5..sequence.len() - 3], &options).unwrap();
+                    let filled = partial
+                        .impute(Some(&v.references[0].id), Some(&j.references[0].id))
+                        .unwrap();
+                    assert!(filled.residues.len() > partial.residues.len());
+                    assert!(
+                        filled
+                            .residues
+                            .iter()
+                            .filter(|r| r.input_index.is_none())
+                            .all(|r| ["FR1", "FR4"].contains(&r.region.as_str())
+                                && !r.imputed_from.is_empty())
+                    );
+                    assert_eq!(
+                        filled
+                            .residues
+                            .iter()
+                            .filter(|r| r.input_index.is_some())
+                            .map(|r| (r.position, r.amino_acid, r.input_index))
+                            .collect::<Vec<_>>(),
+                        partial
+                            .residues
+                            .iter()
+                            .map(|r| (r.position, r.amino_acid, r.input_index))
+                            .collect::<Vec<_>>()
+                    );
+                }
+            }
+        }
     }
 
     #[test]
