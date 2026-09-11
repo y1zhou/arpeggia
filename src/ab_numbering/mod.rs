@@ -1,6 +1,8 @@
 //! Antibody variable-domain numbering with explicit region conventions.
 
 mod core;
+mod germline;
+pub use germline::{GermlineHit, GermlineMatch, GermlineReference, GermlineSpecies};
 
 use crate::{ArpeggiaError, ArpeggiaResult};
 use immunum::{Chain, Scheme};
@@ -83,6 +85,8 @@ pub struct NumberingOptions {
     pub scheme: Option<NumberingScheme>,
     /// Region convention; automatic follows the numbering scheme.
     pub cdr_definition: CdrDefinition,
+    /// Restrict germline matching; empty searches all bundled species.
+    pub species: Vec<GermlineSpecies>,
 }
 
 /// A numbered position with an optional single-letter insertion code.
@@ -171,6 +175,10 @@ pub struct NumberedAntibody {
     pub matched_profile_positions: usize,
     /// Recoverable limitations of this annotation.
     pub diagnostics: Vec<String>,
+    /// Best qualifying V similarities, or none when reference evidence is insufficient.
+    pub v_match: Option<GermlineMatch>,
+    /// Best qualifying J similarities, or none when reference evidence is insufficient.
+    pub j_match: Option<GermlineMatch>,
 }
 
 impl NumberedAntibody {

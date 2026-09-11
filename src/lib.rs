@@ -27,8 +27,9 @@ mod utils;
 
 // Re-export key public types
 pub use ab_numbering::{
-    CdrDefinition, NumberedAntibody, NumberedPosition, NumberedResidue, NumberingOptions,
-    NumberingScheme, number_antibody,
+    CdrDefinition, GermlineHit, GermlineMatch, GermlineReference, GermlineSpecies,
+    NumberedAntibody, NumberedPosition, NumberedResidue, NumberingOptions, NumberingScheme,
+    number_antibody,
 };
 pub use clustering::{ClusterOptions, ClusteringMethod, cluster_pairwise_rmsd};
 pub use contacts::ProtonationMode;

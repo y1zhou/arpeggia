@@ -397,7 +397,10 @@ attribution and transformation rules. Exact species matching alone would
 discard most mouse records.
 
 The three-species subset contains 1,212 V and 58 J records. All retained J
-references are complete, 12–20 amino acids long. V references span 48–105
+references lack partial-record flags and are 12–20 amino acids long; the alpaca
+IGHJ5*01 sequence nevertheless ends before IMGT 128. FR4 coverage therefore
+follows the observed W/F118 anchor and available residues, not a completeness
+flag or assumed suffix length. V references span 48–105
 ungapped residues; 45 have missing 5′ sequence represented by leading padding.
 Four human V references contain six `X` characters. Preserve reference coverage
 separately from internal alignment gaps, and exclude ambiguous residues from
@@ -516,7 +519,7 @@ unchanged. This does not reconstruct coordinates or the full V/D/J junction.
 ## 10. Implementation plan
 
 **Status, 11 September 2026:** implementation authorized and underway. The Rust
-numbering core is implemented; germline matching, imputation, antibody alignments,
+numbering core and offline V/J matching are implemented; imputation, antibody alignments,
 rendering and CLI/Python integration remain in progress. The accepted behavior is
 in [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
 the milestones below define the execution order and completion criteria.
@@ -526,6 +529,15 @@ antibody PR will be stacked on that branch, with its feature diff reviewed
 against the parent and the combined release changes described against `master`.
 
 ### Integration boundaries
+
+The bundled subset is reproducible from the source checksum using the
+[data preparation script](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/prepare.py).
+`GermlineMatch.hits` retains all qualifying maximum-score groups; each hit shares
+one alignment across references with identical sequence and coverage. Hits carry
+known paired/identical counts, identity over known pairs, and separate coverage
+over known reference/input segment lengths. Score-only candidate ranking uses
+Hyalite's reusable scratch; tracebacks are constructed until the highest
+qualifying score and all exact ties are resolved.
 
 Keep numbering, germline matching and imputation in `ab_numbering`. Use
 Immunum's public alignment/conversion functions and rules, with Arpeggia

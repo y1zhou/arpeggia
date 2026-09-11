@@ -256,7 +256,7 @@ pub(super) fn number(
         diagnostics
             .push("SEQUENCE_SCORING_ALIAS: U/O score as C/K; original symbols are retained".into());
     }
-    Ok(NumberedAntibody {
+    let mut antibody = NumberedAntibody {
         name: if options.name.is_empty() {
             "Seq001".into()
         } else {
@@ -271,7 +271,11 @@ pub(super) fn number(
         confidence,
         matched_profile_positions: matched,
         diagnostics,
-    })
+        v_match: None,
+        j_match: None,
+    };
+    super::germline::matches(&mut antibody, &alignment, chain, &options.species)?;
+    Ok(antibody)
 }
 
 #[cfg(test)]
