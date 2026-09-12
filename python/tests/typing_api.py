@@ -38,5 +38,8 @@ def antibody_api_types(
         sequence, scheme="imgt", species=["human", "alpaca", "rat", "rabbit"]
     )
     completed = antibody.impute()
-    comparison = arpeggia.align_antibodies([antibody, completed], reference_index=1)
+    numbered_only = arpeggia.number_antibody(sequence, match_germlines=False)
+    comparison = arpeggia.align_antibodies(
+        [antibody, completed, numbered_only], reference_index=1
+    )
     return antibody, comparison, comparison.format(color="never", reference_index=0)

@@ -35,8 +35,11 @@ fn warnings(py: Python<'_>, diagnostics: &[String]) -> PyResult<()> {
 ///         2021 consensus boundaries. Mixed conventions retain the requested labels.
 ///     species (str | Sequence[str] | None): Restrict references to "human",
 ///         "mouse", "alpaca", "rat", "rabbit", or a sequence of these names.
-///         None searches all bundled species.
+///         None searches all bundled species. Unused when match_germlines=False.
 ///         Alpaca references cover heavy chains; species describe matched references.
+///     match_germlines (bool): True (default) searches V/J references. False skips
+///         matching without changing numbering, CDRs or recognition. No skip warning
+///         is emitted; reading, displaying or serializing the result never searches.
 ///
 /// Returns:
 ///     NumberedAntibody: Read-only residues, zero-based input indices and half-open
@@ -44,7 +47,10 @@ fn warnings(py: Python<'_>, diagnostics: &[String]) -> PyResult<()> {
 ///         diagnostics, and separate v_match/j_match similarities. Each match's
 ///         hits retain exact score ties and their source references. Known-residue
 ///         evidence excludes ambiguous symbols. Missing evidence produces None and
-///         a warning. Numbering does not fill missing residues; use result.impute().
+///         a warning. When matching is skipped, germlines_searched is False and
+///         both matches are None; otherwise germlines_searched is True, even when
+///         no match qualifies. Numbering does not fill missing residues; use
+///         result.impute() after numbering with matching enabled.
 ///
 /// Raises:
 ///     ValueError: Invalid input or options.
@@ -62,7 +68,7 @@ fn warnings(py: Python<'_>, diagnostics: &[String]) -> PyResult<()> {
 /// Martin/AbM: https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/
 /// AHo loops: https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f
 #[pyfunction]
-#[pyo3(signature=(sequence, *, name="Seq001", scheme=None, cdr_definition="auto", species=None))]
+#[pyo3(signature=(sequence, *, name="Seq001", scheme=None, cdr_definition="auto", species=None, match_germlines=true))]
 fn number_antibody(
     py: Python<'_>,
     sequence: &str,
@@ -70,6 +76,7 @@ fn number_antibody(
     scheme: Option<&str>,
     cdr_definition: &str,
     species: Option<&Bound<'_, PyAny>>,
+    match_germlines: bool,
 ) -> PyResult<NumberedAntibody> {
     let species = species
         .map(|s| {
@@ -81,6 +88,7 @@ fn number_antibody(
         .unwrap_or_default();
     let options = crate::NumberingOptions {
         name: name.into(),
+        match_germlines,
         scheme: scheme
             .map(|s| value_enum(s, "scheme must be imgt, martin (or chothia), aho, or kabat"))
             .transpose()?,
@@ -188,7 +196,9 @@ impl NumberedAntibody {
     ///         Unsupported or conflicting reference evidence stays unresolved.
     ///
     /// Raises:
-    ///     ValueError: A selector is absent from the tied reference set.
+    ///     ValueError: Germline matching was skipped, or a selector is absent from
+    ///         the tied reference set. Rerun number_antibody with matching enabled
+    ///         before imputing a result whose search was skipped.
     #[pyo3(name="impute",signature=(*, v_reference=None,j_reference=None))]
     fn impute_python(
         &self,
@@ -209,7 +219,9 @@ impl NumberedAntibody {
     /// ruler and sequence, then operations relative to the input. CDR1/2/3 bands
     /// are gray/pink/cyan across every row except operations. Yellow backgrounds mark
     /// imputed residues and their summary count. All tied reference names appear
-    /// in the summary; only representative V/J sequences are shown.
+    /// in the summary; only representative V/J sequences are shown. If matching
+    /// was skipped, show only the input, ruler and CDR markers, with a skipped
+    /// summary message. Formatting never triggers matching.
     ///
     /// Args:
     ///     width (int | None): Total visible columns including both gene labels.

@@ -13,7 +13,10 @@ struct NumberingArgs {
     /// Region convention; non-auto requires an explicit --scheme
     #[arg(long, value_enum, default_value = "auto")]
     cdr_definition: CdrDefinition,
-    /// Restrict germline references, comma-separated (default: all bundled species)
+    /// Skip V/J matching; retain numbering and CDRs (incompatible with --impute)
+    #[arg(long, conflicts_with = "impute")]
+    no_germlines: bool,
+    /// Restrict references, comma-separated; unused with --no-germlines (default: all)
     #[arg(long, value_enum, value_delimiter = ',')]
     species: Vec<GermlineSpecies>,
     /// Impute only supported missing beginnings of FR1 and ends of FR4
@@ -35,6 +38,7 @@ impl NumberingArgs {
                 name,
                 scheme: self.scheme,
                 cdr_definition: self.cdr_definition,
+                match_germlines: !self.no_germlines,
                 species: self.species.clone(),
             },
         )?;

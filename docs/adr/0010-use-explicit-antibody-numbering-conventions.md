@@ -42,7 +42,7 @@ do not require duplicate per-residue tables.
 
 ## Germline matching
 
-The numbering call computes germline matches once, returning separate V and J
+By default the numbering call computes germline matches once, returning separate V and J
 reference similarities, coverage and tied references for display and imputation.
 It does not reconstruct a unique ancestral antibody or
 infer a D segment. References ship offline as a versioned, attributed IMGT
@@ -51,6 +51,18 @@ references. Numbering uses shared H/K/L profiles; species restrictions affect
 germline matching only. The expanded default search may change top hits and ties.
 Search covers all bundled species by default and accepts an explicit species
 restriction. Report matched-reference species rather than presumed input origin.
+
+Rust/Python `match_germlines=false` / `False` and CLI `--no-germlines` skip the
+entire matching step. Numbering, CDRs and recognition remain identical; `species`
+is unused. A read-only `germlines_searched` boolean distinguishes a skipped
+search from a completed search without qualifying hits. Both matches are absent
+when skipped, without a skip diagnostic or warning. Property access, rendering
+and serialization never perform deferred matching. The numbered-antibody display
+retains input/ruler/CDR rows, omits the germline and operations rows, and reports
+“Germline matching: skipped”. Imputation of an unsearched result is an argument
+error; CLI `--no-germlines` conflicts with `--impute`. Completed searches with
+insufficient evidence keep the existing imputation diagnostics. Python
+`align_antibodies()` accepts either kind of numbered object without another option.
 
 Rank V and J references separately by local BLOSUM62 alignment score, using
 the sequence module's gap costs of 10/0.5. The V search uses observed sequence

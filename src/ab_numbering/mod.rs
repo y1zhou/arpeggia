@@ -81,7 +81,7 @@ impl CdrDefinition {
 }
 
 /// Options for numbering one unaligned variable-domain sequence.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct NumberingOptions {
     /// Display name; an empty name uses `Seq001`.
     pub name: String,
@@ -89,8 +89,22 @@ pub struct NumberingOptions {
     pub scheme: Option<NumberingScheme>,
     /// Region convention; automatic follows the numbering scheme.
     pub cdr_definition: CdrDefinition,
-    /// Restrict germline matching; empty searches all bundled species.
+    /// Search bundled V/J references, enabled by default.
+    pub match_germlines: bool,
+    /// Restrict matching when enabled; empty searches all bundled species.
     pub species: Vec<GermlineSpecies>,
+}
+
+impl Default for NumberingOptions {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            scheme: None,
+            cdr_definition: CdrDefinition::Auto,
+            match_germlines: true,
+            species: Vec::new(),
+        }
+    }
 }
 
 /// A numbered position with an optional single-letter insertion code.
@@ -181,9 +195,11 @@ pub struct NumberedAntibody {
     pub matched_profile_positions: usize,
     /// Recoverable limitations of this annotation.
     pub diagnostics: Vec<String>,
-    /// Best qualifying V similarities, or none when reference evidence is insufficient.
+    /// Whether V/J matching ran, even if neither segment had a qualifying match.
+    pub germlines_searched: bool,
+    /// Best qualifying V similarities, or none when skipped or evidence is insufficient.
     pub v_match: Option<GermlineMatch>,
-    /// Best qualifying J similarities, or none when reference evidence is insufficient.
+    /// Best qualifying J similarities, or none when skipped or evidence is insufficient.
     pub j_match: Option<GermlineMatch>,
 }
 
@@ -240,6 +256,8 @@ impl NumberedAntibody {
 /// Profile coverage must span IMGT 23–118 to retain framework-anchor context
 /// for alignment and both numbering/CDR conversions.
 /// Numbering does not impute missing residues.
+/// Set `match_germlines` to false to skip V/J matching while retaining all numbering
+/// results. In that mode `species` is unused and imputation is unavailable.
 ///
 /// Conventions: <https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html>,
 /// <https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/>, and

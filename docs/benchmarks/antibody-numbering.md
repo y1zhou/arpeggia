@@ -405,3 +405,32 @@ Each scheme accepts 130 and rejects 140. This is a conservative supported-input
 boundary, not proof that every rejected fragment is intrinsically unnumberable.
 The saved accepted IMGT maps from the original qualification already span this
 interval; the new sweep exercises a boundary absent from that panel.
+
+## Optional germline matching
+
+On 12 September 2026, a locked release Python extension compared the default
+five-species search with `match_germlines=False` on the same 30 inputs and host
+as the reference-expansion benchmark. Use the same seven batches, ten repeats
+of each chain's ten inputs, five warm-up calls per setting and CPU 0 affinity.
+Alternate enabled/disabled order between batches; no test or build ran alongside
+the measurements. Timings include numbering and Python result construction,
+excluding imports, warm-up and display.
+
+| Chain | Matching enabled | Numbering only | Speedup |
+| --- | ---: | ---: | ---: |
+| H | 10.848 ms | 0.135 ms | 80.2× |
+| K | 4.149 ms | 0.122 ms | 34.1× |
+| L | 1.429 ms | 0.122 ms | 11.7× |
+
+All 30 inputs retain identical residue labels, regions, input correspondence,
+domain spans, chain assignments, confidence and numbering diagnostics. Only
+search state and V/J results differ. These are warm, per-input measurements
+for the sampled chains; they do not measure process startup or promise a fixed
+speedup for other inputs. Matching remains enabled by default.
+
+Numbering-only runs also repeated the pinned 26,365-input qualification panel
+in all four schemes, comparing against the stored matching-enabled results.
+Every scheme retains all 25,474 accepted position maps, chain assignments,
+domain spans and numbering diagnostics, with the same 891 rejections. Search
+state is false and both matches are absent throughout; matching-specific
+missing-reference diagnostics are omitted as expected.

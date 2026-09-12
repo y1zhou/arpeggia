@@ -196,6 +196,7 @@ impl NumberedAntibody {
     /// separate similarities measured on the supplied input, including after imputation.
     /// Rulers use original input positions and a continuous V-then-J residue count.
     /// Imputed input positions are blank and their residues have yellow backgrounds.
+    /// Skipped matching displays only the input and annotations, without germline rows.
     pub fn format(
         &self,
         width: Option<usize>,
@@ -363,6 +364,7 @@ impl NumberedAntibody {
         };
         let rows: Vec<_> = [false, true]
             .into_iter()
+            .filter(|germline| !germline || self.germlines_searched)
             .map(|germline| DisplayRow {
                 name: if germline {
                     name(&self.v_match, "V unavailable")
@@ -433,6 +435,9 @@ impl NumberedAntibody {
             .filter(|r| r.input_index.is_none())
             .count();
         let mut details = String::new();
+        if !self.germlines_searched {
+            details.push_str("Germline matching: skipped\n");
+        }
         for (segment, matching) in [("V", &self.v_match), ("J", &self.j_match)] {
             if let Some(matching) = matching {
                 let hit = &matching.hits[0];

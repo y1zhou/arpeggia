@@ -574,6 +574,43 @@ fn antibody_cli_ruler_flag_preserves_compact_reference_first_blocks() {
 }
 
 #[test]
+fn antibody_cli_can_skip_germlines_without_disabling_numbering() {
+    for command in ["number-antibody", "align-antibodies"] {
+        let args = [
+            command,
+            ANTIBODY_SEQUENCE,
+            "--no-germlines",
+            "--species",
+            "rat,rabbit",
+        ];
+        let output = arpeggia().args(args).arg("--json").output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output.stderr.is_empty());
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let result = if command == "number-antibody" {
+            &value
+        } else {
+            &value["antibodies"][0]
+        };
+        assert_eq!(result["germlines_searched"], false);
+        assert!(result["v_match"].is_null() && result["j_match"].is_null());
+        assert!(result["diagnostics"].as_array().unwrap().is_empty());
+        assert_eq!(
+            result["residues"].as_array().unwrap().len(),
+            ANTIBODY_SEQUENCE.len()
+        );
+        let conflict = arpeggia().args(args).arg("--impute").output().unwrap();
+        assert!(!conflict.status.success());
+        let error = String::from_utf8_lossy(&conflict.stderr);
+        assert!(error.contains("--no-germlines") && error.contains("--impute"));
+    }
+}
+
+#[test]
 fn antibody_cli_rejects_invalid_names_and_conventions() {
     for options in [
         vec!["align-antibodies", ANTIBODY_SEQUENCE, "--names", "one,two"],

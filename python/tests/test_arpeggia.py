@@ -576,6 +576,48 @@ def test_antibody_api_and_germline_correspondence():
             )
 
 
+def test_antibody_germline_opt_out_is_explicit():
+    """Keep skipped matching observable without warnings or deferred computation."""
+    import warnings
+
+    import arpeggia
+
+    searched = arpeggia.number_antibody(ANTIBODY_SEQUENCE)
+    assert searched.germlines_searched
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        skipped = arpeggia.number_antibody(
+            ANTIBODY_SEQUENCE, name="WT", species="alpaca", match_germlines=False
+        )
+        assert not skipped.germlines_searched
+        assert skipped.diagnostics == []
+        for rulers in [True, False]:
+            text = skipped.format(width=80, color="never", rulers=rulers)
+            assert "Germline matching: skipped" in text
+            assert "unavailable" not in text and "input similarity" not in text
+            assert "\x1b" not in text
+            assert all(len(line) <= 80 for line in text.splitlines())
+            blocks = text.split("\n\n")[1:]
+            assert all(
+                len(block.splitlines()) == (3 if rulers else 2) for block in blocks
+            )
+            assert (
+                "".join(block.splitlines()[-1].split()[2] for block in blocks)
+                == ANTIBODY_SEQUENCE
+            )
+        assert "\x1b" in skipped.format(color="always")
+        assert str(skipped) == repr(skipped)
+        assert skipped.v_match is None and skipped.j_match is None
+        assert not skipped.germlines_searched
+        comparison = arpeggia.align_antibodies([searched, skipped])
+        assert comparison.aligned_sequences == [ANTIBODY_SEQUENCE, ANTIBODY_SEQUENCE]
+        assert not comparison.antibodies[1].germlines_searched
+    with pytest.raises(AttributeError):
+        cast(Any, skipped).germlines_searched = True
+    with pytest.raises(ValueError, match="imputation requires germline matching"):
+        skipped.impute()
+
+
 def test_antibody_imputation_is_explicit_and_preserves_input():
     """Preserve observations when terminal imputation adds inferred residues."""
     import arpeggia

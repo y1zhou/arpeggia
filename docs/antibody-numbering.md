@@ -81,6 +81,37 @@ Sources: [IMGT numbering](https://www.imgt.org/IMGTScientificChart/Numbering/IMG
 [AHo structural loops](https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f),
 and the [upstream Chothia consensus table](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering/chothia.rs#L16).
 
+## Numbering without germline matching
+
+For numbering and CDRs without V/J comparisons, use:
+
+```python
+numbered = arpeggia.number_antibody(sequence, match_germlines=False)
+comparison = arpeggia.align_antibodies([numbered])
+```
+
+```bash
+arpeggia number-antibody "$sequence" --no-germlines
+arpeggia align-antibodies "$sequence" "$sequence" --no-germlines
+```
+
+Matching is enabled by default. Skipping it preserves numbering, regions,
+confidence and domain detection; `species` has no effect in this mode. The
+read-only `.germlines_searched` flag distinguishes skipped matching (`False`)
+from a completed search (`True`), even if no reference qualified. Skipping sets
+both `.v_match` and `.j_match` to `None` without a warning; other domain
+diagnostics still apply.
+
+The display says “Germline matching: skipped” and retains the input sequence,
+rulers and CDR annotations, omitting the empty germline and operations rows.
+Property access, formatting and JSON output never initiate matching.
+`.impute()` raises `ValueError` if matching was skipped; number the input again
+with matching enabled before imputing it. CLI `--no-germlines` conflicts with
+`--impute`. A completed search with insufficient reference evidence retains the
+usual imputation diagnostics. See the
+[numbering-only benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#optional-germline-matching)
+for measured savings.
+
 ## Germline similarities
 
 Offline references cover human, mouse, rat and rabbit H/K/L and alpaca heavy chains, including

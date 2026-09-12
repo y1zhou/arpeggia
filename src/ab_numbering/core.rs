@@ -288,10 +288,13 @@ pub(super) fn number(
         confidence,
         matched_profile_positions: matched,
         diagnostics,
+        germlines_searched: options.match_germlines,
         v_match: None,
         j_match: None,
     };
-    super::germline::matches(&mut antibody, &alignment, chain, &options.species)?;
+    if options.match_germlines {
+        super::germline::matches(&mut antibody, &alignment, chain, &options.species)?;
+    }
     Ok(antibody)
 }
 
@@ -302,6 +305,58 @@ mod tests {
     const KAPPA: &str = "DIQMTQSPSSLSASVGDRVTITCRASQSISSYLNWYQQKPGKAPKLLIYAASSLQSGVPSRFSGSGSGTDFTLTISSLQPEDFATYYCQQSYSTPPTFGQGTKVEIK";
     // AntPack's pinned numbering fixture 788; see the engine comparison report.
     const LAMBDA: &str = "QSALTQPASVSGSPGQSITISCTGTTSDVGTYNFVSWYQQHPGKAPKAIIFDVTNRPSGISNRFSGSKFGNTASLTISGLQAEDEADYYCAAYTVASTLLFGGGTKVTVL";
+
+    #[test]
+    fn skipping_germlines_preserves_numbering_and_recognition() {
+        for sequence in [HEAVY, KAPPA, LAMBDA] {
+            for scheme in [
+                NumberingScheme::Imgt,
+                NumberingScheme::Martin,
+                NumberingScheme::Aho,
+                NumberingScheme::Kabat,
+            ] {
+                let mut options = NumberingOptions {
+                    scheme: Some(scheme),
+                    ..Default::default()
+                };
+                let searched = number_antibody(sequence, &options).unwrap();
+                assert!(searched.germlines_searched);
+                assert!(searched.v_match.is_some() && searched.j_match.is_some());
+                options.match_germlines = false;
+                // A retained species restriction is unused when matching is disabled.
+                options.species = vec![GermlineSpecies::Alpaca];
+                let skipped = number_antibody(sequence, &options).unwrap();
+                let mut expected = serde_json::to_value(&searched).unwrap();
+                expected["germlines_searched"] = false.into();
+                expected["v_match"] = serde_json::Value::Null;
+                expected["j_match"] = serde_json::Value::Null;
+                assert_eq!(serde_json::to_value(&skipped).unwrap(), expected);
+                assert!(
+                    skipped
+                        .impute(None, None)
+                        .unwrap_err()
+                        .to_string()
+                        .contains("requires germline matching")
+                );
+            }
+        }
+        for sequence in [
+            "A".repeat(100),
+            format!("{HEAVY}GGGGSGGGGS{KAPPA}"),
+            HEAVY[23..].into(),
+        ] {
+            let error = number_antibody(&sequence, &NumberingOptions::default()).unwrap_err();
+            let skipped = number_antibody(
+                &sequence,
+                &NumberingOptions {
+                    match_germlines: false,
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+            assert_eq!(error.to_string(), skipped.to_string());
+        }
+    }
 
     #[test]
     fn domain_spans_and_regions_follow_the_requested_convention() {

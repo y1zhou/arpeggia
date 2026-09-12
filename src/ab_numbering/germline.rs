@@ -555,6 +555,8 @@ mod tests {
         )
         .unwrap();
         assert!(missing.v_match.is_none() && missing.j_match.is_none());
+        assert!(missing.germlines_searched);
+        assert!(missing.impute(None, None).is_ok());
         assert_eq!(missing.diagnostics.len(), 2);
     }
 }

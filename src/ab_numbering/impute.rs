@@ -9,11 +9,17 @@ impl NumberedAntibody {
     /// corresponding tied hits. Unknown input residues and internal gaps remain
     /// unchanged. Inferred residues have no original input index and retain their
     /// source IDs; the original input, domain span and object are preserved.
+    /// Germline matching must have run when constructing the antibody.
     pub fn impute(
         &self,
         v_reference: Option<&str>,
         j_reference: Option<&str>,
     ) -> ArpeggiaResult<Self> {
+        if !self.germlines_searched {
+            return Err(ArpeggiaError::InvalidArgument(
+                "imputation requires germline matching; number the input again with match_germlines enabled".into(),
+            ));
+        }
         let scheme = clap::ValueEnum::from_str(&self.scheme, true)
             .map_err(ArpeggiaError::InvalidArgument)?;
         let scheme: NumberingScheme = scheme;

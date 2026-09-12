@@ -589,7 +589,7 @@ and displays must remain unchanged.
    Package the five-species subset described in section 9.2 with reproducible
    filtering, release/hash metadata and IMGT attribution. Keep runtime assets
    outside `docs/`, which release packages omit. Preserve partial-reference
-   coverage and all source metadata. Add eager, separate V/J matching and the
+   coverage and all source metadata. Add separate V/J matching, enabled by default, and the
    public `number_antibody()` result; reuse alignment work for identical
    sequence/coverage pairs while retaining every tied reference.
    Complete when species restrictions, known-residue gates, deterministic ties,
@@ -706,14 +706,14 @@ Rat and rabbit reuse the same pinned IMGT snapshot and matching path; see the
 does not require another engine, runtime downloads or a new general-purpose
 multiple sequence alignment API.
 
-The next decisions worth revisiting are:
-
-| Topic | Recommendation |
-| --- | --- |
-| Numbering without germline matching | Discuss an explicit opt-out for numbering-only callers: matching dominates runtime, and adding species increases candidate work. Keep current eager results as the default until the API is agreed. |
-| Structure-file input and numbered RMSD correspondence | Next feature candidate. Reuse observed chain sequences and retain residue/atom correspondence; imputed sequence must not imply coordinates. |
-| Independent structural validation | Prioritize curated H/K/L and VHH examples across species and difficult loops. Fixture agreement and synthetic germline tests do not establish accuracy. |
-| Constant regions, multiple domains and multi-letter insertions | Retain the current deferral until a concrete input requires them; each changes the supported domain or position model. |
+On 12 September 2026, the accepted performance change made V/J matching
+explicitly optional while retaining eager matching by default. Rust/Python
+`match_germlines` and CLI `--no-germlines` control the existing search call;
+`germlines_searched` records whether it ran. Skipped results have no V/J matches
+or skip warning and cannot be imputed. Rendering and serialization never search.
+See [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#germline-matching)
+for the result, display and argument contract. Structure integration and
+independent structural validation remain outside this PR.
 
 ## 11. Display revision workplan
 

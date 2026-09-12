@@ -707,6 +707,7 @@ def number_antibody(
     scheme: NumberingScheme | None = None,
     cdr_definition: CdrDefinition = "auto",
     species: GermlineSpecies | Sequence[GermlineSpecies] | None = None,
+    match_germlines: bool = True,
 ) -> NumberedAntibody:
     """Number one variable domain and compute separate, tied V/J similarities.
 
@@ -720,11 +721,17 @@ def number_antibody(
         cdr_definition (str): Auto follows the scheme. An explicit definition
             requires an explicit scheme; Chothia uses distinct consensus regions.
         species (str | Sequence[str] | None): Human, mouse, alpaca, rat, rabbit, or a sequence
-            of these names. None searches all bundled references.
+            of these names. None searches all bundled references. Unused when
+            match_germlines=False.
+        match_germlines (bool): True (default) searches V/J references. False skips
+            matching without changing numbering, CDRs or recognition. Reading,
+            displaying and serializing the result never trigger matching.
 
     Returns:
         NumberedAntibody: Read-only residue correspondence, region sequences,
-            confidence, diagnostics and V/J matches; missing matches are None.
+            confidence, diagnostics and V/J matches. Skipped matching sets
+            germlines_searched=False and both matches to None without a warning.
+            A completed search sets germlines_searched=True even if no match qualifies.
 
     Raises:
         ValueError: Invalid input or options.
@@ -799,12 +806,16 @@ class NumberedAntibody:
         """Recoverable limitations of this annotation."""
 
     @property
+    def germlines_searched(self) -> bool:
+        """Whether V/J matching ran, even if no reference qualified."""
+
+    @property
     def v_match(self) -> GermlineMatch | None:
-        """Best qualifying V similarities, or none when reference evidence is insufficient."""
+        """Best qualifying V similarities, or none when skipped or evidence is insufficient."""
 
     @property
     def j_match(self) -> GermlineMatch | None:
-        """Best qualifying J similarities, or none when reference evidence is insufficient."""
+        """Best qualifying J similarities, or none when skipped or evidence is insufficient."""
 
     @property
     def sequence(self) -> str:
@@ -854,7 +865,9 @@ class NumberedAntibody:
                 unknown input residues remain unchanged.
 
         Raises:
-            ValueError: Unknown reference selector.
+            ValueError: Germline matching was skipped, or the reference selector
+                is unknown. Rerun number_antibody with matching enabled before
+                imputing a result whose search was skipped.
         """
 
     def format(
@@ -869,7 +882,9 @@ class NumberedAntibody:
         ruler and sequence, then operations relative to the input. CDR1/2/3 bands
         are gray/pink/cyan across every row except operations. Yellow backgrounds mark
         imputed residues and their summary count. All tied reference names appear
-        in the summary; only representative V/J sequences are shown.
+        in the summary; only representative V/J sequences are shown. If matching
+        was skipped, show only the input, ruler and CDR markers, with a skipped
+        summary message. Formatting never triggers matching.
 
         Args:
             width (int | None): Total columns including labels; None detects

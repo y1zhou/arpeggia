@@ -16,7 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context for alignment, numbering and CDR conversion.
 - Offline human, mouse, alpaca, rat and rabbit V/J germline similarities, with explicit
   species restrictions, known-residue coverage, tied gene/allele references,
-  and attributed IMGT release 202636-7 data. Binary release archives include
+  and attributed IMGT release 202636-7 data. `match_germlines=False` /
+  `--no-germlines` skip matching without changing numbering or CDRs; matching
+  remains enabled by default.
+  `germlines_searched` distinguishes skipped searches from absent matches;
+  skipped results display only input annotations and require matching before
+  imputation. Binary release archives include
   the project README and a distinct `IMGT-GERMLINES.md` attribution file.
 - Explicit terminal FR1/FR4 imputation returns a new numbered antibody and
   preserves original input indices and reference provenance. Tied references
