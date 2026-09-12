@@ -2,8 +2,8 @@
 
 Arpeggia uses a serial `f64` Kabsch kernel and a packed pairwise RMSD matrix
 with k-medoids clustering. The public selection grammar, table schemas, input
-formats, cache behavior, and measured performance are documented in the
-[structure-clustering guide](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md).
+formats and cache behavior are documented in the
+[structure-comparison guide](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md).
 
 [ADR 0009](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) extends
 two-structure RMSD with optional sequence correspondence and refinement; the
@@ -14,8 +14,8 @@ exact-correspondence collection behavior below remains unchanged.
 Selected atoms must correspond exactly after model and conformer selection.
 Their identities include chain, author residue number, insertion code, residue
 name, and atom name. A mismatch fails rather than silently intersecting atom
-sets. Sequence/structural alignment and weighting remain deferred at the
-correspondence boundary in [the RMSD selection module](https://github.com/y1zhou/arpeggia/blob/master/src/rmsd/selection.rs).
+sets. Sequence/structural alignment and weighting remain deferred for
+collection comparisons.
 
 The Superposition Selection determines one proper rigid-body transform; the
 RMSD Selection is evaluated with that transform without recentering or
@@ -150,10 +150,11 @@ bit in the same direction; reverse-direction and analytical checks use narrow
 numerical tolerances. The independent-selection change retained its existing
 coordinate payload for equal selections, with runtime gates of 5% for one
 worker and 10% for eight, and a 10% peak-RSS gate. Overlapping selections must
-save exactly `24n(f+r-u)` coordinate bytes. The guide retains the measurements;
-regressions live with the implementation.
+save exactly `24n(f+r-u)` coordinate bytes. The
+[benchmark report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/structure-clustering.md)
+retains these measurements; regressions live with the implementation.
 
 Exact correspondence, one shared atom preset, quadratic matrix storage,
 heuristic memory protection, and caller-managed cache provenance remain the
-principal limits. Broader polymer/ligand selection, alignment, weights, other
+principal collection limits. Broader polymer/ligand selection, alignment, weights, other
 clustering methods, and public transforms require separate decisions.

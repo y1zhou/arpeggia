@@ -80,10 +80,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Probe-radius guidance explains crevice access and how SASA changes depend on
   the structure. Consolidated structure-comparison usage in a dedicated guide,
   linked repository files through GitHub for installed-package users, and
-  clarified Python/CLI names in README.
+  clarified Python/CLI names in README. Removed duplicated setup and completed
+  workplans, kept accepted contracts in ADRs, and retained research evidence and
+  dated benchmark results. Python recipes preserve complete residue identities
+  and use current Polars aggregation APIs.
 
 ### Validation
 
+- Compared Immunum, RIOT and AntPack on 26,365 protein inputs, separating fixture
+  agreement from independent accuracy. Qualified antibody recognition,
+  conversion, imputation and display, and measured reference expansion and
+  optional germline matching; see the
+  [antibody qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md).
 - Qualified Hyalite against 2,745 Biopython reference cases and checked structural
   correspondence, refinement, and terminal displays. See the
   [alignment validation and benchmarks](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md).

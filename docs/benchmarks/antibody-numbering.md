@@ -199,7 +199,9 @@ neither confidence nor endpoint classification guarantees stable numbering.
 The earlier modest FR1/FR4 truncations remain consistent in all 90 cases.
 Requiring raw coverage from FR1 through FR4 (`cons_start <= 26`,
 `cons_end >= 118`) would also reject ten original antibody-panel rows. This is
-the accepted initial scope restriction, not a proof of correctness.
+the initial scope restriction, later tightened to IMGT 23–118 in the
+[terminal-framework follow-up](#terminal-framework-regression-follow-up). Neither
+boundary proves numbering correctness.
 
 ## Implications for Arpeggia
 
@@ -208,7 +210,8 @@ and strongest fixture-label agreement. The adapter qualification below covers
 its conversion/span correction,
 aligned-domain coverage, insertion limits and multiple-domain guards.
 The [numbering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/antibody-numbering-schemes-and-tools.md)
-records the accepted scope. RIOT is a useful comparator with stronger
+records engine evidence; [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md)
+records accepted scope. RIOT is a useful comparator with stronger
 negative-control rejection here;
 this panel does not show better positional accuracy than Immunum.
 
@@ -294,7 +297,7 @@ per-cell coordinate labels and general row layout.
 Numbering the same 32 inputs with eager V/J matching takes 295.58 ms per batch
 (9.24 ms/input). An isolated build with only the private germline-matching call
 omitted takes 4.46 ms (0.139 ms/input), retaining the recognition and conversion
-work. This temporary measurement does not add a public skip-matching option.
+work. This isolated measurement preceded the public [matching opt-out](#optional-germline-matching).
 Matching accounts for about 98.5% of this workload's elapsed time.
 
 For broader chain coverage, take the first ten H, K and L numbering fixtures
@@ -328,7 +331,7 @@ not a release archive containing extra files.
 | CLI executable | 51,288,144 | 52,561,568 | 1,273,424 (2.48%) |
 | CLI executable, gzip | 12,333,380 | 12,616,583 | 283,203 (2.30%) |
 
-The runtime reference subset is 255,885 bytes. The lockfile adds Immunum 1.3.1,
+The three-species reference subset at this measurement was 255,885 bytes. The lockfile adds Immunum 1.3.1,
 strum 0.27.2 and strum_macros 0.27.2 without upgrading existing dependencies.
 Immunum's default features are disabled; its CLI and Python layers are unused.
 
@@ -339,7 +342,7 @@ Rust package file list also retains the reference assets and excludes docs.
 The source distribution does not bundle benchmark fixtures.
 CLI release archives include the same attribution alongside the executable.
 
-Final validation passes 199 Rust library tests, 3 binary tests, 17 CLI tests,
+Validation at `a9f1337` passed 199 Rust library tests, 3 binary tests, 17 CLI tests,
 8 doctests, 21 Python tests, Python type checking, and the repository's required
 format/lint checks. The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
 describes the supported scope and remaining limitations.
@@ -434,3 +437,16 @@ Every scheme retains all 25,474 accepted position maps, chain assignments,
 domain spans and numbering diagnostics, with the same 891 rejections. Search
 state is false and both matches are absent throughout; matching-specific
 missing-reference diagnostics are omitted as expected.
+
+## Display validation
+
+The 11 September 2026 display revision checked original-input rulers across gaps
+and wraps, continuous V/J counts, blank imputed coordinates, reference-defined
+CDR bands, yellow imputation highlights, tied names and Unicode width in Rust,
+CLI and Python. It passed 202 library tests, three binary tests, 18 CLI tests,
+eight doctests, 21 Python tests, type checking and pre-commit hooks.
+
+Six representative AntPack full/truncated inputs were rendered before and after
+imputation under all four schemes: 48 displays preserved supplied and imputed
+sequence content, respected width, and retained idempotent imputation. This
+revision did not repeat the full numbering benchmark.

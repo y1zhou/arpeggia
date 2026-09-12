@@ -85,7 +85,7 @@ pre-commit checks.
 
 The artifact measurements above cover the alignment engine and API before display
 rendering and expanded help; they are not final release-size measurements.
-The complete feature passes 211 Rust tests and 18 Python tests against the rebuilt editable
+The display-stage build passed 211 Rust tests and 18 Python tests against the rebuilt editable
 extension, with Python warnings treated as errors. Regressions cover gapped
 strings and recovered residue indices, insertion/deletion orientation,
 positive-score substitution markers without changing identity, independent

@@ -1,4 +1,4 @@
-# Pairwise sequence alignment and sequence-aware RMSD
+# Pairwise sequence alignment
 
 ## Align two sequences
 
@@ -24,8 +24,8 @@ default. The CLI accepts `--alignment-mode` and its alias `--mode`.
 BLOSUM62 scoring uses positive `gap_open=10` and `gap_extend=0.5`, charging
 `gap_open + (length - 1) * gap_extend` per gap. Costs accept at most two decimal
 places and require opening ≥ extension ≥ 0.01; smaller costs are rejected, never
-rounded to zero. Matrix and costs are scaled together
-for exact integer optimization. Unrepresentable scores fail explicitly.
+rounded to zero. Matrix and costs use the same integer scale; unrepresentable
+scores fail explicitly.
 
 Lowercase is normalized; standard amino acids and `B/Z/X/U/O` are accepted.
 `U/O` score as `C/K` with a warning but retain their original symbols for identity
@@ -56,9 +56,9 @@ still compares the complete inputs. JSON represents undefined ratios as `null`.
 
 ## Display an alignment
 
-Evaluating or printing a Python `SeqAlignment` shows statistics followed by
-reference and query rows followed by an unlabeled operation row. The CLI uses the same layout, including
-per-chain alignments from `rmsd --align-seqs`.
+Python `SeqAlignment` displays statistics, reference and query rows, and an
+unlabeled operation row. The CLI uses the same layout, including per-chain
+alignments from `rmsd --align-seqs`.
 
 ```python
 alignment = arpeggia.align_seqs(
@@ -183,7 +183,8 @@ region is never refitted. Results include parameters and selected model serials,
 without per-atom residuals or transformations. The CLI prints a detailed summary;
 `--json` provides the structured result.
 
-`pairwise_rmsd` and clustering still require exact correspondence. Sequence-aware
-collection comparisons and antibody numbering are follow-ups. See
+`pairwise_rmsd` and clustering require exact correspondence; sequence-aware
+collection comparisons remain deferred. [Antibody numbering](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+provides a separate numbered-position correspondence. See
 [ADR 0009](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) for
 rationale and [validation](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md) for reference checks.

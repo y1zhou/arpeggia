@@ -28,13 +28,13 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
  <div class="card"><strong>exact</strong>Matched-input SC core parity</div>
 </section>
 <p class="note"><strong>Scope:</strong> numerical similarity is claimed only for the same caller-prepared input. Arpeggia does not add hydrogens, reconstruct missing atoms, relax structures, or fit benchmark outputs.</p>
-<h2>SASA: improvement from master</h2>
+<h2>SASA: comparison with baseline 4135403</h2>
 <table><thead><tr><th>Metric</th><th>Version</th><th>MAE</th><th>Median AE</th><th>RMSE</th><th>P95 AE</th><th>Max AE</th><th>Bias</th><th>Spearman</th><th>MAE reduction</th><th>Structures improved</th></tr></thead>
-<tbody><tr><th>Total</th><td>master</td><td>536.70</td><td>384.27</td><td>756.87</td><td>1679.45</td><td>3130.44</td><td>+486.00</td><td>0.999511</td><td>—</td><td>—</td></tr><tr><th>Total</th><td>v0.9.0</td><td>395.42</td><td>291.68</td><td>558.55</td><td>1101.01</td><td>2450.31</td><td>+326.65</td><td>0.999648</td><td>26.3%</td><td>71/85</td></tr><tr><th>Polar</th><td>master</td><td>1945.53</td><td>1625.39</td><td>2510.64</td><td>4739.11</td><td>11182.60</td><td>+1945.53</td><td>0.999179</td><td>—</td><td>—</td></tr><tr><th>Polar</th><td>v0.9.0</td><td>1019.28</td><td>773.32</td><td>1343.56</td><td>2456.74</td><td>6362.36</td><td>+1019.28</td><td>0.999062</td><td>47.6%</td><td>85/85</td></tr><tr><th>Hydrophobic</th><td>master</td><td>1459.53</td><td>1188.46</td><td>1817.96</td><td>3253.89</td><td>8052.17</td><td>-1459.53</td><td>0.999394</td><td>—</td><td>—</td></tr><tr><th>Hydrophobic</th><td>v0.9.0</td><td>692.62</td><td>564.62</td><td>858.18</td><td>1463.21</td><td>3911.95</td><td>-692.62</td><td>0.999355</td><td>52.5%</td><td>85/85</td></tr></tbody></table>
+<tbody><tr><th>Total</th><td>baseline</td><td>536.70</td><td>384.27</td><td>756.87</td><td>1679.45</td><td>3130.44</td><td>+486.00</td><td>0.999511</td><td>—</td><td>—</td></tr><tr><th>Total</th><td>v0.9.0</td><td>395.42</td><td>291.68</td><td>558.55</td><td>1101.01</td><td>2450.31</td><td>+326.65</td><td>0.999648</td><td>26.3%</td><td>71/85</td></tr><tr><th>Polar</th><td>baseline</td><td>1945.53</td><td>1625.39</td><td>2510.64</td><td>4739.11</td><td>11182.60</td><td>+1945.53</td><td>0.999179</td><td>—</td><td>—</td></tr><tr><th>Polar</th><td>v0.9.0</td><td>1019.28</td><td>773.32</td><td>1343.56</td><td>2456.74</td><td>6362.36</td><td>+1019.28</td><td>0.999062</td><td>47.6%</td><td>85/85</td></tr><tr><th>Hydrophobic</th><td>baseline</td><td>1459.53</td><td>1188.46</td><td>1817.96</td><td>3253.89</td><td>8052.17</td><td>-1459.53</td><td>0.999394</td><td>—</td><td>—</td></tr><tr><th>Hydrophobic</th><td>v0.9.0</td><td>692.62</td><td>564.62</td><td>858.18</td><td>1463.21</td><td>3911.95</td><td>-692.62</td><td>0.999355</td><td>52.5%</td><td>85/85</td></tr></tbody></table>
 <p class="note"><strong>Interpretation:</strong> v0.9.0 changes the standard heavy-atom surface from elemental radii to ProtOr/fallback radii. It improves absolute errors substantially, but it does not make Shrake–Rupley numerically identical to Rosetta's full-atom LeGrand calculation. Rank agreement was already very high; v0.9.0 slightly improves total-SASA Spearman and slightly lowers the two partition correlations.</p>
 <h2>Scatter plots</h2><div class="plots">
-    <figure><figcaption>master: Total SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="master: Total SASA">
+    <figure><figcaption>baseline: Total SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="baseline: Total SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -59,8 +59,8 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
         <text x="45" y="34" text-anchor="end">140,431</text>
       </svg>
     </figure>
-    <figure><figcaption>master: Polar SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="master: Polar SASA">
+    <figure><figcaption>baseline: Polar SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="baseline: Polar SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -85,8 +85,8 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
         <text x="45" y="34" text-anchor="end">64,532</text>
       </svg>
     </figure>
-    <figure><figcaption>master: Hydrophobic SASA</figcaption>
-      <svg viewBox="0 0 460 370" role="img" aria-label="master: Hydrophobic SASA">
+    <figure><figcaption>baseline: Hydrophobic SASA</figcaption>
+      <svg viewBox="0 0 460 370" role="img" aria-label="baseline: Hydrophobic SASA">
         <line class="axis" x1="52" y1="318" x2="442" y2="318"/>
         <line class="axis" x1="52" y1="318" x2="52" y2="28"/>
         <line class="identity" x1="52" y1="318" x2="442.0" y2="28.0"/>
@@ -142,7 +142,7 @@ pre { overflow:auto; padding:1rem; border-radius:.5rem; background:#8882; }
 <p>Each row is the median of seven one-thread release-mode whole-command runs after filesystem warm-up. SC now reuses one <code>rstar</code> neighbor query and stores sorted compact-index vectors. Contacts carry one-byte group masks and compact residue identities beside indexed atoms. SAP prepares once and carries the definition-derived hydrophobic contribution in its spatial item. The first cold execution of a newly built binary was excluded; runtime and RSS are local observations, not portable limits.</p>
 
 <h3>Reproducing the external 2EAB fixture</h3>
-<p>The full 2EAB structure is intentionally not committed or packaged. Fetch the RustSASA corpus at commit <code>ad8ecd2237abd41291d39e7e5e7e6ad5bbcea2c7</code>; its source <code>tests/data/freesasa_pdbs/2eab.pdb</code> has SHA-256 <code>c185b82cf99ec495e5c7c4433292a892211189ccca37d497d745db86c53b371e</code>. Prepare it with installed Rosetta revision <code>597b55d6600c3939574ffee30a4469b26c3337bd</code>, an empty protocol, a constant seed, and no relax, packing, design, or sampling. Put its executable on <code>PATH</code>:</p>
+<p>The full 2EAB structure is intentionally not committed or packaged. Fetch the RustSASA corpus at commit <code>ad8ecd2237abd41291d39e7e5e7e6ad5bbcea2c7</code>; its source <a href="https://github.com/maxall41/RustSASA/blob/ad8ecd2237abd41291d39e7e5e7e6ad5bbcea2c7/tests/data/freesasa_pdbs/2eab.pdb">2eab.pdb</a> has SHA-256 <code>c185b82cf99ec495e5c7c4433292a892211189ccca37d497d745db86c53b371e</code>. Prepare it with installed Rosetta revision <code>597b55d6600c3939574ffee30a4469b26c3337bd</code>, an empty protocol, a constant seed, and no relax, packing, design, or sampling. Put its executable on <code>PATH</code>:</p>
 <pre><code>git clone https://github.com/maxall41/RustSASA.git rustsasa
 git -C rustsasa checkout ad8ecd2237abd41291d39e7e5e7e6ad5bbcea2c7
 printf '%s\n' '&lt;ROSETTASCRIPTS&gt;&lt;PROTOCOLS /&gt;&lt;/ROSETTASCRIPTS&gt;' &gt; empty.xml

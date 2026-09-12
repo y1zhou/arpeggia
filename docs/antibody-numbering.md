@@ -3,7 +3,8 @@
 `number_antibody()` identifies one antibody variable domain, numbers its
 residues, assigns framework/CDR regions, and finds the closest bundled V and J
 references. `align_antibodies()` compares numbered positions across antibodies.
-Both accept protein sequences; no structure file or network connection is needed.
+Python aligns `NumberedAntibody` objects; both CLI commands accept sequence
+strings. No structure file or network connection is needed.
 
 ## Python
 
@@ -35,7 +36,7 @@ strings under the selected CDR definition. Each residue carries its numbered
 position, amino acid, original zero-based `input_index`, and region.
 
 `chain` is `H`, `K`, or `L`. `confidence` is the numbering engine's normalized
-alignment score, not a probability of correctness. `matched_profile_positions`
+profile-confidence heuristic, not a probability of correctness. `matched_profile_positions`
 measures domain evidence without counting insertions. Diagnostics remain in
 `.diagnostics`; Python also emits them as `UserWarning`.
 
@@ -232,7 +233,10 @@ including the reference.
 
 ## Scope and qualification
 
-The adapter uses Immunum 1.3.1's Rust core. Inputs must contain one recognizable
+The adapter uses Immunum 1.3.1's Rust core. Inputs must be unaligned protein
+strings of 30–10,000 residues, using the
+[sequence alphabet](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md#align-two-sequences).
+Each must contain one recognizable
 variable domain spanning FR1 through FR4; modest terminal FR1/FR4 truncations
 are supported when the profile alignment spans IMGT 23–118, retaining coverage
 of the FR1 and FR4 anchor positions. This preserves the framework context needed

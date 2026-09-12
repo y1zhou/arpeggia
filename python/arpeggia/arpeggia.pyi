@@ -712,8 +712,10 @@ def number_antibody(
     """Number one variable domain and compute separate, tied V/J similarities.
 
     Args:
-        sequence (str): Unaligned amino-acid input; tags and constant tails are
-            retained. Terminal FR1/FR4 truncations must span IMGT profile positions
+        sequence (str): Unaligned amino-acid string, 30–10,000 residues. Lowercase
+            is normalized; B/Z/X/U/O are accepted. Gaps, whitespace and stops fail.
+            Tags and constant tails are retained; additional detected domains fail.
+            Terminal FR1/FR4 truncations must span IMGT profile positions
             23–118 to preserve framework-anchor context for alignment and conversion.
         name (str): Display name, default Seq001.
         scheme (str | None): IMGT by default; Martin, AHo and Kabat are supported.
@@ -819,35 +821,35 @@ class NumberedAntibody:
 
     @property
     def sequence(self) -> str:
-        """Derived sequence sequence under this antibody's CDR definition."""
+        """Numbered sequence, including imputation and excluding unnumbered input tails."""
 
     @property
     def fr1(self) -> str:
-        """Derived fr1 sequence under this antibody's CDR definition."""
+        """FR1 sequence under the selected CDR definition."""
 
     @property
     def cdr1(self) -> str:
-        """Derived cdr1 sequence under this antibody's CDR definition."""
+        """CDR1 sequence under the selected CDR definition."""
 
     @property
     def fr2(self) -> str:
-        """Derived fr2 sequence under this antibody's CDR definition."""
+        """FR2 sequence under the selected CDR definition."""
 
     @property
     def cdr2(self) -> str:
-        """Derived cdr2 sequence under this antibody's CDR definition."""
+        """CDR2 sequence under the selected CDR definition."""
 
     @property
     def fr3(self) -> str:
-        """Derived fr3 sequence under this antibody's CDR definition."""
+        """FR3 sequence under the selected CDR definition."""
 
     @property
     def cdr3(self) -> str:
-        """Derived cdr3 sequence under this antibody's CDR definition."""
+        """CDR3 sequence under the selected CDR definition."""
 
     @property
     def fr4(self) -> str:
-        """Derived fr4 sequence under this antibody's CDR definition."""
+        """FR4 sequence under the selected CDR definition."""
 
     def impute(
         self, *, v_reference: str | None = None, j_reference: str | None = None

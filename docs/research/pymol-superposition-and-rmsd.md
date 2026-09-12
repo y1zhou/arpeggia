@@ -5,17 +5,19 @@
 **Audited revision:** `5e8bfca5a7f5dc4d5e7f84fa1d15af707cc86e69` (24 July 2026), the latest default-branch commit returned by the repository API before the cutoff.[^revision]
 **Validation status:** The relevant Python and C++ source paths were inspected. PyMOL itself was not installed or executed in this research session. An independent NumPy demonstration of the rejection rule was executed; it is not a binary-level PyMOL regression test.
 
-## Executive findings
+## Findings
 
-The most important finding is a documentation–implementation discrepancy: **in the audited implementation, `align(..., cutoff=2.0)` rejects an atom pair when its post-fit distance exceeds twice the current RMSD—not when it exceeds 2 Å.** The Python docstring describes an Å cutoff, but the C++ expression divides the distance by RMSD before comparing it with `cutoff`.[^wrapper-align][^rejection]
+**in the audited implementation, `align(..., cutoff=2.0)` rejects an atom pair when its post-fit distance exceeds twice the current RMSD—not when it exceeds 2 Å.** The Python docstring describes an Å cutoff, but the C++ expression divides the distance by RMSD before comparing it with `cutoff`.[^wrapper-align][^rejection]
 
 `align` first constructs a sequence-based residue correspondence and then matching atom pairs. Its refinement loop does **not** repeatedly align the sequences or search for new nearest-neighbor atom correspondences. It repeatedly fits the current pairs, removes outlying pairs, and refits the survivors. Rejected pairs never re-enter that invocation.[^executive][^rejection]
 
 The reported final RMSD is consequently a **surviving-core RMSD**. It is not necessarily the RMSD of all residues, all selected atoms, or all atoms in the two structures. Even `cycles=0` measures only the atom pairs admitted by the initial correspondence.[^selector][^rejection]
 
-For quantitative protein-design evaluation, my recommendation is to retain both an independently defined evaluation correspondence and the fitting correspondence. Report the atom selection, initial and final pair counts, coverage, and RMSD with and without rejection. A low trimmed RMSD by itself is an incomplete comparison.
+Arpeggia preserves separate fitting and evaluation selections and reports both
+full-selection and core RMSD; [ADR 0009](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md)
+records the adopted refinement contract.
 
-## 1. Three different operations hidden behind “alignment”
+## 1. Correspondence, superposition and evaluation
 
 For two coordinate arrays, three decisions should be kept separate:
 
@@ -56,8 +58,6 @@ $$
 $$
 
 This is best described as a **local, Smith–Waterman-like residue alignment with PyMOL-specific gap/search controls**. It should not be treated as an unconditional promise of equivalence to an unrestricted textbook affine-gap implementation: `max_gap`, `max_skip`, and the structural-mode options affect the permitted paths and scores.[^wrapper-align][^match]
-
-The critical practical point is that coordinate residuals are not fed back into a fresh sequence alignment during the later rejection loop. The residue alignment supplies the initial atom-pair pool once.[^executive]
 
 ### 2.2 Residue pairs become atom pairs
 
@@ -180,8 +180,6 @@ An alignment object created by the refined call contains the surviving atom pair
 
 ### Four useful quantities to report separately
 
-My recommended reporting vocabulary is:
-
 | Quantity | Fitting set | Evaluation set | Scientific question |
 |---|---|---|---|
 | Untrimmed fitted RMSD | All predefined paired atoms | Same full pair set | Overall least-squares agreement |
@@ -279,17 +277,17 @@ print("Original-pair RMSD under core fit:",
 
 For a production test, also save the exact selections, PyMOL version/build, scheme-derived residue mapping where applicable, states, gap parameters, fitting settings, surviving pair IDs, and transformation. Add a synthetic scaling test: under the relative rule, uniform coordinate scaling should preserve rejection membership apart from numerical-tolerance effects. This is a recommendation for validating the installed implementation, not a claim that the binary test was performed here.
 
-## 8. Recommended use in protein and antibody design
+## 8. Implications for antibody structure comparison
 
-For a near-identical design and reference, establish atom correspondence explicitly, calculate an untrimmed Cα or backbone RMSD, and retain residue-wise residuals. For divergent proteins, choose sequence-based or structure-based correspondence deliberately rather than assuming the command with the lowest RMSD found the biologically correct alignment.
-
-For antibody comparisons, define the framework and CDR evaluation sets using an explicit numbering scheme and CDR convention. Fit a predefined framework, evaluate the CDRs without refitting, and separately quantify VH–VL orientation changes when relevant. An automatically clipped whole-variable-domain RMSD may remove precisely the loop changes the design experiment is intended to measure.
-
-For a rigid-core visualization, `align` or `super` with rejection is useful. For a scientific ranking, treat the resulting core selection as part of the result, not as an invisible preprocessing step.
+A future structure API should derive framework and CDR selections from explicit
+numbering and CDR conventions, then evaluate CDRs under the framework fit.
+Automatically trimmed whole-domain RMSD can exclude the loop changes being
+measured. VH–VL orientation changes need a separate evaluation. These structure
+features remain outside Arpeggia's sequence-only antibody APIs.
 
 ## 9. Evidence limitations
 
-I did not identify a dedicated peer-reviewed publication that specifies this exact PyMOL normalized-distance rejection implementation. The classical least-squares, sequence-alignment, CE, and US-align publications explain relevant algorithm families, but they should not be cited as proof of PyMOL's particular clipping threshold. The pinned C++ code is the decisive evidence for that behavior.
+No dedicated peer-reviewed specification of this exact normalized-distance rejection rule was identified in the audit. The classical least-squares, sequence-alignment, CE, and US-align publications explain relevant algorithm families, but they should not be cited as proof of PyMOL's particular clipping threshold. The pinned C++ code is the decisive evidence for that behavior.
 
 The audit covers the stated open-source revision. It does not establish that every historical release, commercial build, third-party patch, or future release behaves identically. A source–binary mismatch should be resolved by running a small regression fixture on the deployed executable.
 

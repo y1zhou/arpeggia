@@ -8,22 +8,19 @@ counts. The [three-engine comparison](https://github.com/y1zhou/arpeggia/blob/ma
 covers 26,365 protein inputs, measuring fixture agreement and recognition
 behavior rather than independent accuracy or comparative throughput.
 
-## Executive assessment
+## Findings
 
-There have been meaningful improvements, but two different questions need separate answers. **A numbering scheme defines positional equivalence; a numbering engine assigns a sequence to those positions.** Replacing ANARCI with a faster engine does not automatically improve the underlying scheme, and converting an incorrect initial mapping into a different scheme does not necessarily correct it.[^anarci][^immunum-source]
+A numbering scheme defines positional equivalence; an engine assigns residues
+to those positions. Martin and AHo address structural limitations in older
+conventions, but no scheme or engine establishes universally correct structural
+correspondence.[^martin][^aho][^evaluation2024]
 
-For structural correspondence, **Martin/enhanced Chothia and AHo are important improvements over simpler historical conventions**, although they are not new in 2026. A 2024 structural/statistical study still found limitations among commonly used schemes rather than establishing one universally correct successor.[^martin][^aho][^evaluation2024]
+Arpeggia selected Immunum's Rust core after the fixture comparison. AntPack,
+ANARCII and RIOT provide complementary CPU, difficult-case and protein V/J
+comparators. The evidence below does not establish a universal speed/accuracy
+winner; reported performance belongs to the cited versions and workloads.
 
-Arpeggia selected Immunum's Rust core following the fixture comparison.
-AntPack remains a CPU comparator, ANARCII provides evidence on difficult or
-unusual sequences, and RIOT provides protein V/J-based numbering comparisons.
-Published performance claims below remain attributed to their authors.[^antpack-paper][^anarcii-paper][^immunum-source][^riot]
-
-**I did not find adequate evidence to declare that a newer tool universally surpasses AntPack in both speed and accuracy.** ANARCII provides published evidence of advantages on challenging sequence classes. Immunum is a serious engineering alternative, but its maintainers explicitly identify weaknesses in their AntPack parallel benchmark and in the independence of their correctness benchmark.[^anarcii-paper][^immunum-speed-issue][^immunum-truth-issue]
-
-A deployment decision must also account for licensing and version differences: current AntPack licensing is not the same as its older GPL line. The follow-up verified Immunum 1.3.1 with five schemes in both its Rust and Python releases.[^antpack-current][^antpack-gpl][^immunum-release]
-
-## 1. Four concepts that should not be conflated
+## 1. Schemes, engines, regions and correspondence
 
 | Concept | What it specifies | Example |
 |---|---|---|
@@ -36,17 +33,17 @@ The original ANARCI paper distinguishes schemes and implements several of them. 
 
 For a reproducible humanization or design pipeline, save **both** `numbering_scheme` and `cdr_definition`. Do not use an unlabeled field such as `cdr1` as though its boundaries were self-evident. Similarly, “Chothia,” “enhanced Chothia/Martin,” and “AbM CDR definition” should not be collapsed into one unnamed convention.
 
-## 2. Have the established schemes improved structurally?
+## 2. Numbering schemes
 
 ### 2.1 Kabat and Chothia are different starting points
 
 Kabat's sequence-oriented convention and Chothia's structural interpretation do not always place gaps or delimit loops in the same way. The practical issue is not merely whether the displayed position numbers look familiar: a different insertion placement changes which residues are treated as corresponding across antibodies.[^martin][^evaluation2024]
 
-For legacy datasets, maintaining the originally used scheme can be essential for reproducing annotations or mutations. For a new computational system, legacy popularity alone is not a sufficient reason to treat that scheme as a structural gold standard. That is a workflow recommendation, not a claim that one historical system has become invalid.
+Preserve a legacy dataset’s original scheme when reproducing its annotations or mutations; familiarity alone does not establish structural accuracy.
 
 ### 2.2 Martin / enhanced Chothia: explicit structural corrections
 
-Abhinandan and Martin's 2008 paper directly addressed structural problems in existing numbering, including insertion placement, and proposed improvements. This is a substantive answer to the question about schemes that better fit antibody crystal structures: **structurally motivated correction of numbering was already an explicit research objective, not an innovation first introduced by the newest high-throughput tools.**[^martin]
+Abhinandan and Martin's 2008 paper proposed structurally motivated corrections to existing numbering, including insertion placement.[^martin]
 
 Martin/enhanced Chothia is therefore worth supporting when the workflow depends on structural modeling or comparison to structural antibody literature. The original ANARCI scheme support includes enhanced Chothia, so adopting this scheme does not itself require adopting a newly released engine.[^anarci]
 
@@ -60,7 +57,7 @@ This makes AHo a particularly relevant candidate for cross-antibody structural a
 
 IMGT provides an extensively documented position system across immunoglobulin and related receptor variable domains. Its standard V-domain boundaries are FR1 1–26, CDR1 27–38, FR2 39–55, CDR2 56–65, FR3 66–104, CDR3 105–117, and FR4 118–128. Conserved landmarks include positions 23, 41, 104, and 118.[^imgt]
 
-I would use IMGT as the canonical sequence-level interchange scheme in a new multi-tool pipeline, while retaining alternate scheme mappings where they serve a specific structural or legacy purpose. That recommendation prioritizes documented interoperability, not a claim that IMGT is the best geometric correspondence for every loop.
+IMGT provides a documented interchange convention; structural and legacy workflows can still require alternate mappings.
 
 Insertion positions must be interpreted with IMGT's ordering rules, especially around long CDR3s. **Do not assume that sorting position labels as ordinary strings reconstructs sequence order.** The safe implementation stores explicit input offsets and a scheme-aware ordering rather than deriving order from a displayed label.[^imgt]
 
@@ -68,9 +65,7 @@ Insertion positions must be interpreted with IMGT's ordering rules, especially a
 
 Zhu, Olson, and Magliery's 2024 study, *50 Years of Antibody Numbering Schemes*, compared statistical variation and structural behavior across common conventions. It found differences in CDR coverage and limitations in structural correspondence, including light-chain loop alignment issues. Its findings argue against assuming that any one familiar CDR convention perfectly captures all structurally or statistically important residues.[^evaluation2024]
 
-I did not identify a broadly adopted 2025–2026 scheme that resolves all these issues and replaces IMGT, AHo, and Martin. The defensible conclusion is **continued need for explicit conventions and structural validation**, not that recent tooling has made the scheme problem disappear.
-
-## 3. What “correct insertion placement” actually requires
+## 3. Insertion-placement failure modes
 
 There are at least three distinct failure modes:
 
@@ -84,7 +79,7 @@ The structural papers and newer engine evaluations document examples motivating 
 
 A correctly identified conserved cysteine is a useful diagnostic, not proof that every intervening residue has been numbered correctly. Conversely, a deliberately mutated anchor should be flagged for review rather than automatically declared impossible. Sequence identity at an anchor and structural location of an anchor are different tests.
 
-## 4. Engine shortlist and what each option is actually good for
+## 4. Engine comparison
 
 | Tool | Method / integration | Best reason to evaluate it | Main reservation |
 |---|---|---|---|
@@ -97,7 +92,7 @@ A correctly identified conserved cysteine is a useful diagnostic, not proof that
 
 Sources for the engine descriptions are the original papers and inspected project documentation/source.[^anarci][^antpack-paper][^antpack-doc][^anarcii-repo][^immunum-source][^riot][^abnumber]
 
-### 4.1 AntPack: still an important performance baseline
+### 4.1 AntPack
 
 The peer-reviewed 2024 Parkinson and Wang paper reports a benchmark of 3,492 antibody sequences from structural data, repeated five times on an Intel i7-13700K with SSD storage. AntPack completed the numbering in **under 0.5 seconds**, compared with **35–45 seconds for ANARCI** and **12–13 seconds for AbRSA** in that setup.[^antpack-paper]
 
@@ -105,9 +100,9 @@ This supports a substantial throughput improvement over that ANARCI configuratio
 
 The official project describes optimized position-specific alignment routines and provides Python APIs for single-chain and paired-chain processing. TCR and antibody workflows should not be assumed to have identical runtime or support characteristics.[^antpack-doc]
 
-My recommendation is to keep AntPack as a strong CPU baseline on representative conventional antibody data. Retain failure metadata and evaluate unusually long loops, truncations, ambiguous residues, and uncommon receptor formats separately. A fast successful return is not the same as a fully correct mapping.
+Use AntPack as a CPU baseline, retaining failures and stratifying unusual loops, truncations, ambiguous residues and uncommon formats.
 
-### 4.2 ANARCII: the clearest recent published accuracy advance
+### 4.2 ANARCII
 
 ANARCII's peer-reviewed paper was published on **21 May 2026**, with an August version-of-record date. It reports a sequence-to-label model and advantages on difficult sequence classes. In **28 VNAR structures**, AntPack misplaced Cys104 in **12**, while ANARCII placed that anchor correctly in all 28. This is a targeted structural result, not proof of perfect full-domain numbering.[^anarcii-paper]
 
@@ -117,19 +112,19 @@ Its difficult “no-truth” dataset deliberately enriches disagreements between
 
 For deployment, the verified PyPI release is **2.0.8**, dated **30 June 2026**, with **Python ≥3.11** specified. The inspected repository license is **BSD 3-Clause**. The project provides a Python package and documented model-based numbering workflow.[^anarcii-release][^anarcii-license][^anarcii-repo]
 
-My recommendation is to use ANARCII as a serious difficult-case comparator or secondary pass, and evaluate it as a primary engine when GPU batch execution or unusual formats are central. Do not turn a score into a probability of correctness without a separate calibration study. For multi-domain constructs, test domain recovery explicitly rather than assuming a numbering call must return every antibody-like domain.
+ANARCII merits difficult-case and GPU-batch comparisons. Scores require calibration before probability interpretation; multidomain recovery requires explicit validation.
 
-### 4.3 Immunum: the main Rust-native candidate
+### 4.3 Immunum
 
 Immunum implements a semi-global Needleman–Wunsch-style alignment against position-specific consensus scoring matrices. The core is Rust, with Python bindings, a Polars plugin, and JavaScript/WASM support. It recognizes antibody heavy, kappa, and lambda chains plus four TCR chain classes. The repository is MIT-licensed.[^immunum-source]
 
 This is an attractive engineering combination for a service or data pipeline: native Rust processing can be used directly, while Python users can stay in a tabular workflow rather than repeatedly calling a Python function for each sequence. Those are integration advantages, not independently measured accuracy advantages.
 
-**The source-only limitation has been resolved.** The follow-up verified **1.3.1, released 2 September 2026**, on both PyPI and crates.io. Its published Rust artifact identifies commit `45bb70d34802cc592ebd86e685cc9f551885a2d6`. Chothia, Martin and AHo were added on 28 August; all five schemes are now released, with alternate antibody schemes derived from internal IMGT numbering.[^immunum-release][^immunum-commit][^immunum-source]
+The 10 September follow-up verified **1.3.1, released 2 September 2026**, on both PyPI and crates.io. Its published Rust artifact identifies commit `45bb70d34802cc592ebd86e685cc9f551885a2d6`. Chothia, Martin and AHo were added on 28 August; version 1.3.1 contains all five schemes, with alternate antibody schemes derived from internal IMGT numbering.[^immunum-release][^immunum-commit][^immunum-source]
 
 Pin the deployed artifact and test each required scheme and chain class. Section 9 records integration boundaries that release availability alone does not resolve.
 
-#### Has Immunum surpassed AntPack?
+#### Comparative benchmark limits
 
 The public evidence does not justify a blanket conclusion. Two maintainer issues are particularly relevant:
 
@@ -231,31 +226,31 @@ martin_results = model.to_scheme("martin")
 
 This numbering/conversion pattern is also used by the inspected AbNumber backend. Select and record model mode, device, batching, and version according to the deployed ANARCII documentation; the example intentionally does not imply a particular throughput.[^abnumber][^anarcii-repo]
 
-## 7. Recommended architecture for a semi-automated antibody workflow
+## 7. Future structural workflows
 
-The following is a proposed design, not a measured guarantee that a two-engine system is more accurate than either engine alone.
+Sequence-only Arpeggia behavior is specified in
+[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
+A future structure workflow additionally needs a correspondence between input
+offsets, domain identity, numbered positions and observed-structure residue IDs.
+Chain IDs, author residue numbers and insertion codes remain distinct from
+sequence offsets. Missing coordinates must remain explicit.
 
-### 7.1 Store a lossless coordinate crosswalk
+Whether to number a declared complete sequence or only observed residues needs
+a separate decision: deleting unresolved residues can alter apparent loop
+lengths, while declared sequence has no coordinates for fitting. Numbering-based
+framework/CDR selections would permit fitting one region and evaluating another.
 
-For each input residue, retain the input sequence offset, domain identity, chain type, scheme, position number, insertion code, and any corresponding observed-structure residue identifier. Store the original sequence and the numbered domain's start/end offsets separately. The displayed label is not an adequate database key on its own.
+Independent-engine escalation should target detection failures, weak evidence,
+unusual insertions or truncations, inconsistent labels/CDR boundaries, multiple
+domains and structurally misplaced anchors. Engine agreement is evidence only
+to the extent their errors are independent. Numbering, germline similarity,
+humanness and developability require separate validation and runtime accounting.
 
-When processing a structure, number the intended complete domain sequence and map observed coordinates onto it. Missing crystallographic residues should remain explicitly missing; deleting them before numbering can create an artificial shortened sequence. Keep chain identifiers, author residue numbers, insertion codes, and internal sequence offsets distinct.
+Scheme conversion preserves a mapping; it does not realign the input against a
+scheme-specific structural reference. This matters when comparing engines that
+share an IMGT intermediate.[^immunum-source][^abnumber]
 
-This crosswalk supports comparisons between schemes without destroying the original coordinates. It also lets the superposition workflow select a framework for fitting and a CDR for evaluation without confusing either with arbitrary MSA column numbers.
-
-### 7.2 Use a fast primary pass and explicit escalation criteria
-
-For a permissively licensed Rust/Python service, I would begin by evaluating Immunum against an internal truth panel. For a CPU-first Python research pipeline, I would evaluate a license-compatible AntPack version as the throughput baseline. Use ANARCII as an independent difficult-case comparator or as the primary engine for workloads where its strengths are important.
-
-Escalation criteria should include domain-detection failure, unusually low score, missing or duplicated labels, unexpected truncation, unusual insertions, disagreement in CDR boundaries, long multi-domain constructs, and structurally inconsistent anchor placement. Agreement between two engines is reassuring only to the extent that their errors are independent; do not equate consensus with truth.
-
-### 7.3 Keep numbering and biological annotations modular
-
-Numbering, CDR segmentation, germline assignment, humanness, and developability assessment should be distinct versioned stages. A tool that performs several of these may be convenient, but compare its numbering performance with optional analyses disabled before making a kernel-speed claim.
-
-Convert schemes only after preserving the original mapping. An IMGT-to-Martin conversion is not evidence that the input was newly aligned against a Martin-specific structural reference. That distinction is especially important when inspecting disagreements between engines that share an IMGT intermediate.[^immunum-source][^abnumber]
-
-## 8. Benchmark that would answer “best for us”
+## 8. Independent validation criteria
 
 A useful test suite should stratify heavy/kappa/lambda, conventional antibodies/VHH/unusual formats, species, domain completeness, CDR lengths, ambiguous residues, framework insertions, and multi-domain constructs. Include the actual kinds of de novo or heavily engineered sequences expected in this project rather than relying only on standard human therapeutic antibodies.
 
@@ -317,13 +312,12 @@ disagrees with its cited alternatives. Martin uses AbM region boundaries.
 Numbering support therefore does not settle the CDR coloring policy.[^immunum-aho][^immunum-numbering]
 
 The [AntPack-fixture comparison](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
-now tests Immunum alongside RIOT and AntPack. It found strongest fixture-label
+tested Immunum alongside RIOT and AntPack. It found strongest fixture-label
 agreement in Immunum, but also a light-chain Martin/Kabat span defect and
-non-antibody inputs passing the default confidence threshold. Resolve these
-and qualify long loops, multiple domains and species coverage before adoption.
-Review source and bundled-profile attribution separately. A bespoke engine
-would add profile construction, domain detection and insertion-rule maintenance
-without evidence of improved accuracy.
+non-antibody inputs passing the default confidence threshold. The Arpeggia adapter adds recognition, span and conversion guards; its
+[qualification](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#arpeggia-adapter-qualification)
+distinguishes these corrections from fixture agreement. A bespoke engine would
+add profile, detection and insertion-rule maintenance without accuracy evidence.
 Constant-region numbering remains separate work: IMGT defines a distinct
 C-domain system, and this engine models variable domains only.[^imgt-constant]
 
@@ -336,39 +330,23 @@ only its final result cannot prevent the insertion failure. The lower-level
 path reuses upstream scoring, alignment and scheme rules; it needs only the
 chain-selection and validation orchestration.[^immunum-core-api]
 
-Load the immutable H/K/L profiles once and reuse alignment scratch storage
-within each call or worker. Upstream selects the highest raw score, retaining
-the first profile on a tie; confidence is the clamped ratio of its confidence
-score to maximum confidence score, or zero when the denominator is zero.
-Count distinct matched profile positions within the winning query span,
-excluding insertions. Recognition of additional domains in the remaining
-prefix/suffix needs these evidence checks, without requiring successful
-numbering or complete FR1-to-FR4 coverage of the additional domain.
+The adapter's profile reuse, confidence/evidence checks, per-rule insertion
+limits and multidomain rejection are recorded in
+[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#inputs-and-result-objects).
+These guards run before conversion to prevent upstream overflow or malformed labels.
 
-Preflight every conversion rule against the retained source-position runs.
-Single-letter sequential insertions permit at most 26 extra residues;
-two-sided symmetric insertions permit at most 52. Framework/offset runs also
-need the single-letter limit checked. These are per-rule capacities, not a
-universal CDR-length limit. Conversion must consume every supported input
-residue and produce valid, unique labels in scheme order. Do not repair an
-internal conversion failure by silently shortening the reported domain.
-
-The raw alignment also supports cheap conversion into a separate CDR definition's
-native scheme, transferring region membership through input offsets without
-another alignment. Conversion lengths need explicit handling: Martin/Kabat
-can omit a light-chain terminal source position, while the high-level AHo path
-can append light-chain position 149 from the next input residue. Keep these
-boundary rules separate from CDR membership.[^immunum-annotator][^immunum-numbering]
-For Martin/Kabat light chains, trim only a verified terminal suffix outside
-the selected rule table's source coverage; preserve it in the supplied input.
-For AHo, retain the upstream light-chain 148-to-149 extension when applicable,
-without appending a duplicate if conversion already produced position 149.
+Conversion boundaries need separate treatment from CDR membership. Martin/Kabat
+can omit a terminal light-chain source position; the high-level AHo path can
+append light-chain position 149 from the next input residue. Arpeggia preserves
+the unnumbered input suffix and avoids duplicating an existing AHo 149.
+Raw-alignment conversion also permits a separate CDR convention without
+realignment.[^immunum-annotator][^immunum-numbering]
 
 ### 9.2 Germline data and interpretation
 
-Current IMGT terms license data and metadata under CC BY 4.0 for public and
-private users; tools retain separate terms. A fresh attributed snapshot is a
-more direct candidate than transformed datasets carrying older terms.[^imgt-terms]
+The IMGT terms retrieved on 10 September 2026 license data and metadata under
+CC BY 4.0; tools retain separate terms. The attributed source snapshot avoids
+reusing transformed datasets with older terms.[^imgt-terms]
 
 Downloaded IMGT/GENE-DB release **202636-7** on 10 September 2026; the release and
 amino-acid files reported last modification on 5 September. The gapped
@@ -376,10 +354,10 @@ amino-acid files reported last modification on 5 September. The gapped
 3,332,989 bytes, SHA-256
 `3cb6b0b8cb8940b3b2a9b105771a6a74aa67c06e3ca39eaea0d2030c90e7efd0`.[^imgt-download]
 
-An illustrative filter retained IGHV/IGKV/IGLV and IGHJ/IGKJ/IGLJ, functional
+The bundled subset retains IGHV/IGKV/IGLV and IGHJ/IGKJ/IGLJ, functional
 records including bracketed/parenthesized `F`, and species names with their
-strain/subspecies suffixes. It excluded stop-containing sequences, retained
-partial records and original IMGT gaps, and did not deduplicate:
+strain/subspecies suffixes. It excludes stop-containing sequences and retains
+partial records, original IMGT gaps and duplicate source records:
 
 | Species | V references | J references | Total |
 |---|---:|---:|---:|
@@ -418,7 +396,7 @@ Prefer separate V and J similarity results, retaining tied gene/allele names
 and measured coverage. A stitched V+J display is not an inferred ancestral
 antibody: junctional additions and D contributions are not recovered by that
 operation. NCBI's IgBLAST reports D/J assignment only for nucleotide searches;
-an amino-acid J comparison here would need to be labeled as similarity, not a
+Arpeggia therefore labels its amino-acid J comparison as similarity, not a
 unique gene call. Missing reference coverage must remain distinguishable from
 a true deletion.[^igblast]
 
@@ -456,13 +434,8 @@ comparisons can still call `align_seqs()`. CDR backgrounds require named region
 boundaries and handling of gap/blank cells. Region identification must remain
 possible without color.[^arpeggia-alignment]
 
-The selected V and J references will share one display row, with the V name on
-the left and J name on the right. Retain their separate coverage and provenance
-behind the joining gaps. An `AntibodyAlignment` comparison reference is instead
-one of its antibody rows: changing that reference does not change the common
-numbered-position grid. The existing two-row renderer needs per-row operations
-and an optional right label; its wrapping, escaped names and color controls
-remain reusable.
+The implemented [display contract](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#display-and-antibody-alignments)
+keeps source coverage and provenance separate from the stitched display row.
 
 ### 9.4 Comparing engines and CDR definitions
 
@@ -476,7 +449,8 @@ assumed to apply unchanged to Immunum's position-dependent scoring.[^immunum-tru
 The [three-engine benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
 separates returned mappings, residue-label agreement and domain coverage on
 26,365 AntPack-fixture inputs. Its labels do not resolve independent accuracy;
-germline matching and species-specific structural validation remain untested.
+that comparison did not test germline matching or species-specific structural
+accuracy. Adapter and reference-integration checks are recorded separately.
 Assess remaining disagreements against scheme rules and structural evidence.
 
 A numbering scheme labels residues; a CDR definition assigns region membership.
@@ -490,7 +464,7 @@ The accepted defaults are recorded in
 The Martin group's 2024 study supports pairing AbM boundaries with Martin
 numbering. The selected AHo structural-loop convention agrees with the core
 boundaries illustrated by Honegger and Plückthun, but is not universal across
-tools and differs from Immunum's unverified table. Public docstrings will cite
+tools and differs from Immunum's unverified table. Public docstrings cite
 these sources.[^martin-loops][^aho-loops][^aho-original]
 
 Immunum's explicit Chothia CDR table follows the 2021 consensus: heavy
@@ -510,284 +484,43 @@ IMGT CDR1 normally leaves positions 31–34 empty; filling them changes its loop
 length. With raw amino-acid input alone, distinguishing an internal biological
 deletion from omitted data requires information the string does not carry.[^imgt]
 
-The accepted imputation policy therefore fills only missing beginnings of FR1
-and ends of FR4, returning a new object with residue provenance. Tied references
-can agree on the observed fragment while differing at an omitted position;
-the position stays unresolved unless they agree on presence and residue or the
-caller selects a reference. Internal gaps and unknown input residues remain
-unchanged. This does not reconstruct coordinates or the full V/D/J junction.
+These distinctions motivate [terminal-only, provenance-preserving imputation](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#terminal-imputation).
 
-## 10. Implementation plan
+## Arpeggia integration
 
-**Status, 11 September 2026:** implementation and release qualification are
-complete. Rust, CLI and Python support numbering, offline V/J matching, terminal
-imputation, numbered antibody alignments and shared styled displays. The
-[qualification results](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#arpeggia-adapter-qualification)
-record the full panel, runtime, package growth and remaining scientific limits. The accepted behavior is
-in [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
-the milestones below define the execution order and completion criteria.
-The feature branch is `feat/antibody-numbering`, based on sequence-alignment PR
-[#25](https://github.com/y1zhou/arpeggia/pull/25) at `1ace91e`. Its feature diff is
-reviewed against that parent; combined release changes are described against
-`master`.
-
-### Integration boundaries
-
-The bundled subset is reproducible from the source checksum using the
-[data preparation script](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/prepare.py).
-`GermlineMatch.hits` retains all qualifying maximum-score groups; each hit shares
-one alignment across references with identical sequence and coverage. Hits carry
-known paired/identical counts, identity over known pairs, and separate coverage
-over known reference/input segment lengths. Score-only candidate ranking uses
-Hyalite's reusable scratch; tracebacks are constructed until the highest
-qualifying score and all exact ties are resolved.
-
-`NumberedAntibody.impute(v_reference=None, j_reference=None)` accepts exact
-`GermlineReference.id` selectors from tied hits. It reuses stored matches and
-converts their IMGT reference positions through the upstream rules without
-repeating sequence alignment. Added residues have `input_index=None` and
-`imputed_from` source IDs. Unsupported reference conversion leaves the affected
-end unresolved with a diagnostic; it never alters existing residue labels.
-
-Keep numbering, germline matching and imputation in `ab_numbering`. Use
-Immunum's public alignment/conversion functions and rules, with Arpeggia
-validating their inputs and translating results into its own types. A backend
-trait, custom alignment algorithm and copied scheme tables are unnecessary.
-Use a small explicit region table only where the agreed convention differs
-from upstream, notably AHo.
-
-Use one Rust result model for the library, serde JSON and optional PyO3
-bindings, following the existing sequence-alignment API. Numbered residues
-hold typed positions, amino acids, input offsets, regions and optional
-imputation provenance. Keep the original input and domain span separate from
-the derived numbered sequence. Retain V/J matches and the coverage/correspondence
-needed to distinguish unknown reference sequence, alignment gaps and inferred
-residues. Convenience region strings are derived from the residue records.
-
-Reuse the sequence module's input conventions, BLOSUM62 scoring and alignment
-implementation. Preserve accepted input symbols rather than silently replacing
-`U/O` in the stored sequence. A germline match reports known-residue evidence
-separately from `SeqAlignment`'s literal-symbol identity. Share only the row/block
-layout needed by both renderers: names, positions, wrapping, operation styles,
-optional right labels and CDR backgrounds. Existing pairwise alignment semantics
-and displays must remain unchanged.
-
-### Milestones and completion criteria
-
-1. **Guarded numbering core** — `ab_numbering: add guarded numbering core`.
-   Pin Immunum 1.3.1 without default features; expose typed positions, scheme/CDR
-   choices and read-only numbered residues. Implement winning-profile selection,
-   recognition, domain-span handling and safe conversion before building the
-   higher-level germline result. Convert the winning alignment into internal
-   IMGT, the requested scheme and the CDR definition's scheme only as needed.
-   Complete when H/K/L examples work across all four schemes, the Chothia alias
-   and explicit CDR override differ correctly, and the span, long-insertion,
-   partial-domain and multiple-domain regressions pass without panics.
-
-2. **Offline references and V/J matching** —
-   `ab_numbering: match bundled V/J germlines`.
-   Package the five-species subset described in section 9.2 with reproducible
-   filtering, release/hash metadata and IMGT attribution. Keep runtime assets
-   outside `docs/`, which release packages omit. Preserve partial-reference
-   coverage and all source metadata. Add separate V/J matching, enabled by default, and the
-   public `number_antibody()` result; reuse alignment work for identical
-   sequence/coverage pairs while retaining every tied reference.
-   Complete when species restrictions, known-residue gates, deterministic ties,
-   ambiguous residues and missing V/J evidence have verified outcomes, including
-   mouse strain names and partial alpaca references.
-
-3. **Terminal imputation** —
-   `ab_numbering: impute terminal framework gaps`.
-   Add `.impute()` using the stored matches and correspondence, returning a new
-   object. Require tied references to agree on residue presence and known amino
-   acid unless the caller explicitly selects a reference.
-   Complete when beginning-FR1/end-FR4 examples fill only supported terminal
-   sequence, provenance and missing input offsets survive, and internal gaps,
-   CDRs, unknown input residues and the original object remain unchanged.
-
-4. **Numbered antibody alignment** —
-   `ab_numbering: align numbered antibodies`.
-   Build the scheme-ordered union of positions and one gapped string per input,
-   preserving row order and each antibody's regions. Add the stored and per-format
-   `reference_index` contract without introducing an alignment score.
-   Complete when reversed IMGT insertion ordering, absent columns, K/L mixtures,
-   incompatible chains/schemes and invalid reference indices behave correctly;
-   switching reference changes comparisons but not stored rows or columns.
-
-5. **Shared annotated display** —
-   `alignment: share annotated sequence rendering`.
-   Extend the existing renderer only enough for CDR backgrounds, per-row
-   comparisons, explicit position labels, coverage masks and the right-hand
-   J label. Render one antibody against the combined V/J row with gray junction
-   hyphens and blank markers. Render an `AntibodyAlignment` with the selected
-   antibody first and germlines hidden.
-   Complete when colored and plain output identify regions; terminal/explicit
-   widths account for both gutters; names are escaped; rulers and color controls
-   work; unavailable reference cells cannot appear as insertions/deletions; and
-   existing `SeqAlignment` display tests still pass.
-
-6. **Python and CLI integration** —
-   `api: expose antibody numbering and alignment`.
-   Export `NumberedAntibody`, `AntibodyAlignment`, their supporting public record
-   types, `number_antibody()` and `align_antibodies()`. Add `number-antibody` and
-   `align-antibodies`, including positional strings, comma-separated `--names`,
-   species/convention selection, `--reference-index`, JSON and display controls.
-   Use existing error/diagnostic conventions and update Python type contracts.
-   Complete when the rebuilt extension and an installed wheel expose the same
-   read-only data as CLI JSON, names default by position, invalid arguments fail
-   clearly, and Google-style docstrings explain defaults, selection rules,
-   examples and scientific sources.
-
-7. **Release qualification and documentation** —
-   `docs: qualify antibody numbering for release`.
-   Re-run the pinned engine comparison through Arpeggia's completed adapter;
-   record intentional changes separately from unexplained disagreements.
-   Measure numbering and matching costs; check existing sequence-alignment
-   runtime and package growth against the stacked parent using the same build
-   settings. Update usage, scientific conventions, benchmark
-   evidence and the changelog, then prepare the stacked PR.
-   Complete when the checks below pass and remaining limitations are explicit.
-
-Commit each working milestone after its relevant checks and
-`prek run --files <changed files>`. Keep documentation current with each code
-milestone; record user-visible changes in
-[CHANGELOG.md](https://github.com/y1zhou/arpeggia/blob/master/CHANGELOG.md) and add a
-concise cross-reference in the
-[cleanup audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md)
-when extending its earlier reuse work.
-Do not describe unfinished functionality as shipped or add iterative branch
-renames to the release changelog. Public documentation and docstrings link to
-GitHub's default branch so installed-package users can reach the references.
-
-### Qualification before the stacked PR
-
-The existing comparison is the baseline, not proof of antibody-numbering
-accuracy. Re-run all 26,365 inputs across the supported schemes, retaining
-rejections, warnings and per-input numbering/span differences. The accepted
-FR1-through-FR4 scope excludes ten original antibody-panel inputs; distinguish
-that restriction from a regression. Keep the malformed fixture-label exclusion
-unchanged. Confirm the coverage gate still rejects the negative controls and
-that the light-chain conversion/span defect is corrected.
-
-Supplement the panel with focused cases for conversion limits, tandem domains,
-tags and constant tails, mixed CDR definitions, supported terminal truncations,
-V/J ties, missing reference coverage and imputation. These exercise behavior the
-original panel did not qualify. Prefer public-result assertions over tests that
-merely repeat private helper logic.
-
-Follow the [locked build instructions](https://github.com/y1zhou/arpeggia/blob/master/BUILD.md)
-for Rust checks and rebuilding the Python extension. Run
-Python/CLI integration checks and `ty` where available. Smoke-test packaged
-artifacts offline: the reference bundle and attribution must be included even
-though research docs and benchmark inputs are excluded. Record compressed
-package and binary sizes, dependency additions, and repeated release-build
-timings for numbering alone, eager V/J matching and batch reuse. No performance
-or species-specific accuracy claim follows from the earlier concurrent
-three-engine comparison.
-
-### Resolved integration choices and deferred scope
-
-The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
-defines the public supporting records, exact reference-ID selectors and coverage
-denominators. CDR1/2/3 use distinct gray/pink/cyan backgrounds with plain
-region labels. The renderer shares layout without manufacturing optimal
-alignment scores; imputation reuses stored correspondence and reference coverage.
-An IMGT 23–118 profile-coverage requirement retains framework anchors and
-contains all count-based core conversion windows in the pinned backend. It
-rejects fragments that can shift during alignment or conversion; the
-[terminal-fragment follow-up](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#terminal-framework-regression-follow-up)
-records the additional cases.
-
-Constant-region numbering, structure-file input, severe partial domains,
-automatic handling of multiple domains, multi-letter insertion support and
-species beyond human, mouse, alpaca, rat and rabbit remain future work.
-Rat and rabbit reuse the same pinned IMGT snapshot and matching path; see the
-[coverage and matching benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#rat-and-rabbit-reference-expansion). The implementation
-does not require another engine, runtime downloads or a new general-purpose
-multiple sequence alignment API.
-
-On 12 September 2026, the accepted performance change made V/J matching
-explicitly optional while retaining eager matching by default. Rust/Python
-`match_germlines` and CLI `--no-germlines` control the existing search call;
-`germlines_searched` records whether it ran. Skipped results have no V/J matches
-or skip warning and cannot be imputed. Rendering and serialization never search.
-See [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#germline-matching)
-for the result, display and argument contract. Structure integration and
-independent structural validation remain outside this PR.
-
-## 11. Display revision workplan
-
-**Status, 11 September 2026:** implemented. The display contract is recorded in
-[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#numbered-antibody-display);
-the [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#display-and-antibody-alignments)
-describes the layout and controls.
-
-### Coordinate findings and decisions
-
-Canonical antibody labels determine correspondence; input rulers use original
-source coordinates. Supplied residues retain their original input indices; imputed
-residues have no original index and leave their ruler positions blank. The domain
-span remains a zero-based, half-open input interval: `[5, 125)` is displayed as
-`Numbered domain in supplied input: 6–125 (1-based)`.
-
-V/J alignments retain separate source indices. V is limited through IMGT104.
-The stitched germline ruler counts V then J continuously, ignoring gaps and
-unknown junction cells; this display count does not replace source coordinates.
-The endpoint and J label follow the visible sequence with two-space separators.
-Outer padding is blank; local matches, scores, ties, coverage and imputation evidence
-remain unchanged. The selected input defines the comparison direction and one
-CDR band map across every row; each antibody retains its own region annotations.
-
-### Implementation and validation
-
-- The shared renderer accepts numeric row coordinates, imputation flags and
-  one reference-derived CDR band map. It emits input-first comparisons and one
-  CDR marker per block, with plain operation backgrounds.
-- Summary wrapping counts visible characters before applying styles. The yellow
-  imputation count and colored CDR legend survive wrapping; tied gene/allele names
-  retain species distinctions and all structured source records.
-- Rust, CLI and Python use the same layout, including reference overrides and
-  ruler suppression. Google-style docstrings, CLI help, the guide, changelog and
-  cleanup audit document the behavior.
-- Validation passed: 202 Rust library tests, 3 binary tests, 18 CLI tests,
-  8 doctests and 21 Python tests. Checks cover exact row order and tenth-residue
-  coordinates across gaps and wraps, continuous V/J counts, blank imputed
-  coordinates, reference-defined CDR bands, yellow imputation backgrounds, tied
-  names and Unicode width. Existing pairwise displays remain covered.
-- Six representative AntPack full/truncated inputs were rendered before and
-  after imputation under all four schemes: 48 displays preserved supplied and
-  imputed sequence content, respected width, and retained idempotent imputation.
-  This display revision did not repeat the full numbering benchmark.
-
-The editable Python extension was rebuilt; Python type and pre-commit checks
-passed. Milestones are committed locally; publishing remains the maintainer's
-responsibility.
+The implementation uses Immunum's raw alignment and guarded conversion APIs,
+shared sequence rendering, and bundled IMGT references. Accepted behavior is in
+[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
+arguments and display controls are in the
+[user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md).
+The [qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#arpeggia-adapter-qualification)
+retains adapter checks, display validation, runtime and package measurements.
 
 ## References and implementation records
 
-[^anarci]: Dunbar J, Deane CM. **ANARCI: antigen receptor numbering and receptor classification.** *Bioinformatics* 32, 298–300 (2016; online 2015). DOI: <https://doi.org/10.1093/bioinformatics/btv552>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/26424857/>.
-[^immunum-source]: ENPICOM, **Immunum 1.3.1 README**, including algorithm, interfaces, chain/scheme support, and MIT license declaration: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/README.md>.
 [^martin]: Abhinandan KR, Martin ACR. **Analysis and improvements to Kabat and structurally correct numbering of antibody variable domains.** *Molecular Immunology* 45, 3832–3839 (2008). DOI: <https://doi.org/10.1016/j.molimm.2008.05.022>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/18614234/>.
 [^aho]: Honegger A, Plückthun A. **Yet another numbering scheme for immunoglobulin variable domains: an automatic modeling and analysis tool.** *Journal of Molecular Biology* 309, 657–670 (2001). DOI: <https://doi.org/10.1006/jmbi.2001.4662>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/11397087/>.
 [^evaluation2024]: Zhu Z, Olson KS, Magliery TJ. **50 Years of Antibody Numbering Schemes: A Statistical and Structural Evaluation Reveals Key Differences and Limitations.** *Antibodies* 13, 99 (2024). DOI: <https://doi.org/10.3390/antib13040099>. Publisher: <https://www.mdpi.com/2073-4468/13/4/99>; PubMed: <https://pubmed.ncbi.nlm.nih.gov/39727482/>.
-[^antpack-paper]: Parkinson J, Wang W. **For antibody sequence generative modeling, mixture models may be all you need.** *Bioinformatics* 40, btae278 (2024). DOI: <https://doi.org/10.1093/bioinformatics/btae278>. This paper includes the AntPack numbering benchmark: <https://academic.oup.com/bioinformatics/article/40/5/btae278/7656770>.
-[^anarcii-paper]: Greenshields-Watson A, Agarwal P, Robinson SA et al. **ANARCII enables alignment-free antigen receptor numbering using a generalised language model.** *Communications Biology* 9, 1085 (2026). Published 21 May 2026; version-of-record date 12 August 2026. DOI: <https://doi.org/10.1038/s42003-026-10186-z>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/42162238/>. Numerical comparisons in this report are author-reported, not reproduced here.
-[^riot]: Dudzic et al. **RIOT—Rapid Immunoglobulin Overview Tool—annotation of nucleotide and amino acid immunoglobulin sequences using an open germline database.** *Briefings in Bioinformatics* 26, bbae632 (2025 issue; online 2024). DOI: <https://doi.org/10.1093/bib/bbae632>. Publisher: <https://academic.oup.com/bib/article/26/1/bbae632/7914577>; official project: <https://github.com/NaturalAntibody/riot_na>.
-[^immunum-speed-issue]: Immunum maintainer issue **#32**, *Fix `antpack` parallelization benchmark*: <https://github.com/ENPICOM/immunum/issues/32>. Opened 23 March 2026, updated 8 April 2026; open in the retrieved record.
-[^immunum-truth-issue]: Immunum maintainer issue **#33**, *Fix correctness benchmarks*: <https://github.com/ENPICOM/immunum/issues/33>. Opened 23 March 2026; open in the retrieved record. The issue explicitly requests an independent, for example structure-based, gold standard.
-[^antpack-current]: AntPack, current PyPI package metadata and licensing: <https://pypi.org/project/antpack/>. At retrieval, the default non-yanked release was 0.4; versions 0.3.9 onward use academic/noncommercial terms and key setup.
-[^antpack-gpl]: AntPack **0.3.8.6.3**, release record and GPL metadata: <https://pypi.org/project/antpack/0.3.8.6.3/>. Released 23 June 2026; Python ≥3.8 stated in this package record.
-[^immunum-release]: Immunum **1.3.1**, released 2 September 2026: <https://pypi.org/project/immunum/1.3.1/>; Rust release metadata: <https://crates.io/api/v1/crates/immunum>. The inspected Rust artifact's VCS record identifies `45bb70d34802cc592ebd86e685cc9f551885a2d6`.
+[^anarci]: Dunbar J, Deane CM. **ANARCI: antigen receptor numbering and receptor classification.** *Bioinformatics* 32, 298–300 (2016; online 2015). DOI: <https://doi.org/10.1093/bioinformatics/btv552>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/26424857/>.
 [^antpack-regions]: AntPack, official **clustering / region assignment** documentation, including separate numbering and CDR conventions: <https://antpackdocumentationlatest.pages.dev/clustering_overview>.
 [^imgt]: IMGT, **IMGT unique numbering for V domains**, official scientific chart: <https://imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html>.
+[^anarcii-paper]: Greenshields-Watson A, Agarwal P, Robinson SA et al. **ANARCII enables alignment-free antigen receptor numbering using a generalised language model.** *Communications Biology* 9, 1085 (2026). Published 21 May 2026; version-of-record date 12 August 2026. DOI: <https://doi.org/10.1038/s42003-026-10186-z>. PubMed: <https://pubmed.ncbi.nlm.nih.gov/42162238/>. Numerical comparisons in this report are author-reported, not reproduced here.
+[^antpack-paper]: Parkinson J, Wang W. **For antibody sequence generative modeling, mixture models may be all you need.** *Bioinformatics* 40, btae278 (2024). DOI: <https://doi.org/10.1093/bioinformatics/btae278>. This paper includes the AntPack numbering benchmark: <https://academic.oup.com/bioinformatics/article/40/5/btae278/7656770>.
 [^antpack-doc]: AntPack, official **numbering background** documentation: <https://antpackdocumentationlatest.pages.dev/numbering_background>. The documentation site's displayed version can lag package releases; verify the deployed API separately.
 [^anarcii-repo]: ANARCII, inspected release README and official user guide: <https://github.com/oxpig/ANARCII/blob/e0d8f192f5a861e03a50918f114d0f5735e42333/README.md>; <https://github.com/oxpig/ANARCII/wiki>.
+[^immunum-source]: ENPICOM, **Immunum 1.3.1 README**, including algorithm, interfaces, chain/scheme support, and MIT license declaration: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/README.md>.
+[^riot]: Dudzic et al. **RIOT—Rapid Immunoglobulin Overview Tool—annotation of nucleotide and amino acid immunoglobulin sequences using an open germline database.** *Briefings in Bioinformatics* 26, bbae632 (2025 issue; online 2024). DOI: <https://doi.org/10.1093/bib/bbae632>. Publisher: <https://academic.oup.com/bib/article/26/1/bbae632/7914577>; official project: <https://github.com/NaturalAntibody/riot_na>.
 [^abnumber]: AbNumber, inspected **`abnumber/common.py`**, `_anarci_align` backend selection, scheme conversion, germline fallback, and duplicate-position handling: <https://github.com/prihoda/AbNumber/blob/master/abnumber/common.py>. File blob hash at retrieval: `d494cb3593745ee824727537176da5eec67e1aaf`. This is an inspected source record, not a guarantee about every packaged version.
 [^anarcii-release]: ANARCII **2.0.8** package metadata and release history: <https://pypi.org/project/anarcii/>. Release date 30 June 2026; Python ≥3.11 in the retrieved package metadata.
 [^anarcii-license]: ANARCII, pinned **BSD 3-Clause** license: <https://github.com/oxpig/ANARCII/blob/e0d8f192f5a861e03a50918f114d0f5735e42333/LICENCE>.
+[^immunum-release]: Immunum **1.3.1**, released 2 September 2026: <https://pypi.org/project/immunum/1.3.1/>; Rust release metadata: <https://crates.io/api/v1/crates/immunum>. The inspected Rust artifact's VCS record identifies `45bb70d34802cc592ebd86e685cc9f551885a2d6`.
 [^immunum-commit]: Immunum commit **`e027d5fe2405300508eee7ce78582a2fe4990f20`**, 28 August 2026, adding Chothia, Martin, and AHo and changing source version to 1.3.0: <https://github.com/ENPICOM/immunum/commit/e027d5fe2405300508eee7ce78582a2fe4990f20>.
+[^immunum-speed-issue]: Immunum maintainer issue **#32**, *Fix `antpack` parallelization benchmark*: <https://github.com/ENPICOM/immunum/issues/32>. Opened 23 March 2026, updated 8 April 2026; open in the retrieved record.
+[^immunum-truth-issue]: Immunum maintainer issue **#33**, *Fix correctness benchmarks*: <https://github.com/ENPICOM/immunum/issues/33>. Opened 23 March 2026; open in the retrieved record. The issue explicitly requests an independent, for example structure-based, gold standard.
 [^riot-source]: RIOT [scheme and species enums](https://github.com/NaturalAntibody/riot_na/blob/2ee4dc3dcfa440cf04356d2c89dbf4917194d8dc/riot_na/data/model.py), [numbering pipeline](https://github.com/NaturalAntibody/riot_na/blob/2ee4dc3dcfa440cf04356d2c89dbf4917194d8dc/riot_na/api/riot_numbering.py), and [Rust manifest](https://github.com/NaturalAntibody/riot_na/blob/2ee4dc3dcfa440cf04356d2c89dbf4917194d8dc/Cargo.toml).
+[^antpack-current]: AntPack, current PyPI package metadata and licensing: <https://pypi.org/project/antpack/>. At retrieval, the default non-yanked release was 0.4; versions 0.3.9 onward use academic/noncommercial terms and key setup.
 [^antpack-yanked]: AntPack **0.5** release record and release history: <https://pypi.org/project/antpack/0.5/>. Released 14 April 2026; yanked for “Bug fix.”
+[^antpack-gpl]: AntPack **0.3.8.6.3**, release record and GPL metadata: <https://pypi.org/project/antpack/0.3.8.6.3/>. Released 23 June 2026; Python ≥3.8 stated in this package record.
 [^immunum-manifest]: Immunum 1.3.1 **Cargo manifest**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/Cargo.toml>.
 [^immunum-annotator]: Immunum **annotator**, including bounds, thresholds and scratch storage: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/annotator.rs>.
 [^immunum-profiles]: Immunum **consensus profile provenance**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/resources/consensus/README.md>.

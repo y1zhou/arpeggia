@@ -1,201 +1,71 @@
-# Quick Start Guide
+# Python recipes
 
-## For Python Users
+Install Arpeggia as described in the
+[README](https://github.com/y1zhou/arpeggia/blob/master/README.md#installation).
+These examples use your own `structure.pdb`; interface examples require the
+specified chains. All tabular results are Polars DataFrames.
 
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/y1zhou/arpeggia.git
-cd arpeggia
-
-# Install the Python package
-pip install maturin polars
-maturin develop -v --release --features python
-```
-
-### Basic Usage
+## Contacts and hydrogen bonds
 
 ```python
 import arpeggia
 import polars as pl
 
-# Analyze protein contacts
-contacts_df = arpeggia.contacts(
-    "test-data/1ubq.pdb",
-    groups="/",                    # All-to-all interactions
-    vdw_comp=0.1,                 # VdW compensation
-    dist_cutoff=6.5,              # Distance cutoff (Å)
-    ignore_zero_occupancy=False   # Set True to ignore zero occupancy atoms
+contacts = arpeggia.contacts("structure.pdb")
+print(contacts.group_by("interaction").len())
+hydrogen_bonds = contacts.filter(
+    pl.col("interaction").is_in(["HydrogenBond", "WeakHydrogenBond"])
 )
+residue_pairs = hydrogen_bonds.group_by([
+    "model", "from_chain", "from_resi", "from_insertion", "from_resn",
+    "to_chain", "to_resi", "to_insertion", "to_resn",
+]).len()
+print(residue_pairs)
 
-print(f"Found {len(contacts_df)} contacts")
-print(contacts_df.head())
-
-# Calculate SASA
-sasa_df = arpeggia.sasa(
-    "test-data/1ubq.pdb",
-    probe_radius=1.4,
-    n_points=100
-)
-
-print(f"Calculated SASA for {len(sasa_df)} atoms")
-
-# Extract sequences
-sequences = arpeggia.seq("test-data/1ubq.pdb")
-for chain_id, seq in sequences:
-    print(f"Chain {chain_id}: {seq[:50]}...")  # First 50 residues
+contacts.write_csv("contacts.csv")
+contacts.write_parquet("contacts.parquet")
 ```
 
-### Working with Results
+Residue identity includes model, chain, residue number and insertion code;
+residue numbers alone can merge distinct residues. Counts above are contact
+rows, not unique atom pairs: a pair can have multiple interaction types.
+Hydrogen-bond results depend on hydrogen evidence and the selected protonation
+policy; see the
+[scientific conventions](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md).
+
+## Interface residues
 
 ```python
-# Filter contacts by interaction type
-hydrogen_bonds = contacts_df.filter(
-    pl.col("interaction") == "HydrogenBond"
-)
-
-# Calculate statistics
-interaction_counts = contacts_df.group_by("interaction").count()
-print(interaction_counts)
-
-# Convert to pandas if needed
-import pandas as pd
-contacts_pd = contacts_df.to_pandas()
-
-# Save to file
-contacts_df.write_csv("contacts.csv")
-contacts_df.write_parquet("contacts.parquet")
-```
-
-### Chain Groups Specification
-
-- `"/"` - All chains with all chains (self-interactions included)
-- `"A,B/C,D"` - Chains A,B interact with chains C,D
-- `"A/"` - Chain A interacts with all other chains
-- `"/C,D"` - All chains interact with chains C,D
-
-## For CLI Users
-
-### Installation
-
-```bash
-# Build and install
-cargo install --path .
-```
-
-### Basic Usage
-
-```bash
-# Analyze contacts
-arpeggia contacts \
-    -i structure.pdb \
-    -o output_dir \
-    -g "A,B/C,D" \
-    -t csv
-
-# Analyze contacts, ignoring atoms with zero occupancy
-arpeggia contacts \
-    -i structure.pdb \
-    -o output_dir \
-    --ignore-zero-occupancy
-
-# Calculate SASA
-arpeggia sasa \
-    -i structure.pdb \
-    -o output_dir \
-    -r 1.4 \
-    -n 100
-
-# Extract sequences
-arpeggia seq structure.pdb
-
-# Cluster a directory of exactly corresponding conformations
-arpeggia cluster-structs \
-    -i structures/ \
-    -o clusters/ \
-    --num-clusters 5 \
-    --pairwise-rmsd
-```
-
-### Output Formats
-
-Supported formats: `csv`, `parquet`, `ndjson`
-
-```bash
-arpeggia contacts -i input.pdb -o output/ -t parquet
-```
-
-See [Structure RMSD and clustering](docs/benchmarks/structure-clustering.md) for atom and
-residue selection, automatic cluster counts, and pairwise cache behavior.
-
-## Examples
-
-### Example 1: Find Hydrogen Bonds
-
-```python
-import arpeggia
-import polars as pl
-
-df = arpeggia.contacts("structure.pdb")
-
-# Filter for hydrogen bonds
-h_bonds = df.filter(
-    pl.col("interaction").is_in([
-        "HydrogenBond",
-        "WeakHydrogenBond"
+contacts = arpeggia.contacts("structure.pdb", groups="A/B")
+identity = ["chain", "resi", "insertion", "resn"]
+interface_residues = pl.concat([
+    contacts.select("model", *[
+        pl.col(f"{side}_{field}").alias(field) for field in identity
     ])
-)
-
-# Group by residue pairs
-pairs = h_bonds.group_by([
-    "from_resn", "from_resi",
-    "to_resn", "to_resi"
-]).agg(pl.count())
-
-print(pairs)
-```
-
-### Example 2: Analyze Interface
-
-```python
-import arpeggia
-import polars as pl
-
-# Get contacts between chains A and B
-df = arpeggia.contacts("structure.pdb", groups="A/B")
-
-# Calculate interface residues
-interface_residues = df.select([
-    pl.col("from_resn"),
-    pl.col("from_resi"),
-    pl.col("from_chain")
+    for side in ("from", "to")
 ]).unique()
-
-print(f"Interface has {len(interface_residues)} residues")
+print(interface_residues)
 ```
 
-### Example 3: SASA Analysis
+Combine both endpoints: `from` and `to` can follow interaction roles rather
+than chain-group order. Filter the resulting `chain` column for one partner. See the
+[chain-group syntax](https://github.com/y1zhou/arpeggia/blob/master/README.md#chain-groups-specification)
+for larger interfaces.
+
+## Solvent exposure
 
 ```python
-import arpeggia
-import polars as pl
-
-sasa = arpeggia.sasa("structure.pdb")
-
-# Find buried residues (low SASA)
-buried = sasa.filter(pl.col("sasa") < 10.0)
-print(f"Found {len(buried)} buried atoms")
-
-# Calculate average SASA per residue
-avg_sasa = sasa.group_by([
-    "chain", "resi", "resn"
-]).agg(pl.col("sasa").mean())
-
-print(avg_sasa)
+residue_sasa = arpeggia.sasa("structure.pdb", level="residue")
+print(residue_sasa.sort("sasa").head(10))
+relative_sasa = arpeggia.relative_sasa("structure.pdb")
+print(relative_sasa)
 ```
 
-### Example 4: SAP Score for Aggregation Prediction
+Residue SASA sums atomic accessible areas in Å². `relative_sasa()` divides each
+standard residue's area by its reference maximum; averaging atomic SASA would
+measure a different quantity. Use `chains="A,B"` to restrict either calculation.
+
+## SAP scores
 
 ```python
 import arpeggia
@@ -218,7 +88,7 @@ print("Top 10 aggregation hotspots:")
 print(hotspots)
 ```
 
-### Example 5: Shape Complementarity at Interface
+## Shape complementarity
 
 ```python
 import arpeggia
@@ -237,42 +107,9 @@ sc_hl = arpeggia.sc("antibody.pdb", groups="H/L")
 print(f"VH-VL interface SC: {sc_hl:.3f}")
 ```
 
-## Troubleshooting
+## Further usage
 
-### Import Error
-
-```python
-ImportError: cannot import name 'arpeggia'
-```
-
-**Solution:** Make sure you've built the package with maturin:
-
-```bash
-maturin develop --release --features python
-```
-
-### Build Errors
-
-**Missing Python.h:**
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install python3-dev
-
-# macOS
-brew install python
-```
-
-**Version conflicts:**
-
-```bash
-cargo clean
-maturin develop --release --features python
-```
-
-## Next Steps
-
-- Read the [full README](README.md) for more details
-- Check [BUILD.md](BUILD.md) for advanced build options
-- See the [test script](python/tests/test_arpeggia.py) for more examples
-- Report issues on [GitHub](https://github.com/y1zhou/arpeggia/issues)
+- [Sequence alignment and sequence-aware RMSD](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md)
+- [Structure selections, pairwise RMSD and clustering](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md)
+- [Antibody numbering, germline matching and imputation](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+- [Building and testing](https://github.com/y1zhou/arpeggia/blob/master/BUILD.md)

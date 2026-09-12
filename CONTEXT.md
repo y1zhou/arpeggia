@@ -63,9 +63,8 @@ CB--SG--SG--CB dihedral is 60--120 degrees, but whose residue pair lacks an
 _Avoid_: Disulfide bond, inferred disulfide bond
 
 **Resolved Explicit Bond**:
-An input bond declaration that matches two atoms in the selected model and
-Selected Conformer. Contact calculation represents it with compact selected-atom
-identities while retaining the qualified declaration as its evidence.
+An input bond declaration matched to two atoms in the selected model and
+Selected Conformer, retaining that declaration as evidence.
 _Avoid_: Distance-inferred bond, unqualified bond
 
 **Peptide-Adjacent Residues**:
@@ -92,8 +91,7 @@ _Avoid_: Van der Waals clash
 
 **Observed Sequence**:
 The ordered polymer residues present in atomic coordinates for a selected model
-and chain. Model `0` selects the first model; solvent, ligands, and polymer
-residues without coordinates are omitted.
+and chain, excluding solvent, ligands, and residues without coordinates.
 _Avoid_: Complete sequence, declared sequence, all-model sequence
 
 **Declared Sequence**:
@@ -150,9 +148,7 @@ _Avoid_: Preparation validation, structure completion
 
 **Calculation Failure**:
 A validly requested analysis for which Arpeggia cannot produce a scientifically
-meaningful complete value. Rust returns a typed error, Python raises an
-exception, and the CLI exits unsuccessfully; no null or partial scalar is
-reported.
+meaningful complete value; no null or partial scalar represents success.
 _Avoid_: Missing result, nullable score, partial success
 
 **Sampled SC Interface**:

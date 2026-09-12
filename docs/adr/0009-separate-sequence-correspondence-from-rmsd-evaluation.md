@@ -1,195 +1,122 @@
 # Separate sequence correspondence from RMSD evaluation
 
-This decision extends [ADR 0008](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0008-cluster-structures-with-kabsch-and-k-medoids.md)
-with optional sequence correspondence while preserving independent fitting and
-evaluation populations.
+Extend [ADR 0008](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0008-cluster-structures-with-kabsch-and-k-medoids.md)
+with optional sequence correspondence and rejection while preserving independent
+fitting and evaluation populations. The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md)
+defines arguments, result fields and display controls.
 
 ## Sequence alignment
 
-`align_seqs()` returns a `SeqAlignment` for two unaligned amino-acid strings
-for Rust, Python, and CLI use. Global alignment is the default; local and
-semi-global modes are selectable. Semi-global consumes the entire second
-sequence and permits free terminal overhangs of the first. Alignment uses exact
-affine-gap optimization with BLOSUM62. Configurable positive gap costs default
-to opening 10 and extension 0.5, with cost `open + (length - 1) * extend`.
-Costs have at most two decimal places and require opening ≥ extension ≥ 0.01.
-Unsupported precision, including positive costs that would round to zero, is rejected. Matrix entries and
-gap costs are scaled consistently for exact integer scoring; reported scores are
-unscaled. Nonfinite costs and unrepresentable score ranges fail explicitly.
-FASTA parsing and multiple sequence alignment are outside this feature.
+`align_seqs()` accepts two unaligned amino-acid strings. Global alignment is the
+default; local and query-full semi-global modes are selectable. Semi-global
+consumes the entire second sequence with free first-sequence terminal overhangs.
+FASTA parsing and general multiple sequence alignment are outside this API.
 
-Identity and paired-residue coverage each have two normalizations. For `M`
-identical pairs, `P` nongap pairs, `A` alignment columns including gaps, and `S`
-the shorter full input length, identity is `M/A` and `M/S`; coverage is `P/A`
-and `P/S`. Retain the underlying counts. Unaligned terminal segments do not count
-toward `A`; substitutions count toward `P` but not `M`. Empty local alignments
-have undefined alignment-length ratios and zero shorter-input ratios.
+Use exact BLOSUM62 affine-gap optimization, charging
+`open + (length - 1) * extend`; defaults are 10 and 0.5. Costs must have at most
+two decimal places and satisfy opening ≥ extension ≥ 0.01. Scale matrix entries
+and costs together for integer scoring and report unscaled scores. Reject
+unsupported precision, nonfinite costs and unrepresentable scores.
 
-Similar substitutions are nonidentical pairs with a strictly positive BLOSUM62
-score, including ambiguous residues and accepted `U/O` scoring aliases. Identity
-takes precedence over score; identical `X/X` remains a match despite its negative
-score. Zero-scoring substitutions are not similar. `mismatches` counts all
-nonidentical pairs; similarity does not change identity, edit distance, or
-structural atom correspondence. Separate similarity statistics are unnecessary.
+Normalize lowercase; accept standard amino acids and `B/Z/X/U/O`. Preserve
+`U/O` for identity and edit distance while scoring them as `C/K`, with a warning.
+Reject empty inputs, gaps, stops, whitespace and unsupported symbols. Return one
+deterministic optimum for the pinned backend; structural RMSD never breaks ties.
 
-Gap-residue and gap-run counts are distinct. Edit distance is full-input
-Levenshtein distance, independent of the protein-scored alignment; local clipping
-does not shorten its inputs.
+For identical pairs `M`, nongap pairs `P`, alignment columns `A` and shorter full
+input length `S`, report identity as `M/A` and `M/S`, and coverage as `P/A` and
+`P/S`, retaining the counts. Clipped tails do not contribute to `A`. Empty local
+alignments have score zero, undefined alignment-length ratios and zero
+shorter-input ratios. Edit distance always compares complete inputs using unit
+substitutions, insertions and deletions, independently of the protein score.
 
-Lowercase is normalized. Standard amino acids and `B/Z/X` are accepted. `U/O`
-remain distinct input symbols for identity but score as `C/K`, with a diagnostic.
-Input gaps, stop symbols, unsupported characters, and empty strings are rejected.
-A local alignment without a positive-scoring match returns an empty alignment:
-score zero, the empty-alignment ratios defined above, and full-input edit distance. One deterministic optimal traceback is returned for the pinned
-backend; structural RMSD is not used to break sequence-alignment ties.
+A similar substitution is a nonidentical pair with a positive BLOSUM62 score,
+including accepted scoring aliases. Identity takes precedence, even for `X/X`.
+Similarity affects display only: both substitution categories remain mismatches
+and neither implies chemical equivalence for atom pairing.
 
 ## Structural correspondence
 
-Sequence correspondence applies to two-structure `rmsd`. Extending pairwise-table
-and clustering APIs requires further work: pair-specific correspondence must first
-be reconciled with their shared coordinate layouts and comparison semantics.
-Future antibody numbering can consume sequence correspondence but requires its
-own domain and numbering definitions.
+Sequence correspondence applies to two-structure `rmsd`. Collection APIs still
+require exact correspondence: pair-specific mappings must first be reconciled
+with their shared coordinate layouts. Antibody numbering has a separate
+[position-based contract](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
 
-With `--align-seqs`, structural mapping uses observed sequences, retaining their
-links to coordinate residues. Declared residues without coordinates cannot
-participate in superposition. Single-chain inputs are paired automatically;
-explicit chain mappings are supported. For multi-chain inputs without identical
-homomer chains, infer mappings from all-to-all semi-global alignments, consuming
-the shorter chain against the longer. Maximize summed raw scores over a
-one-to-one chain assignment. A tied optimum requires explicit mapping. Every
-reference chain used by either residue selection requires a partner; unused
-query chains are allowed. Inferred pair scores must be positive, with identity
-and coverage reported; no universal homology threshold is imposed. Explicit
-mapping can override score-based inference. Infer only for reference chains used
-by either selection, against all eligible query chains. Explicit maps cover all
-relevant reference chains, use unique query partners, and disable inference.
-Required reference chains with identical scoring sequences, including `U/C` and
-`O/K` aliases, require an explicit map before any pairwise scoring. Duplicate
-unused query chains do not prevent otherwise unique inference.
+Use observed chain sequences linked to coordinate residues. Declared residues
+without coordinates cannot contribute atoms. Align complete chains before
+applying residue ranges and atom selection. With alignment enabled, both
+selectors address reference author numbering; otherwise selectors and exact
+correspondence apply to both structures as in ADR 0008.
 
-Chain inference and final residue alignment are separate: inference uses
-shorter-against-longer semi-global scores, while final alignment uses the selected
-mode with reference first and query second. In alignment mode, both residue
-selectors address reference author numbering and map to query residues after
-complete observed chains have been aligned. Without alignment, existing exact
-correspondence and selector behavior remain.
+Explicit maps cover exactly the reference chains used by either selection,
+assign unique query partners and disable inference. Otherwise score those
+reference chains against all eligible query chains using shorter-against-longer
+semi-global alignment. Maximize the summed raw score of a one-to-one assignment,
+requiring every inferred pair score to be positive. A missing complete assignment
+or tied optimum requires an explicit map. Unused query chains are allowed.
+Identical reference scoring sequences, including `U/C` and `O/K` aliases, are
+necessarily ambiguous and fail before pairwise scoring.
 
-Nongap residue pairs include substitutions. Available backbone atoms pair across
-substitutions; side-chain pairing requires the same normalized amino-acid
-identity, followed by matching atom names and elements. The `U/O` scoring aliases
-do not establish chemical equivalence with `C/K`. Omitted
-atoms are reported, and caps lacking sequence correspondence are excluded.
-Geometric refinement cannot establish chemical equivalence or guarantee rejection
-of a poor sequence match.
+Final residue alignment uses the selected mode, with reference first and query
+second, independently of chain-inference scoring. Report identity and coverage;
+a positive score is not a universal homology threshold. Explicit maps can
+override score-based inference, but refinement cannot guarantee removal of poor
+sequence matches.
+
+Nongap residue pairs include substitutions. Pair available backbone atoms across
+substitutions; side chains require the same normalized amino-acid identity,
+atom name and element. Scoring aliases do not make `U/O` chemically equivalent
+to `C/K`. Report omitted atoms; exclude caps without sequence correspondence.
 
 ## Refinement and evaluation
 
-Refinement is independent of sequence alignment and can use exact atom
-correspondence. It does not infer structural correspondence as PyMOL `super` does.
-`refine_cycles=0` preserves one initial fit without rejection. A positive value
-allows that many subsequent rejection/refit cycles. Rejection is permanent and
-atom-wise, using a configurable multiplier of the current fitting RMSD, initially
-2. Sequence correspondence is established once, before refinement. Stop early
-when no pairs are rejected or fitting RMSD is effectively zero. If rejection
-leaves fewer than three non-collinear fitting pairs, fail with the surviving count
-rather than silently falling back to the preceding fit.
+`refine_cycles=0` performs one initial fit without rejection. Positive values
+allow that many subsequent inspections, permanently rejecting atom pairs farther
+than `refine_cutoff × current fitting RMSD` (default multiplier 2) and refitting
+survivors. Stop when unchanged or effectively zero. If survivors cannot define
+three non-collinear fitting pairs, fail with the surviving count.
 
-The final RMSD evaluates all mapped pairs selected by `rmsd_residues`, including
-pairs rejected from fitting, under the final retained-pair transform. Evaluation
-never triggers another fit. This preserves flexible-region deviations rather
-than reporting only a favorable surviving-core RMSD.
+Establish correspondence once. Refinement also works with exact correspondence
+and does not infer structural matches as PyMOL `super` does. The final `rmsd`
+evaluates every mapped pair selected by `rmsd_residues`, including rejected
+fitting pairs, under the retained-pair transform. Evaluation never refits. This
+keeps flexible-region deviations visible instead of reporting only a favorable
+surviving-core score; `core_rmsd` reports that core separately.
 
-## Result contract
+## Results and presentation
 
-`rmsd()` returns a `RmsdResult` instead of a scalar, accepting the breaking API
-change. Its `rmsd` is final evaluation RMSD; `core_rmsd` is the RMSD of retained
-fitting pairs after rejection. It also records initial fitting RMSD, initial and
-retained fitting counts, evaluation count, performed cycles, and chain/residue
-correspondence. These populations can differ when fit and evaluation selections
-differ.
+Python `rmsd()` returns a read-only `RmsdResult` instead of a scalar. Record
+initial/core/evaluation RMSDs, pair counts, inspection count, parameters and
+chain/residue correspondence. Omit per-atom residuals and the transformation
+to keep payloads compact. Rust, CLI JSON and Python share result structs, with
+optional PyO3 annotations and binding methods rather than duplicate wrappers.
 
-Both result types expose read-only Python attributes; Python continues emitting
-scientific warnings. `SeqAlignment` retains normalized inputs, scoring settings,
-aligned spans, residue mapping, and statistics. Per-atom residuals, atom-pair
-records, and the final transformation are omitted to keep results compact.
+`SeqAlignment` retains normalized inputs, scoring settings, zero-based half-open
+spans, statistics and equal-length gapped strings plus ASCII operations. These
+recover residue-index pairs without a stored column vector. Names are metadata;
+structural alignments append chain IDs. Stored data and JSON remain unstyled.
 
-The CLI returns a concise detailed summary by default, with explicit JSON output
-for parameters, mappings, and statistics.
-
-Rust, CLI JSON, and Python share the same result structs. Four feature-gated
-`#[pyclass]` annotations remain on those definitions, as required by PyO3;
-Python methods and conversions stay in the binding module. This avoids wrapper
-types and duplicate property forwarding while keeping PyO3 optional. Serde
-serializes the results and nested correspondence for CLI JSON.
-
-### Gapped sequences and display
-
-Sequence names are display metadata, separate from sequence data and residue
-correspondence. `reference_name` and `query_name` default to "Reference" and
-"Query"; structural alignments append their chain IDs. Names are included in
-results and JSON, with label padding based on visible terminal width.
-
-`SeqAlignment` exposes equal-length `aligned_reference`,
-`aligned_query`, and `operations` ASCII strings. Gapped strings make downstream use
-direct; original inputs and zero-based, half-open spans retain enough information
-to reconstruct index pairs internally. Strings contain only the scored alignment,
-using `-` for gaps and no color escapes. Operations describe reference-to-query
-changes: space for match, `+` for insertion, `-` for deletion, `:` for similar
-substitution, and `x` for other substitution. ASCII keeps one byte per column
-in both stored data and the operation row.
-
-Render reference and query rows followed by an unlabeled operation row. Insertions are green,
-deletions red, similar substitutions blue, and other substitutions yellow,
-coloring both sequence cells and the marker;
-matches are uncolored. Clipped tails are gray with blank operation cells, with
-prefixes right-aligned against the scored alignment and suffixes left-aligned
-after it. Global terminal gaps remain scored operations. Empty local results
-show both inputs gray and state that no positive-scoring alignment exists.
-
-Wrap complete output into blocks within terminal width, falling back to 80
-columns, or an explicit width including labels and positions. Reject widths
-that cannot fit labels and one residue. CLI and Python object displays enable
-color automatically when the terminal supports it; stored fields and JSON remain
-plain. Explicit color controls and `NO_COLOR` support remain available.
-Clap supplies the color enum and named ANSI styles; width detection uses native
-Rust/Python APIs, while the shared renderer owns alignment layout.
-
-Display positions are one-based input coordinates, counting residues but not gaps
-or padding. Each sequence row shows its start and end positions; rulers mark
-every tenth residue with the last digit aligned to that residue's column.
-Rows without residues omit endpoint numbers. Structural sequence displays use
-observed-sequence positions; author numbering remains in the residue mapping.
-Each ruler sits immediately above its sequence row, with operations below both.
-CLI `--no-rulers` and Python `.format(rulers=False)` hide rulers while retaining
-start/end positions; rulers are shown by default.
-Python `repr()`, `str()`, and `.format(width=None, color="auto", rulers=True)` use automatic
-color. Explicit `color="never"` produces plain text; `color="always"` overrides
-terminal detection and `NO_COLOR`.
-
-The RMSD CLI shows each chain alignment. Python `RmsdResult` remains compact,
-with full displays available through its individual chain alignment objects.
+Share CLI/Python rendering, escaped names, terminal-width wrapping, operation
+styles and rulers. Sequence rulers count original residues, never gaps or
+padding; author numbering remains in structural residue maps. Color, width and
+ruler controls do not change data. The [display contract](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md#display-an-alignment)
+specifies markers, colors and clipped-tail layout. RMSD CLI output includes
+chain alignments; Python keeps the RMSD summary compact and exposes individual
+chain alignment objects for full displays.
 
 ## Backend qualification
 
-Hyalite 0.4.0 provides exact alignment modes and deterministic traceback without
-normal dependencies. Arpeggia owns the public result types and scoring semantics.
-Its recent introduction warranted independent qualification before adoption:
-2,745 cases matched Biopython scores, with tracebacks checked for score and span
-consistency. Tied optima require deterministic results within the pinned backend,
-not identical paths across implementations.
+Hyalite 0.4.0 supplies exact modes and deterministic traceback without normal
+dependencies. Arpeggia owns scoring semantics and result types. Its recent
+introduction required independent qualification: 2,745 cases matched Biopython
+scores, with traceback/span checks. Equal-score paths may differ across engines.
 
-Structural regressions cover renumbering, chain assignment and ambiguity,
-substitutions, missing atoms, independent fit/evaluation selections, refinement
-failure, and evaluation of pairs rejected from fitting. Exact-correspondence RMSD
-retains its numerical behavior despite the new result type. The
-[validation report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md) records the checks and
-measured runtime and package sizes.
+The [validation report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md)
+records structural regressions, runtime and package-size measurements. Exact
+RMSD retains its numerical behavior despite the changed result type.
+[Sequence research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/protein-sequence-alignment-methods.md)
+compares objectives and backends; the [PyMOL audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/pymol-superposition-and-rmsd.md)
+establishes the relative rejection rule and core/full-evaluation distinction.
 
-Backend evidence: [Hyalite 0.4.0 source](https://docs.rs/crate/hyalite/0.4.0/source/)
+Backend sources: [Hyalite 0.4.0](https://docs.rs/crate/hyalite/0.4.0/source/)
 and [Rust-Bio manifest](https://docs.rs/crate/bio/4.0.1/source/Cargo.toml.orig).
-
-The [sequence research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/protein-sequence-alignment-methods.md)
-explains scoring and end-gap objectives; the
-[PyMOL audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/pymol-superposition-and-rmsd.md) documents the relative
-rejection rule and the distinction between core and full-pair evaluation.

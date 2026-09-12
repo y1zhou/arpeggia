@@ -14,7 +14,7 @@
   a pH-dependent intrinsic-pKa prior, while `ExplicitOnly` never guesses.
   Inferred histidine charge produces potential ionic, repulsion, and cation-pi
   labels rather than definitive ones.
-- All analyses deterministically choose the highest-occupancy alternate
+- Coordinate-based analyses deterministically choose the highest-occupancy alternate
   conformer, with `A` as the tie-breaker, and warn when selection occurs.
 - Standard atom, residue, and chain SASA use one atom population and ProtOr
   radii with elemental fallback. Polar/hydrophobic columns follow Rosetta's
