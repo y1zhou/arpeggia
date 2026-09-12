@@ -60,11 +60,15 @@ import arpeggia
 contacts = arpeggia.contacts("structure.pdb", groups="A/B")
 contacts.write_parquet("contacts.parquet")
 residue_sasa = arpeggia.sasa("structure.pdb", level="residue")
+print(residue_sasa.sort("sasa").head(10))
+relative_sasa = arpeggia.relative_sasa("structure.pdb")
+sap = arpeggia.sap_score("structure.pdb", level="residue")
+print(sap.sort("sap_score", descending=True).head(10))
 total, polar, hydrophobic, unknown = arpeggia.dsasa_components(
     "structure.pdb", groups="A/B"
 )
 sc_score = arpeggia.sc("antibody_antigen.pdb", groups="H,L/A")
-print(f"Shape Complementarity: {sc_score:.3f}")  # Typical values: 0.5-0.7
+print(f"Shape Complementarity: {sc_score:.3f}")
 
 print(arpeggia.align_seqs("ACDEFGHIK", "ACDEYGHIK"))
 result = arpeggia.rmsd(
@@ -75,9 +79,9 @@ print(result.rmsd, result.core_rmsd)
 ```
 
 Use `help(arpeggia.contacts)` for arguments and defaults. The
-[Python recipes](https://github.com/y1zhou/arpeggia/blob/master/QUICKSTART.md)
-cover filtering contacts, residue identities and surface scores; the feature
-guides above cover alignment and numbering.
+[contact-table examples](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md#contact-table-examples)
+cover hydrogen-bond counts and interface residues; the feature guides above
+cover alignment and numbering.
 
 ### Command-Line Interface
 

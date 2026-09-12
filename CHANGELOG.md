@@ -82,8 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linked repository files through GitHub for installed-package users, and
   clarified Python/CLI names in README. Removed duplicated setup and completed
   workplans, kept accepted contracts in ADRs, and retained research evidence and
-  dated benchmark results. Python recipes preserve complete residue identities
-  and use current Polars aggregation APIs.
+  dated benchmark results. Removed the redundant QUICKSTART guide, retaining
+  contact-table recipes in Scientific Conventions and surface examples in README.
+  Recipes preserve complete residue identities and use current Polars APIs;
+  removed uncited SAP/SC interpretation thresholds.
 
 ### Validation
 

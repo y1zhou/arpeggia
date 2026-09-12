@@ -19,6 +19,8 @@
 - Standard atom, residue, and chain SASA use one atom population and ProtOr
   radii with elemental fallback. Polar/hydrophobic columns follow Rosetta's
   legacy `SasaFilter` atom partition; numerical areas remain Shrake–Rupley.
+  Residue SASA sums atomic areas in Å²; `relative_sasa()` divides each standard
+  residue's area by its reference maximum.
 - Smaller solvent probes access narrower crevices; larger probes exclude them.
   Total SASA can increase or decrease with probe radius. An isolated atom has
   area `4π(atom_radius + probe_radius)²`, illustrating why smaller probes do not
@@ -142,3 +144,39 @@ The implementation details and atom-typing tables live in the
 [charge rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/ionic.rs),
 [hydrophobic rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/hydrophobic.rs), and
 [aromatic geometry rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/aromatic.rs).
+
+## Contact-table examples
+
+Count hydrogen-bond rows by residue pair, retaining model, chain, residue number
+and insertion code so distinct residues are not merged. A count measures contact
+rows; a pair can have multiple interaction types.
+
+```python
+import arpeggia
+import polars as pl
+
+contacts = arpeggia.contacts("structure.pdb", groups="A/B")
+hydrogen_bonds = contacts.filter(
+    pl.col("interaction").is_in(["HydrogenBond", "WeakHydrogenBond"])
+)
+residue_pairs = hydrogen_bonds.group_by([
+    "model", "from_chain", "from_resi", "from_insertion", "from_resn",
+    "to_chain", "to_resi", "to_insertion", "to_resn",
+]).len()
+print(residue_pairs)
+```
+
+For all contacting interface residues, combine both endpoints: `from` and `to`
+can follow interaction roles rather than chain-group order. Filter the resulting
+`chain` column for one partner.
+
+```python
+identity = ["chain", "resi", "insertion", "resn"]
+interface_residues = pl.concat([
+    contacts.select("model", *[
+        pl.col(f"{side}_{field}").alias(field) for field in identity
+    ])
+    for side in ("from", "to")
+]).unique()
+print(interface_residues)
+```
