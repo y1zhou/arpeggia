@@ -150,7 +150,7 @@ impl SeqAlignment {
 pub(crate) fn scaled_cost(value: f64) -> ArpeggiaResult<i32> {
     let scaled = value * 100.0;
     if !value.is_finite()
-        || value <= 0.0
+        || scaled.round() < 1.0
         || scaled > i32::MAX as f64
         || (scaled - scaled.round()).abs() > f64::EPSILON * scaled.abs().max(1.0) * 4.0
     {
@@ -464,9 +464,20 @@ mod tests {
         for input in ["", "A-C", "A*C", "A C", "é", "AJ"] {
             assert!(align_seqs(input, "AC", &SeqAlignOptions::default()).is_err());
         }
-        for value in [0.0, -1.0, 0.001, f64::NAN, f64::INFINITY, 1e15] {
+        for value in [
+            0.0,
+            -1.0,
+            0.001,
+            1e-20,
+            f64::MIN_POSITIVE,
+            f64::from_bits(1),
+            f64::NAN,
+            f64::INFINITY,
+            1e15,
+        ] {
             assert!(scaled_cost(value).is_err());
         }
+        assert_eq!(scaled_cost(0.01).unwrap(), 1);
         assert_eq!(scaled_cost(0.29).unwrap(), 29);
         assert!(
             scoring(&SeqAlignOptions {

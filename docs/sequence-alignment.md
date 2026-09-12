@@ -23,7 +23,8 @@ default. The CLI accepts `--alignment-mode` and its alias `--mode`.
 
 BLOSUM62 scoring uses positive `gap_open=10` and `gap_extend=0.5`, charging
 `gap_open + (length - 1) * gap_extend` per gap. Costs accept at most two decimal
-places and require opening ≥ extension. Matrix and costs are scaled together
+places and require opening ≥ extension ≥ 0.01; smaller costs are rejected, never
+rounded to zero. Matrix and costs are scaled together
 for exact integer optimization. Unrepresentable scores fail explicitly.
 
 Lowercase is normalized; standard amino acids and `B/Z/X/U/O` are accepted.

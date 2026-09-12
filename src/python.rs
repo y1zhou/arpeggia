@@ -144,10 +144,10 @@ impl crate::RmsdResult {
 ///     mode (str): "global" (default) consumes both inputs; "local" selects
 ///         best-scoring subsequences; "semi-global" consumes the entire query
 ///         sequence with free reference terminal overhangs.
-///     gap_open (float): Positive opening cost, default 10, with at most two
+///     gap_open (float): Opening cost ≥ 0.01, default 10, with at most two
 ///         decimals and no smaller than gap_extend. A gap of length L costs
 ///         gap_open + (L - 1) * gap_extend.
-///     gap_extend (float): Positive cost per additional gap residue, default
+///     gap_extend (float): Cost per additional gap residue ≥ 0.01, default
 ///         0.5, with at most two decimals and no larger than gap_open.
 ///     reference_name (str): Keyword-only reference display label, default
 ///         "Reference". Stored on the result and in JSON; does not affect scoring.
@@ -228,9 +228,9 @@ fn align_seqs(
 ///     alignment_mode (str): "global" (default), "local", or "semi-global" for
 ///         final chain alignment. Semi-global consumes the complete query chain.
 ///         Chain inference independently scores shorter against longer semi-globally.
-///     gap_open (float): Positive alignment opening cost, default 10; at most
+///     gap_open (float): Alignment opening cost ≥ 0.01, default 10; at most
 ///         two decimals and no smaller than gap_extend. Gap cost is open+(L-1)*extend.
-///     gap_extend (float): Positive cost per additional gap residue, default 0.5;
+///     gap_extend (float): Cost per additional gap residue ≥ 0.01, default 0.5;
 ///         at most two decimals and no larger than gap_open.
 ///     refine_cycles (int): Maximum rejection/refit rounds after the initial fit;
 ///         0 (default) performs no rejection. Stops early when unchanged or exact.

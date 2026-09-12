@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matches, severe truncations, multiple domains and unsupported insertions.
   Partial domains must span the IMGT 23–118 framework-anchor interval to retain
   context for alignment, numbering and CDR conversion.
+  Inputs outside 30–10,000 residues fail before sequence encoding.
 - Offline human, mouse, alpaca, rat and rabbit V/J germline similarities, with explicit
   species restrictions, known-residue coverage, tied gene/allele references,
   and attributed IMGT release 202636-7 data. `match_germlines=False` /
@@ -43,7 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   germlines, with wrapping and color/ruler controls.
 - Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI
   `align-seqs`: global, local, and query-full semi-global modes with BLOSUM62
-  and configurable affine gap costs. `SeqAlignment` includes gapped strings,
+  and configurable affine gap costs with hundredth precision and a 0.01 minimum.
+  `SeqAlignment` includes gapped strings,
   operations, input spans, identity/coverage ratios, gap statistics, and full-input
   edit distance.
 - Shared CLI/Python alignment displays with blue `:` markers for positive-score
@@ -53,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional observed-sequence correspondence before two-structure RMSD, with
   reference-based selections, explicit chain maps or unique maximum-score
   inference, and diagnostics for omitted atoms.
+  Indistinguishable reference chains require explicit mapping before pairwise scoring.
 - Optional atom-wise rejection and refitting. Final evaluation retains all mapped
   selected pairs, including rejected fitting pairs. Unchanged fitting sets retain
   their core RMSD; degenerate surviving fits fail.

@@ -245,6 +245,17 @@ fn chain_mapping(
             second.len()
         )));
     }
+    // Identical reference encodings have interchangeable score rows, including
+    // U/C and O/K aliases. Explicit maps above bypass this inference requirement.
+    let mut seen = BTreeSet::new();
+    if first
+        .iter()
+        .any(|chain| !seen.insert(chain.encoded.as_slice()))
+    {
+        return Err(ArpeggiaError::Calculation(
+            "ambiguous reference chains with identical scoring sequences; supply an explicit chain_map".into(),
+        ));
+    }
     let scoring = crate::seq_alignment::scoring(&options.alignment)?;
     let mut scratch = hyalite::PairScratch::new();
     let mut scores = Vec::new();
@@ -627,6 +638,7 @@ mod tests {
             ("X", &["TRP", "TYR", "PHE"], 100),
             ("Y", &["ALA", "CYS", "ASP"], 200),
             ("Z", &["GLY", "GLY", "GLY"], 1),
+            ("W", &["GLY", "GLY", "GLY"], 1),
         ]);
         let result = get_rmsd(
             first,
@@ -670,6 +682,50 @@ mod tests {
                 .query_chain,
             "Y"
         );
+    }
+    #[test]
+    fn identical_reference_encodings_require_explicit_maps() {
+        for cysteine in ["CYS", "SEC"] {
+            let reference = structure(&[
+                ("A", &["ALA", "CYS", "ASP"], 1),
+                ("B", &["ALA", cysteine, "ASP"], 1),
+            ]);
+            let query = structure(&[
+                ("X", &["ALA", "CYS", "ASP"], 1),
+                ("Y", &["ALA", "CYS", "ASP"], 1),
+            ]);
+            let mut options = RmsdOptions {
+                align_seqs: true,
+                ..Default::default()
+            };
+            assert!(
+                get_rmsd(reference.clone(), query.clone(), &options)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("identical scoring sequences")
+            );
+            options.chain_map = [("A".into(), "X".into()), ("B".into(), "Y".into())].into();
+            assert_eq!(
+                get_rmsd(reference.clone(), query, &options)
+                    .unwrap()
+                    .value
+                    .evaluation_atoms,
+                6
+            );
+
+            // An unselected duplicate reference chain does not need a partner.
+            options.chain_map.clear();
+            options.superpose_residues = "A".into();
+            options.rmsd_residues = "A".into();
+            let query = structure(&[("X", &["ALA", "CYS", "ASP"], 1)]);
+            assert_eq!(
+                get_rmsd(reference, query, &options)
+                    .unwrap()
+                    .value
+                    .evaluation_atoms,
+                3
+            );
+        }
     }
     #[test]
     fn gaps_and_substitution_sidechains_are_omitted_with_diagnostics() {

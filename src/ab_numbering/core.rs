@@ -199,12 +199,12 @@ pub(super) fn number(
     sequence: &str,
     options: &NumberingOptions,
 ) -> ArpeggiaResult<NumberedAntibody> {
-    crate::seq_alignment::encode(sequence)?;
     if !(30..=10000).contains(&sequence.len()) {
         return Err(ArpeggiaError::InvalidArgument(
             "antibody inputs must contain 30–10000 amino acids".into(),
         ));
     }
+    crate::seq_alignment::encode(sequence)?;
     let sequence = sequence.to_ascii_uppercase();
     let mut buffer = AlignBuffer::new();
     let (chain, alignment) = best_alignment(&sequence, &mut buffer)?;

@@ -12,8 +12,8 @@ semi-global modes are selectable. Semi-global consumes the entire second
 sequence and permits free terminal overhangs of the first. Alignment uses exact
 affine-gap optimization with BLOSUM62. Configurable positive gap costs default
 to opening 10 and extension 0.5, with cost `open + (length - 1) * extend`.
-Costs have at most two decimal places and opening cost must be at least extension
-cost. Unsupported precision is rejected rather than rounded. Matrix entries and
+Costs have at most two decimal places and require opening ≥ extension ≥ 0.01.
+Unsupported precision, including positive costs that would round to zero, is rejected. Matrix entries and
 gap costs are scaled consistently for exact integer scoring; reported scores are
 unscaled. Nonfinite costs and unrepresentable score ranges fail explicitly.
 FASTA parsing and multiple sequence alignment are outside this feature.
@@ -64,6 +64,9 @@ and coverage reported; no universal homology threshold is imposed. Explicit
 mapping can override score-based inference. Infer only for reference chains used
 by either selection, against all eligible query chains. Explicit maps cover all
 relevant reference chains, use unique query partners, and disable inference.
+Required reference chains with identical scoring sequences, including `U/C` and
+`O/K` aliases, require an explicit map before any pairwise scoring. Duplicate
+unused query chains do not prevent otherwise unique inference.
 
 Chain inference and final residue alignment are separate: inference uses
 shorter-against-longer semi-global scores, while final alignment uses the selected

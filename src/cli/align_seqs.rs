@@ -6,10 +6,10 @@ pub(crate) struct AlignmentArgs {
     /// Sequence alignment objective (semi-global consumes the second sequence)
     #[arg(long, alias = "mode", value_enum, default_value = "global")]
     alignment_mode: AlignmentMode,
-    /// Positive first-gap-residue cost, at most two decimals; gap cost = open + (length-1)*extend
+    /// First-gap-residue cost ≥ 0.01, at most two decimals; gap cost = open + (length-1)*extend
     #[arg(long, default_value_t = 10.0)]
     gap_open: f64,
-    /// Positive cost per additional gap residue, at most two decimals and no larger than opening
+    /// Cost per additional gap residue ≥ 0.01, at most two decimals and no larger than opening
     #[arg(long, default_value_t = 0.5)]
     gap_extend: f64,
 }
