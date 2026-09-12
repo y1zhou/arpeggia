@@ -142,7 +142,7 @@ pub(crate) fn run_alignment(args: &AlignArgs) -> ArpeggiaResult<()> {
     } else {
         for antibody in &result.antibodies {
             for diagnostic in &antibody.diagnostics {
-                tracing::warn!("{}: {diagnostic}", antibody.name);
+                tracing::warn!("{:?}: {diagnostic}", antibody.name);
             }
         }
         println!(

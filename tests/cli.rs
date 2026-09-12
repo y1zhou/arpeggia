@@ -611,6 +611,30 @@ fn antibody_cli_can_skip_germlines_without_disabling_numbering() {
 }
 
 #[test]
+fn antibody_cli_escapes_names_in_diagnostics() {
+    let output = arpeggia()
+        .args([
+            "align-antibodies",
+            &ANTIBODY_SEQUENCE[5..],
+            "--names",
+            "partial\nforged\rname",
+            "--no-germlines",
+            "--color",
+            "never",
+        ])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains(r#""partial\nforged\rname": PARTIAL_DOMAIN"#),
+        "{stderr}"
+    );
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    assert!(!stderr.contains('\r'), "{stderr}");
+}
+
+#[test]
 fn antibody_cli_rejects_invalid_names_and_conventions() {
     for options in [
         vec!["align-antibodies", ANTIBODY_SEQUENCE, "--names", "one,two"],

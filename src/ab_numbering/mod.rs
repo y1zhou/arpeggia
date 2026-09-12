@@ -108,10 +108,13 @@ impl Default for NumberingOptions {
 }
 
 /// A numbered position with an optional single-letter insertion code.
+///
+/// Equality and hashing use only the number and insertion code. Retain the
+/// antibody's scheme and chain context when comparing positions across results.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(frozen, get_all, skip_from_py_object, module = "arpeggia")
+    pyo3::pyclass(frozen, eq, hash, get_all, skip_from_py_object, module = "arpeggia")
 )]
 pub struct NumberedPosition {
     /// Position number in the selected scheme.

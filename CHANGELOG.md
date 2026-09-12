@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Partial domains must span the IMGT 23–118 framework-anchor interval to retain
   context for alignment, numbering and CDR conversion.
   Inputs outside 30–10,000 residues fail before sequence encoding.
+  Python position labels compare and hash by number and insertion code for
+  residue/column lookup; CLI diagnostics escape control characters in input names.
 - Offline human, mouse, alpaca, rat and rabbit V/J germline similarities, with explicit
   species restrictions, known-residue coverage, tied gene/allele references,
   and attributed IMGT release 202636-7 data. `match_germlines=False` /
@@ -71,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   output reports details by default and supports structured `--json` output.
 - Python sequence and antibody displays share `__repr__` through Python's
   standard `str()` fallback, with `.format()` for explicit display controls.
+- Python structural and antibody diagnostics share warning emission, preserving
+  `UserWarning` filters and reporting only newly added imputation diagnostics.
 - Expanded CLI help and Google-style Python/IDE docstrings with reference
   selection syntax, independent defaults, units, result semantics, and examples.
   Probe-radius guidance explains crevice access and how SASA changes depend on

@@ -1,22 +1,6 @@
-use super::{display_options, python_error, value_enum};
+use super::{display_options, emit_python_warnings, python_error, value_enum};
 use crate::{AntibodyAlignment, NumberedAntibody, NumberedPosition, NumberedResidue};
 use pyo3::prelude::*;
-use std::ffi::CString;
-
-fn warnings(py: Python<'_>, diagnostics: &[String]) -> PyResult<()> {
-    for diagnostic in diagnostics {
-        let message = CString::new(diagnostic.as_str()).map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err("diagnostic contains a NUL byte")
-        })?;
-        PyErr::warn(
-            py,
-            &py.get_type::<pyo3::exceptions::PyUserWarning>(),
-            &message,
-            1,
-        )?;
-    }
-    Ok(())
-}
 
 /// Number one antibody variable domain and find its closest bundled V/J references.
 ///
@@ -104,7 +88,7 @@ fn number_antibody(
     let result = py
         .detach(|| crate::number_antibody(sequence, &options))
         .map_err(python_error)?;
-    warnings(py, &result.diagnostics)?;
+    emit_python_warnings(py, &result.diagnostics)?;
     Ok(result)
 }
 
@@ -209,7 +193,7 @@ impl NumberedAntibody {
         let result = py
             .detach(|| self.impute(v_reference, j_reference))
             .map_err(python_error)?;
-        warnings(py, &result.diagnostics[self.diagnostics.len()..])?;
+        emit_python_warnings(py, &result.diagnostics[self.diagnostics.len()..])?;
         Ok(result)
     }
 

@@ -215,6 +215,11 @@ All antibodies must use one numbering scheme and be all heavy or all light;
 K/L mixtures and differing per-row CDR definitions are allowed. Alignment follows
 numbered positions and has no multiple-alignment score.
 
+Python `NumberedPosition` objects compare and hash by `(number, insertion)`, so
+residue positions can be looked up directly in `.positions`, sets and dictionaries.
+The label carries no scheme or chain: retain that context across independent
+results. Use alignment order rather than sorting position labels numerically.
+
 The selected reference displays first, followed by the remaining inputs in their
 original relative order. Germline rows are hidden, including for a one-antibody
 alignment. `.format(reference_index=...)` changes one display without changing

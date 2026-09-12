@@ -34,7 +34,10 @@ fn load_for_python(py: Python<'_>, input_file: &str) -> PyResult<pdbtbx::PDB> {
     Ok(analysis.value)
 }
 
-fn emit_python_warnings(py: Python<'_>, warnings: Vec<crate::AnalysisWarning>) -> PyResult<()> {
+fn emit_python_warnings(
+    py: Python<'_>,
+    warnings: impl IntoIterator<Item = impl std::fmt::Display>,
+) -> PyResult<()> {
     let category = py.get_type::<pyo3::exceptions::PyUserWarning>();
     for warning in warnings {
         let message = CString::new(warning.to_string())

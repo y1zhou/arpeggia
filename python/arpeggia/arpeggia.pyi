@@ -959,8 +959,14 @@ class AntibodyAlignment:
         """
 
 class NumberedPosition:
-    """Read-only NumberedPosition result; constructed by the antibody analysis functions."""
+    """Immutable position label, compared and hashed by number and insertion code.
 
+    Retain scheme and chain context when comparing positions across results.
+    Constructed by the antibody analysis functions.
+    """
+
+    def __eq__(self, other: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
     @property
     def number(self) -> int:
         """Position number in the selected scheme."""

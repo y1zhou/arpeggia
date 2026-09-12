@@ -576,6 +576,25 @@ def test_antibody_api_and_germline_correspondence():
             )
 
 
+def test_numbered_positions_are_value_keys():
+    """Use copied position labels for residue/column correspondence in Python."""
+    import arpeggia
+
+    antibody = arpeggia.number_antibody(
+        ANTIBODY_SEQUENCE, scheme="martin", match_germlines=False
+    )
+    positions = [r.position for r in antibody.residues]
+    assert positions == [r.position for r in antibody.residues]
+    assert any(p.insertion for p in positions)
+    assert len(set(positions)) == len(positions)
+    assert positions[0] != positions[1]
+    assert positions[0] != str(positions[0])
+    alignment = arpeggia.align_antibodies([antibody])
+    assert all(p in alignment.positions for p in positions)
+    columns = {p: i for i, p in enumerate(alignment.positions)}
+    assert [columns[p] for p in positions] == list(range(len(positions)))
+
+
 def test_antibody_germline_opt_out_is_explicit():
     """Keep skipped matching observable without warnings or deferred computation."""
     import warnings
@@ -616,6 +635,29 @@ def test_antibody_germline_opt_out_is_explicit():
         cast(Any, skipped).germlines_searched = True
     with pytest.raises(ValueError, match="imputation requires germline matching"):
         skipped.impute()
+
+
+def test_python_warning_filters_and_new_imputation_diagnostics():
+    """Emit new diagnostics once and let Python filters promote warnings to errors."""
+    import warnings
+
+    import arpeggia
+
+    original = ANTIBODY_SEQUENCE[5:-3]
+    with pytest.warns(UserWarning, match="PARTIAL_DOMAIN") as notices:
+        partial = arpeggia.number_antibody(original, species="alpaca")
+    assert len(notices) == 1
+    with pytest.warns(UserWarning, match="IMPUTATION_REFERENCE_COVERAGE") as notices:
+        partial.impute()
+    assert len(notices) == 1
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        with pytest.raises(UserWarning, match="SEQUENCE_SCORING_ALIAS"):
+            arpeggia.align_seqs("U", "C")
+        with pytest.raises(UserWarning, match="PARTIAL_DOMAIN"):
+            arpeggia.number_antibody(original, match_germlines=False)
+        with pytest.raises(UserWarning, match="IMPUTATION_REFERENCE_COVERAGE"):
+            partial.impute()
 
 
 def test_antibody_imputation_is_explicit_and_preserves_input():
