@@ -47,6 +47,12 @@ pub fn load_model(input_file: &str) -> ArpeggiaResult<Analysis<PDB>> {
         ));
     }
 
+    let mut warnings = diagnostics
+        .into_iter()
+        .map(|error| AnalysisWarning::new(WarningCode::Parser, error.to_string()))
+        .collect::<Vec<_>>();
+    // Alternate residue identities have no single name until a conformer is selected.
+    warnings.extend(select_conformers(&mut pdb));
     pdb.remove_residues_by(|residue| {
         let name = residue.name().unwrap_or("");
         one_letter_code(name).is_none()
@@ -55,11 +61,6 @@ pub fn load_model(input_file: &str) -> ArpeggiaResult<Analysis<PDB>> {
                 .any(|cap| name.eq_ignore_ascii_case(cap))
     });
 
-    let mut warnings = diagnostics
-        .into_iter()
-        .map(|error| AnalysisWarning::new(WarningCode::Parser, error.to_string()))
-        .collect::<Vec<_>>();
-    warnings.extend(select_conformers(&mut pdb));
     Ok(Analysis::new(pdb, warnings))
 }
 
@@ -335,10 +336,10 @@ mod tests {
     #[test]
     fn load_selects_highest_occupancy_conformer_with_a_tie_break() {
         let input =
-            b"ATOM      1  CB AALA A   1       0.000   0.000   0.000  0.50 20.00           C  \n\
-ATOM      2  CB BALA A   1       1.000   0.000   0.000  0.50 20.00           C  \n\
-ATOM      3  CB AALA A   2       2.000   0.000   0.000  0.30 20.00           C  \n\
-ATOM      4  CB BALA A   2       3.000   0.000   0.000  0.70 20.00           C  \n\
+            b"ATOM      1  CA AALA A   1       0.000   0.000   0.000  0.50 20.00           C  \n\
+ATOM      2  CA BGLY A   1       1.000   0.000   0.000  0.50 20.00           C  \n\
+ATOM      3  CA AALA A   2       2.000   0.000   0.000  0.30 20.00           C  \n\
+ATOM      4  CA BSER A   2       3.000   0.000   0.000  0.70 20.00           C  \n\
 END                                                                             \n";
         let path =
             std::env::temp_dir().join(format!("arpeggia-conformers-{}.pdb", std::process::id()));
@@ -358,6 +359,10 @@ END                                                                             
             })
             .collect::<Vec<_>>();
         assert_eq!(altlocs, ["A", "B"]);
+        assert_eq!(
+            crate::get_sequences(&analysis.value, 0).unwrap(),
+            [("A".into(), "AS".into())]
+        );
         assert_eq!(
             analysis
                 .warnings

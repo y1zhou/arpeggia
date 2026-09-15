@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bundled germline attribution appears in the README, linking the
   [source credits and provenance](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
 
+### Fixed
+
+- Preserve supported alternate residue identities during structure loading and
+  report the conformer-selection warning.
+
 Qualification and benchmark reports:
 [sequence alignment](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md),
 [antibody numbering](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md).
