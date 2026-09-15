@@ -115,9 +115,12 @@ for measured savings.
 
 ## Germline similarities
 
-Offline references cover human, mouse, rat and rabbit H/K/L and alpaca heavy chains, including
-VHH references. Search uses all bundled species by default; restrict it with
-`species="rabbit"`, `species=["rat", "rabbit"]`, or CLI `--species rat,rabbit`.
+Offline references cover human, mouse, rat and rabbit H/K/L and alpaca/llama
+heavy chains, including VHH references. Search uses all bundled species by default;
+restrict it with `species="llama"`, `species=["rat", "rabbit"]`, or CLI
+`--species rat,rabbit`. `"Lama glama"` aliases `"llama"` in both APIs.
+The llama supplement contains six V and five J references from IMGT protein
+displays; it is a limited historical set, separate from the bulk snapshot.
 The same generic H/K/L profiles number every input; the species option restricts
 germline comparisons only. Adding species can change the best matches and ties
 in an unrestricted search. It does not establish species-specific numbering accuracy.

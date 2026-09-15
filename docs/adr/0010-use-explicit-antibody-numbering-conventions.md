@@ -60,7 +60,10 @@ The adapter handles the qualified light-chain conversion/span defect explicitly.
 ## Germline matching
 
 Bundle an attributed, versioned IMGT subset for human, mouse, rat and rabbit
-H/K/L and alpaca heavy chains/VHH. The same H/K/L profiles number all inputs;
+H/K/L and alpaca/llama heavy chains/VHH. Llama uses a separately attributed
+protein-display supplement because the bulk export omits it; retain its limited
+coverage and unavailable J termini rather than treating it as a complete repertoire.
+The same H/K/L profiles number all inputs;
 species restrict reference matching only. Search all bundled species by default.
 Report reference species, never presumed input origin or a unique ancestor.
 Do not infer D segments. The [data record](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md)

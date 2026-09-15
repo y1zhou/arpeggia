@@ -17,9 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Inputs outside 30–10,000 residues fail before sequence encoding.
   Python position labels compare and hash by number and insertion code for
   residue/column lookup; CLI diagnostics escape control characters in input names.
-- Offline human, mouse, alpaca, rat and rabbit V/J germline similarities, with explicit
+- Offline human, mouse, alpaca, llama, rat and rabbit V/J germline similarities, with explicit
   species restrictions, known-residue coverage, tied gene/allele references,
-  and attributed IMGT release 202636-7 data. `match_germlines=False` /
+  and attributed IMGT release 202636-7 data plus a separate llama protein-display
+  supplement (six V and five J references). `llama` accepts the alias `Lama glama`.
+  `match_germlines=False` /
   `--no-germlines` skip matching without changing numbering or CDRs; matching
   remains enabled by default.
   `germlines_searched` distinguishes skipped searches from absent matches;

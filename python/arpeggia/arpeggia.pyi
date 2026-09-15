@@ -722,9 +722,10 @@ def number_antibody(
             Chothia aliases Martin numbering.
         cdr_definition (str): Auto follows the scheme. An explicit definition
             requires an explicit scheme; Chothia uses distinct consensus regions.
-        species (str | Sequence[str] | None): Human, mouse, alpaca, rat, rabbit, or a sequence
-            of these names. None searches all bundled references. Unused when
-            match_germlines=False.
+        species (str | Sequence[str] | None): Human, mouse, alpaca, llama (alias
+            "Lama glama"), rat, rabbit, or a sequence of these names. None searches
+            all bundled references. Alpaca/llama references cover heavy chains.
+            Unused when match_germlines=False.
         match_germlines (bool): True (default) searches V/J references. False skips
             matching without changing numbering, CDRs or recognition. Reading,
             displaying and serializing the result never trigger matching.
@@ -1012,7 +1013,7 @@ class GermlineReference:
 
     @property
     def id(self) -> str:
-        """Stable reference selector: accession, gene/allele, species and source span."""
+        """Stable selector: accession, gene/allele, species and source span or dataset label."""
 
     @property
     def species(self) -> str:

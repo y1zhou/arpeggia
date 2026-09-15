@@ -389,6 +389,26 @@ reproduced by the [preparation script](https://github.com/y1zhou/arpeggia/blob/m
 the [attribution file](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md)
 records the expanded subset checksum.
 
+## Llama reference supplement
+
+On 15 September 2026, the same 30-input, seven-batch protocol and CPU 0 affinity
+compared explicit `species=["human", "mouse", "alpaca", "rat", "rabbit"]` with
+the six-species default on one locked release build. The supplement adds six
+heavy-chain V and five J references; light-chain candidates are unchanged.
+
+| Chain | Five species | Six species | Change |
+| --- | ---: | ---: | ---: |
+| H | 10.833 ms | 10.902 ms | +0.64% |
+| K | 4.151 ms | 4.150 ms | −0.03% |
+| L | 1.433 ms | 1.432 ms | −0.07% |
+
+Numbering and V reference sets are unchanged in all 30 cases; one J reference
+set changes. Synthetic llama V/junction/J inputs pass matching and terminal
+imputation checks in all four schemes, without establishing biological accuracy.
+The [supplement](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md#llama-protein-display-supplement)
+adds 1,327 raw bytes. Concatenated reference data grow from 51,355 to 51,551 bytes
+under the same gzip settings above; these are not package-size measurements.
+
 ## Terminal framework regression follow-up
 
 A terminal sweep on 11 September 2026 used the first ten accepted H, K and L

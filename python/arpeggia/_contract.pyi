@@ -7,7 +7,9 @@ SapLevel: TypeAlias = Literal["atom", "residue"]
 ProtonationMode: TypeAlias = Literal["all-charged", "heuristic", "explicit-only"]
 NumberingScheme: TypeAlias = Literal["imgt", "martin", "chothia", "aho", "kabat"]
 CdrDefinition: TypeAlias = Literal["auto", "imgt", "martin", "chothia", "aho", "kabat"]
-GermlineSpecies: TypeAlias = Literal["human", "mouse", "alpaca", "rat", "rabbit"]
+GermlineSpecies: TypeAlias = Literal[
+    "human", "mouse", "alpaca", "llama", "Lama glama", "rat", "rabbit"
+]
 AlignmentMode: TypeAlias = Literal["global", "local", "semi-global"]
 AtomSubset: TypeAlias = Literal["ca", "backbone", "heavy", "all"]
 ClusteringMethod: TypeAlias = Literal["k-medoids"]

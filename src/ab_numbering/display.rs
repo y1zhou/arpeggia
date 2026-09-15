@@ -688,6 +688,33 @@ mod tests {
     }
 
     #[test]
+    fn same_gene_ties_across_species_do_not_repeat_the_displayed_assignment() {
+        let ab = number_antibody(
+            "EVQLVESGGGLVQPGGSLRLSCAASGRTFSYNPMGWFRQAPGKGRELVAAISRTGGSTYYPDSVEGRFTISRDNAKRMVYLQMNSLRAEDTAVYYCAAAGVRAEDGRVRTLPSEYTFWGQGTQVTVSS",
+            &NumberingOptions::default(),
+        )
+        .unwrap();
+        let references: Vec<_> = ab
+            .j_match
+            .as_ref()
+            .unwrap()
+            .hits
+            .iter()
+            .flat_map(|h| &h.references)
+            .collect();
+        assert_eq!(references.len(), 2);
+        assert_ne!(references[0].species, references[1].species);
+        assert!(references.iter().all(|r| gene_name(r) == "IGHJ4*01"));
+        let before = serde_json::to_string(&ab).unwrap();
+        assert!(
+            !ab.render(80, false, true)
+                .unwrap()
+                .contains("Additional tied J")
+        );
+        assert_eq!(serde_json::to_string(&ab).unwrap(), before);
+    }
+
+    #[test]
     fn single_display_places_source_rulers_above_input_and_stitched_germlines() {
         let sequence = format!("AAAAAA{}AAAAAA", SEQUENCE.replace("GGSFSTY", "GGGSGGSFSTY"));
         let ab = number_antibody(

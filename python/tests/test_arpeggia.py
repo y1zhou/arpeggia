@@ -566,6 +566,8 @@ def test_antibody_api_and_germline_correspondence():
     for result, prefix in [
         (number_antibody(ANTIBODY_SEQUENCE, species="rat"), "Rattus norvegicus"),
         (number_antibody(ANTIBODY_SEQUENCE, species="rabbit"), "Oryctolagus cuniculus"),
+        (number_antibody(ANTIBODY_SEQUENCE, species="llama"), "Lama glama"),
+        (number_antibody(ANTIBODY_SEQUENCE, species=["Lama glama"]), "Lama glama"),
     ]:
         assert result.v_match is not None and result.j_match is not None
         for matching in [result.v_match, result.j_match]:

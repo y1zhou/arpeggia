@@ -367,13 +367,24 @@ partial records, original IMGT gaps and duplicate source records:
 | Rat | 268 | 13 | 281 |
 | Rabbit | 123 | 20 | 143 |
 
-The bundled five-species subset contains 1,603 V and 91 J records and occupies
+The bulk five-species subset contains 1,603 V and 91 J records and occupies
 349,651 bytes raw. Its release, checksum, attribution and exact transformation
 are recorded with the [runtime data](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
 Strain/subspecies suffixes are retained; exact species-name matching would
 discard most mouse and rat references. The
 [expansion benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#rat-and-rabbit-reference-expansion)
 compares three- and five-species search costs on the same build.
+
+On 15 September 2026, the pinned bulk file and live GENE-DB V/J exports contained
+no `Lama glama` records. IMGT's protein displays supplied a separate supplement:
+six functional IGHV3S1–IGHV3S6 alleles (AF305944–AF305949) and five IGHJ2–IGHJ6
+alleles (AF305952), all `*01`. The displays retain IMGT V gaps; IGHJ5/6 end at
+IMGT 127 and cannot support imputation of 128. No light-chain references are
+included, and this historical set is not a comprehensive llama repertoire.
+The [data record](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md#llama-protein-display-supplement)
+pins the display URLs, checksums and extraction. Together the two files provide
+1,609 V and 96 J records. `llama` and `Lama glama` select the same references;
+they do not change the generic numbering profiles.
 
 In the original human/mouse/alpaca subset of 1,212 V and 58 J records, all retained J
 references lack partial-record flags and are 12–20 amino acids long; the alpaca

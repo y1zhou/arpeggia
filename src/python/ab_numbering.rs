@@ -18,9 +18,10 @@ use pyo3::prelude::*;
 ///         an explicit scheme. Martin uses AbM; explicit Chothia uses the distinct
 ///         2021 consensus boundaries. Mixed conventions retain the requested labels.
 ///     species (str | Sequence[str] | None): Restrict references to "human",
-///         "mouse", "alpaca", "rat", "rabbit", or a sequence of these names.
+///         "mouse", "alpaca", "llama" (alias "Lama glama"), "rat", "rabbit",
+///         or a sequence of these names.
 ///         None searches all bundled species. Unused when match_germlines=False.
-///         Alpaca references cover heavy chains; species describe matched references.
+///         Alpaca/llama references cover heavy chains; species describe matched references.
 ///     match_germlines (bool): True (default) searches V/J references. False skips
 ///         matching without changing numbering, CDRs or recognition. No skip warning
 ///         is emitted; reading, displaying or serializing the result never searches.
@@ -82,7 +83,12 @@ fn number_antibody(
         )?,
         species: species
             .iter()
-            .map(|s| value_enum(s, "species must be human, mouse, alpaca, rat, or rabbit"))
+            .map(|s| {
+                value_enum(
+                    s,
+                    "species must be human, mouse, alpaca, llama, rat, or rabbit",
+                )
+            })
             .collect::<PyResult<Vec<_>>>()?,
     };
     let result = py
