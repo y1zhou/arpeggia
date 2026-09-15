@@ -155,7 +155,7 @@ pub(crate) fn render_rows(
         .max()
         .unwrap_or(1);
     let prefix = label_width + 2 + digits;
-    let overhead = prefix + 1 + digits + if right_width == 0 { 0 } else { right_width + 3 };
+    let overhead = prefix + 1 + digits + if right_width == 0 { 0 } else { right_width + 2 };
     let block_width = width
         .checked_sub(overhead)
         .filter(|v| *v > 0)
@@ -266,7 +266,7 @@ pub(crate) fn render_rows(
             if right_names[index].is_empty() {
                 write!(output, " {last:>digits$}").expect("String write");
             } else {
-                write!(output, "  {last}  {}", right_names[index]).expect("String write");
+                write!(output, " {last}  {}", right_names[index]).expect("String write");
             }
             output.push('\n');
             if row.show_operations {

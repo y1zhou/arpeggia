@@ -708,7 +708,7 @@ mod tests {
                 );
                 assert!(!lines[line_index + 1].contains("CDR"));
                 let (row, j_name) = germline.rsplit_once("  ").unwrap();
-                let (row, last) = row.rsplit_once("  ").unwrap();
+                let (row, last) = row.rsplit_once(' ').unwrap();
                 assert_eq!(
                     j_name,
                     ab.j_match.as_ref().unwrap().hits[0]

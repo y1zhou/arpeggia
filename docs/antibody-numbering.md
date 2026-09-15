@@ -198,7 +198,7 @@ leaves the first supplied residue at position 1. Imputed positions are blank.
 The germline ruler counts continuously through V then J, ignoring alignment
 gaps and the unknown junction. If V ends at 96, J starts at 97. This is a display
 count; each stored V/J alignment retains its own source coordinates. The endpoint
-and J name follow the visible germline sequence with two spaces between each,
+follows the visible germline sequence with one space, then two spaces before the J name,
 without padding to the input's right edge.
 Canonical antibody numbering remains available through `.residues[i].position`.
 

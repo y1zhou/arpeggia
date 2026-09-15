@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   imputed residues. Counts appear only after explicit imputation, including
   attempts that add zero residues; results retain `imputation_attempted`.
   Germline rulers count continuously through
-  V then J, with endpoint and gene labels beside the visible sequence.
+  V then J, with one space before the endpoint and two before the J gene label.
   Summaries provide colored CDR legends and show tied V/J names only when
   multiple reference records share the best score.
   Multi-antibody views show the selected reference first and hide
