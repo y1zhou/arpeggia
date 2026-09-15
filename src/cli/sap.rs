@@ -7,9 +7,9 @@ use tracing::{debug, error, info, trace};
 /// Granularity level for SAP score calculation.
 #[derive(ValueEnum, Clone, Debug, Copy)]
 enum SapLevel {
-    /// Calculate SAP score for each individual atom
+    /// Signed SAP score for each calibrated side-chain atom
     Atom,
-    /// Aggregate SAP score by residue
+    /// Sum positive side-chain atom scores per residue
     Residue,
 }
 

@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restored detailed [Python/CLI examples](https://github.com/y1zhou/arpeggia/blob/master/docs/examples.md).
 - Bundled germline attribution appears in the README, linking the
   [source credits and provenance](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
+- Corrected scientific/API descriptions of SASA, SAP, output schemas and
+  clustering limits; see the [scientific conventions](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md).
 
 ### Fixed
 

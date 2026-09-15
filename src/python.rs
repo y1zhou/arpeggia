@@ -380,7 +380,10 @@ fn pairwise_rmsd(
 ///     max_clusters (int | None): Upper bound for automatic selection, at least 2
 ///         and less than the structure count. Supply this or num_clusters.
 ///         An effectively identical ensemble forms one cluster automatically.
-///     max_iterations (int): Iteration budget, default 100; nonconvergence fails.
+///     max_iterations (int): Iteration budget per stage, default 100. Fixed-count
+///         nonconvergence fails. Automatic count selection detects exhaustion of
+///         every stage, but the upstream API cannot identify an isolated
+///         exhausted stage.
 ///     model_num (int): Model serial; 0 selects each first model for input structures.
 ///     superpose_residues (str): Fit selection on every input structure. Empty
 ///         selects all eligible residues. Use "A:1-100,B" for a comma union of
@@ -564,10 +567,14 @@ fn contacts(
 
 /// Load a PDB or mmCIF file and calculate solvent accessible surface area (SASA).
 ///
+/// File loading retains supported protein residues and ACE/NH2 terminal caps.
+/// Other ligands are discarded and do not contribute SASA or occlusion. Caps
+/// contribute to atom output and residue/chain totals; hydrogens are excluded.
+///
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
 ///     level (str, optional): Aggregation level for SASA calculation. Options:
-///         - "atom": Calculate SASA for each atom (default)
+///         - "atom": Calculate SASA for each retained heavy atom (default)
 ///         - "residue": Aggregate SASA by residue
 ///         - "chain": Aggregate SASA by chain
 ///     probe_radius (float, optional): Probe radius in Ångströms. Defaults to 1.4.
@@ -853,20 +860,23 @@ fn relative_sasa(
 /// and is described in "Developability Index: A Rapid In Silico Tool for the Screening of
 /// Antibody Aggregation Propensity" (J Pharm Sci, 2012).
 ///
-/// The formula is:
+/// Atom scores use:
 /// SAP(i) = Σ{j ∈ neighbors(i, R)} [ Hydrophobicity(j) × (SASA(j) / SASA_max(j)) ]
 ///
-/// Where:
-/// - Neighbors are atoms/residues within radius R of atom/residue i
-/// - Hydrophobicity uses Rosetta's Black & Mould-derived constants
-/// - SASA is the side-chain solvent accessible surface area
-/// - SASA_max is the maximum SASA for that residue type
+/// Neighbors are calibrated side-chain atoms strictly within sap_radius of
+/// side-chain atom i, including i itself. SASA(j) is the neighbor atom's area;
+/// SASA_max(j) is Rosetta's maximum side-chain area for its residue type.
+/// Hydrophobicity uses Rosetta's Black & Mould-derived constants. All retained
+/// atoms, including hydrogens, participate in Reduce-radius exposure calculations;
+/// atom output contains only calibrated side-chain atoms. Unsupported monomers are omitted
+/// with a warning. Residue SAP sums positive atom scores; sc_sasa includes
+/// complete side-chain area, regardless of score.
 ///
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
 ///     level (str, optional): Aggregation level for SAP calculation. Options:
-///         - "atom": Calculate SAP for each atom
-///         - "residue": Aggregate SAP by residue (default)
+///         - "atom": Signed SAP scores for calibrated side-chain atoms
+///         - "residue": Sum positive side-chain atom scores per residue (default)
 ///     probe_radius (float, optional): Probe radius in Ångströms for SASA calculation. Defaults to 1.1.
 ///         Smaller probes access narrower crevices; larger probes exclude them.
 ///         Total SASA changes depend on the structure.

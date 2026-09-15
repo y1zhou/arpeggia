@@ -93,7 +93,7 @@ pub struct DsasaResult {
     pub unclassified_dsasa: f32,
 }
 
-/// Calculate solvent accessible surface area (SASA) for each atom in a PDB structure.
+/// Calculate solvent accessible surface area (SASA) for each retained heavy atom.
 ///
 /// # Arguments
 ///
@@ -108,7 +108,7 @@ pub struct DsasaResult {
 /// # Returns
 ///
 /// A Polars `DataFrame` with columns:
-/// - `atomi`, `sasa`
+/// - `atomi`, `sasa`, `polarity`
 /// - `chain`, `resn`, `resi`, `insertion`, `altloc`, `atomn`
 ///
 /// # Example

@@ -117,8 +117,11 @@ clusters = arpeggia.cluster_structs(
 )
 ```
 
-`max_iterations` defaults to 100. Failure to converge within the supported
-iteration budget raises a calculation error.
+`max_iterations` defaults to 100. Fixed-count clustering raises a calculation
+error if it does not converge within that budget. Automatic count selection
+applies the budget to each stage, but the upstream API reports only aggregate
+iterations: exhaustion of every stage is detected; an isolated exhausted stage
+may go undetected.
 
 The cluster table contains:
 

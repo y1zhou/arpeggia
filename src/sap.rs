@@ -11,10 +11,14 @@
 //! SAP(i) = Σ{j ∈ neighbors(i, R)} [ Hydrophobicity(j) × (SASA(j) / SASA_max(j)) ]
 //!
 //! Where:
-//! - Neighbors are atoms within radius R of atom i
+//! - Neighbors are calibrated side-chain atoms strictly within radius R of
+//!   side-chain atom i, including i itself
 //! - Hydrophobicity uses Rosetta's Black & Mould-derived constants
-//! - SASA is the side-chain solvent accessible surface area
-//! - SASA_max is the maximum SASA for that residue type
+//! - SASA is each neighbor atom's solvent accessible surface area
+//! - SASA_max is Rosetta's maximum side-chain area for the neighbor's residue type
+//!
+//! Atom output contains side-chain atoms only. Residue scores sum positive atom
+//! scores; side-chain SASA includes all their area, regardless of score.
 
 use crate::sasa::{calculate_prepared_sap_atom_sasa_records, validate_sasa_input};
 use crate::structure::prepare_structure;
@@ -160,10 +164,10 @@ fn is_sap_sidechain(resn: &str, atomn: &str) -> bool {
         )
 }
 
-/// Calculate the SAP score for each atom in a PDB structure.
+/// Calculate the SAP score for each calibrated side-chain atom in a PDB structure.
 ///
 /// The SAP score quantifies the aggregation propensity by combining the
-/// solvent-accessible hydrophobic surface area of neighboring residues.
+/// solvent-accessible hydrophobic surface area of neighboring side-chain atoms.
 ///
 /// # Arguments
 ///
@@ -400,7 +404,8 @@ fn atom_sap_records_to_dataframe(records: &[AtomSapRecord]) -> DataFrame {
 /// # Returns
 ///
 /// A Polars `DataFrame` with columns:
-/// - `chain`, `resn`, `resi`, `insertion`, `sc_sasa`, `sap_score`
+/// - `chain`, `resn`, `resi`, `insertion`, `sc_sasa`, `sap_score`,
+///   `max_sc_asa`, `relative_sc_sasa`
 ///
 /// # Example
 ///

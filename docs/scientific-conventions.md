@@ -17,8 +17,11 @@
 - Coordinate-based analyses deterministically choose the highest-occupancy alternate
   conformer, with `A` as the tie-breaker, and warn when selection occurs.
 - Standard atom, residue, and chain SASA use one atom population and ProtOr
-  radii with elemental fallback. Polar/hydrophobic columns follow Rosetta's
-  legacy `SasaFilter` atom partition; numerical areas remain Shrake–Rupley.
+  radii with elemental fallback. File loading retains supported protein residues
+  and ACE/NH2 caps; other ligands contribute neither SASA nor occlusion. Caps
+  contribute to atom output and residue/chain totals. Polar/hydrophobic columns
+  follow Rosetta's legacy `SasaFilter` atom partition; numerical areas remain
+  Shrake–Rupley.
   Residue SASA sums atomic areas in Å²; `relative_sasa()` divides each standard
   residue's area by its reference maximum.
 - Smaller solvent probes access narrower crevices; larger probes exclude them.
@@ -29,8 +32,9 @@
   `SASA(group 1) + SASA(group 2) - SASA(complex)`. Divide by two only when a
   one-sided interface-area convention is required.
 - SAP uses the Rosetta-compatible full-atom Reduce-radius exposure definition
-  with a 1.1 Å default probe and sums positive score contributions while
-  reporting complete side-chain SASA. Arpeggia does not add missing atoms, so
+  with a 1.1 Å default probe. Atom scores use side-chain atom neighborhoods;
+  residue scores sum positive atom scores while reporting complete side-chain
+  SASA. Arpeggia does not add missing atoms, so
   direct Rosetta comparison requires the same caller-prepared full-atom input.
   Monomers without a Rosetta calibration are omitted with a warning.
 - RMSD uses uniform-weight Kabsch superposition with proper rotations and exact

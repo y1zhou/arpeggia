@@ -232,8 +232,8 @@ impl NumberedAntibody {
     /// Returns:
     ///     str: Wrapped sequence rows and separate V/J similarities for the supplied
     ///         input. Outer germline padding is blank; unknown junction hyphens
-    ///         are gray with blank operations. A '+' marks a germline insertion,
-    ///         '-' a deletion, ':' a positive-BLOSUM62 substitution, and 'x' any
+    ///         are gray with blank operations. A '+' marks an input insertion,
+    ///         '-' an input deletion, ':' a positive-BLOSUM62 substitution, and 'x' any
     ///         other mismatch. Matches have blank operations.
     ///
     /// Raises:

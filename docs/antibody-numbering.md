@@ -292,7 +292,7 @@ the backend's single-letter representation produce errors. Recognition is a
 heuristic and does not establish biological origin or numbering correctness.
 
 Constant-region numbering, structure inputs, automatic multidomain handling,
-multi-letter insertions, and species beyond the five bundled here are deferred. The
+multi-letter insertions, and additional species are deferred. The
 [qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md)
 records fixture agreement and limits; [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md)
 records the API decisions.
