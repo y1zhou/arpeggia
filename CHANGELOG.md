@@ -43,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attempts that add zero residues; results retain `imputation_attempted`.
   Germline rulers count continuously through
   V then J, with one space before the endpoint and two before the J gene label.
-  Summaries provide colored CDR legends and show tied V/J names only when
-  multiple reference records share the best score.
+  Summaries provide colored CDR legends and list additional tied V/J gene/allele
+  names, omitting the displayed assignment and hiding empty tie lists.
   Multi-antibody views show the selected reference first and hide
   germlines, with wrapping and color/ruler controls.
 - Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI

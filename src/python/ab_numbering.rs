@@ -204,8 +204,8 @@ impl NumberedAntibody {
     /// ruler and sequence, then operations relative to the input. CDR1/2/3 bands
     /// are gray/pink/cyan across every row except operations. Yellow backgrounds mark
     /// imputed residues and their summary count. The count appears only after
-    /// impute(), including when zero residues were added. All tied reference names appear
-    /// in the summary; only representative V/J sequences are shown. If matching
+    /// impute(), including when zero residues were added. Summaries list additional
+    /// tied gene/allele names; only representative V/J sequences are shown. If matching
     /// was skipped, show only the input, ruler and CDR markers, with a skipped
     /// summary message. Formatting never triggers matching.
     ///

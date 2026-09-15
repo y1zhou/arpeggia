@@ -111,7 +111,8 @@ comma-separated names, defaulting omitted/empty names by input position; excess
 names and invalid reference indices fail.
 
 For one numbered antibody, show the input above a stitched V/J reference row,
-labeling both sources and retaining all tied names in summaries. Unknown junctions
+labeling both sources and listing additional tied gene/allele names in summaries.
+Keep every source record in the result. Unknown junctions
 and missing outer coverage must remain distinguishable from alignment gaps.
 Display padding changes never alter the local V/J matches or imputation evidence.
 
