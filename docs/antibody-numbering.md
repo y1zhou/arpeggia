@@ -184,13 +184,13 @@ a specific tied reference, pass its exact `.references[i].id` to
 
 ## Display and antibody alignments
 
-The supplied antibody appears above one combined V/J germline row, with the V
-gene on the left and J gene on the right. Each wrapped block has this order:
+The combined V/J germline is the reference above the supplied antibody query,
+with the V gene on the left and J gene on the right. Each wrapped block has this order:
 
 1. CDR marker
-2. Input ruler and sequence
-3. Germline ruler and sequence
-4. Operations relative to the input
+2. Germline ruler and reference sequence
+3. Input ruler and query sequence
+4. Operations relative to the germline
 
 Only the representative V/J sequences are shown. The separate V/J summaries
 identify them. `Additional tied V/J references` lists other gene/allele names
@@ -199,8 +199,8 @@ and collapses duplicate names; the record count covers only listed assignments.
 The line is hidden when no additional names remain. All source records remain
 in the result.
 
-The top legend and vertical bands use gray for CDR1, pink for CDR2 and cyan for
-CDR3. Bands cover markers, rulers and sequences, including gaps, but exclude
+The numbered input defines the CDR bands across both rows. The top legend and
+vertical bands use gray for CDR1, pink for CDR2 and cyan for CDR3. Bands cover markers, rulers and sequences, including gaps, but exclude
 operations and name gutters. Yellow backgrounds mark imputed residues and the
 `imputed residues` count. The count appears only after CLI `--impute` or Python
 `.impute()`, including when the operation adds zero residues. Imputation
@@ -217,8 +217,8 @@ follows the visible germline sequence with one space, then two spaces before the
 without padding to the input's right edge.
 Canonical antibody numbering remains available through `.residues[i].position`.
 
-Matches have blank operations; germline insertions relative to the input are
-green `+`, deletions red `-`, positive-BLOSUM62 substitutions blue `:`, and other
+Matches have blank operations; input insertions relative to the germline are
+green `+`, input deletions red `-`, positive-BLOSUM62 substitutions blue `:`, and other
 mismatches yellow `x`. Unknown V/J junctions have gray hyphens and blank operations.
 Outer germline padding is blank where the input extends beyond germline coverage;
 unmatched sequence tails are gray. These display choices preserve the local

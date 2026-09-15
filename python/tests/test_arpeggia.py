@@ -717,7 +717,9 @@ def test_antibody_display_and_reference_override(monkeypatch):
     assert "\x1b[" in alignment.format(color="always")
     assert "CDR1" in first.format(color="never")
     assert "IGHJ" in first.format(color="never")
-    for result, top_name in [(first, "first"), (alignment, "first")]:
+    assert first.v_match is not None
+    germline_name = first.v_match.hits[0].alignment.reference_name
+    for result, top_name in [(first, germline_name), (alignment, "first")]:
         with_rulers = result.format(width=60, color="never")
         without_rulers = result.format(width=60, color="never", rulers=False)
         blocks = with_rulers.split("\n\n")[1:]

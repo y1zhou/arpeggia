@@ -113,8 +113,9 @@ this view, including for one antibody. The CLI accepts positional strings and
 comma-separated names, defaulting omitted/empty names by input position; excess
 names and invalid reference indices fail.
 
-For one numbered antibody, show the input above a stitched V/J reference row,
+For one numbered antibody, show the stitched V/J reference above the input query,
 labeling both sources and listing additional tied gene/allele names in summaries.
+Use germline-to-input operations directly: input insertions are + and deletions are -.
 Keep every source record in the result. Unknown junctions
 and missing outer coverage must remain distinguishable from alignment gaps.
 Display padding changes never alter the local V/J matches or imputation evidence.
@@ -122,7 +123,8 @@ Display padding changes never alter the local V/J matches or imputation evidence
 Input rulers preserve original coordinates and leave imputed residues blank.
 The stitched germline ruler counts V then J continuously without gaps or junction
 cells; stored V/J alignments retain separate source coordinates. This counter
-does not imply a synthetic ancestor. Reference-defined CDR bands align across
+does not imply a synthetic ancestor. Single-antibody CDR bands follow the numbered
+input; multi-antibody bands follow the selected reference. Bands align across
 rows, while imputation highlights retain each row's provenance. Shared sequence
 rendering handles names, wrapping, color and rulers; JSON remains unstyled.
 Exact layout and colors belong in the [display guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#display-and-antibody-alignments).

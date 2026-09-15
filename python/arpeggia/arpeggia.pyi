@@ -887,15 +887,16 @@ class NumberedAntibody:
         color: Literal["auto", "always", "never"] = "auto",
         rulers: bool = True,
     ) -> str:
-        """Render the input above its combined V/J germlines, with CDR highlighting.
+        """Render combined V/J germlines above the input query, with CDR highlighting.
 
-        Each block contains one CDR marker row, input ruler and sequence, germline
-        ruler and sequence, then operations relative to the input. CDR1/2/3 bands
+        Each block contains one CDR marker row, germline ruler and reference sequence,
+        input ruler and query sequence, then operations relative to the germline.
+        Input insertions are +; deletions are -. The input's CDR1/2/3 bands
         are gray/pink/cyan across every row except operations. Yellow backgrounds mark
         imputed residues and their summary count. The count appears only after
         impute(), including when zero residues were added. Summaries list additional
         tied gene/allele names; only representative V/J sequences are shown. If matching
-        was skipped, show only the input, ruler and CDR markers, with a skipped
+        was skipped, show only the input and annotations, with a skipped
         summary message. Formatting never triggers matching.
 
         Args:

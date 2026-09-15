@@ -202,7 +202,7 @@ struct Column {
 }
 
 impl NumberedAntibody {
-    /// Format the input above combined V/J germlines, with distinct CDR backgrounds.
+    /// Format combined V/J germlines above the input query, with distinct CDR backgrounds.
     ///
     /// Gray junction gaps mark unavailable reference sequence. V/J scores remain
     /// separate similarities measured on the supplied input, including after imputation.
@@ -374,7 +374,7 @@ impl NumberedAntibody {
                 },
             )
         };
-        let rows: Vec<_> = [false, true]
+        let rows: Vec<_> = [true, false]
             .into_iter()
             .filter(|germline| !germline || self.germlines_searched)
             .map(|germline| DisplayRow {
@@ -410,10 +410,11 @@ impl NumberedAntibody {
                     .map(|c| {
                         if germline {
                             match c.operation {
-                                b'+' => b'-',
-                                b'-' => b'+',
-                                op => op,
+                                b'.' => b'.',
+                                _ => b' ',
                             }
+                        } else if self.germlines_searched {
+                            c.operation
                         } else if c.query_position.is_none() {
                             b'.'
                         } else {
@@ -426,12 +427,12 @@ impl NumberedAntibody {
                 } else {
                     combined.iter().map(|c| c.imputed).collect()
                 },
-                show_operations: germline,
+                show_operations: !germline && self.germlines_searched,
             })
             .collect();
         let body = render_rows(&rows, width, color, rulers, &regions)?;
         let intro = format!(
-            "Reference: {}; {} chain; {} numbering; {} CDR definition\nConfidence: {:.3}; matched profile positions: {}\nNumbered domain in supplied input: {}–{} (1-based)\n",
+            "Query: {}; {} chain; {} numbering; {} CDR definition\nConfidence: {:.3}; matched profile positions: {}\nNumbered domain in supplied input: {}–{} (1-based)\n",
             display_name(&self.name),
             self.chain,
             self.scheme,
@@ -715,8 +716,13 @@ mod tests {
     }
 
     #[test]
-    fn single_display_places_source_rulers_above_input_and_stitched_germlines() {
-        let sequence = format!("AAAAAA{}AAAAAA", SEQUENCE.replace("GGSFSTY", "GGGSGGSFSTY"));
+    fn single_display_places_germline_reference_above_query_with_source_rulers() {
+        let sequence = format!(
+            "AAAAAA{}AAAAAA",
+            SEQUENCE
+                .replace("GGSFSTY", "GGGSGGSFSTY")
+                .replace("RPGSS", "RPGS")
+        );
         let ab = number_antibody(
             &sequence,
             &NumberingOptions {
@@ -739,7 +745,7 @@ mod tests {
             {
                 let cells = line.split_whitespace().nth(2).unwrap();
                 let prefix = line.find(cells).unwrap();
-                let germline = lines[line_index + 2];
+                let germline = lines[line_index - 2];
                 assert!(
                     germline.starts_with(
                         &ab.v_match.as_ref().unwrap().hits[0]
@@ -747,7 +753,7 @@ mod tests {
                             .reference_name
                     )
                 );
-                assert!(!lines[line_index + 1].contains("CDR"));
+                assert!(!lines[line_index - 1].contains("CDR"));
                 let (row, j_name) = germline.rsplit_once("  ").unwrap();
                 let (row, last) = row.rsplit_once(' ').unwrap();
                 assert_eq!(
@@ -759,7 +765,7 @@ mod tests {
                 assert!(!row.ends_with(' '));
                 let visible = &row[prefix..];
                 let reference_cells = format!("{visible:width$}", width = cells.len());
-                let ops = &lines[line_index + 3][prefix..prefix + cells.len()];
+                let ops = &lines[line_index + 1][prefix..prefix + cells.len()];
                 reference_sequence.push_str(&reference_cells);
                 assert_eq!(
                     last.parse::<usize>().unwrap(),
@@ -779,8 +785,8 @@ mod tests {
                         }
                     }
                     match ops.as_bytes()[column] {
-                        b'+' => assert_eq!(residue, b'-'),
-                        b'-' => assert_eq!(reference_cells.as_bytes()[column], b'-'),
+                        b'+' => assert_eq!(reference_cells.as_bytes()[column], b'-'),
+                        b'-' => assert_eq!(residue, b'-'),
                         _ => {}
                     }
                 }
@@ -789,8 +795,8 @@ mod tests {
             assert!(reference_sequence.starts_with("      "));
             assert!(reference_sequence.ends_with("      "));
             assert!(
-                operations.contains('-'),
-                "insertions in the top input are germline deletions"
+                operations.contains('+') && operations.contains('-'),
+                "the query has both an insertion and a deletion relative to the germline"
             );
             assert!(operations.starts_with("      ") && operations.ends_with("      "));
             assert!(text.lines().all(|line| line.width() <= width));
@@ -813,7 +819,7 @@ mod tests {
                         if position.is_multiple_of(10) {
                             let label = position.to_string();
                             let stop = prefix + column + 1;
-                            assert_eq!(&lines[index + 1][stop - label.len()..stop], label);
+                            assert_eq!(&lines[index - 3][stop - label.len()..stop], label);
                         }
                         column += 1;
                     }

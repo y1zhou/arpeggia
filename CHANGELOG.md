@@ -38,9 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for one or more numbered antibodies through the ordered
   union of positions, preserving input row order and per-row CDR definitions.
   Heavy/light mixing and incompatible schemes fail; K/L mixtures are supported.
-- Antibody displays place the input above combined V/J references, with separate
-  gene labels, gray uncovered junctions and blank outer padding. Per-sequence
-  rulers preserve original input coordinates through imputation; reference-defined
+- Antibody displays place combined V/J references above the input query, with separate
+  gene labels, gray uncovered junctions and blank outer padding. Operations describe
+  the input relative to the germline: insertions are + and deletions are -. Per-sequence
+  rulers preserve original input coordinates through imputation; shared
   CDR bands span the marker, ruler and sequence rows, and yellow backgrounds identify
   imputed residues. Counts appear only after explicit imputation, including
   attempts that add zero residues; results retain `imputation_attempted`.

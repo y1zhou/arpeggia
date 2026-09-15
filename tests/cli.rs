@@ -550,7 +550,13 @@ fn antibody_cli_ruler_flag_preserves_compact_reference_first_blocks() {
         };
         let full = run(true);
         let compact = run(false);
-        assert!(full.contains("Reference: WT"));
+        let input_row = if command == "number-antibody" { 4 } else { 2 };
+        let role = if command == "number-antibody" {
+            "Query"
+        } else {
+            "Reference"
+        };
+        assert!(full.contains(&format!("{role}: WT")));
         assert!(!full.contains('\x1b'));
         assert!(full.lines().all(|l| l.len() <= 80));
         let full_blocks: Vec<_> = full.split("\n\n").skip(1).collect();
@@ -560,7 +566,10 @@ fn antibody_cli_ruler_flag_preserves_compact_reference_first_blocks() {
         for (full, compact) in full_blocks.iter().zip(compact_blocks) {
             let rows: Vec<_> = full.lines().collect();
             assert_eq!(rows.len(), 6);
-            assert!(rows[2].starts_with("WT "));
+            assert!(rows[input_row].starts_with("WT "));
+            if command == "number-antibody" {
+                assert!(rows[2].starts_with("IGHV"));
+            }
             assert_eq!(
                 compact.lines().collect::<Vec<_>>(),
                 [rows[0], rows[2], rows[4], rows[5]]
