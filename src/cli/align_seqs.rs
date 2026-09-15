@@ -41,7 +41,7 @@ impl DisplayArgs {
 }
 #[derive(Parser, Debug, Clone)]
 #[command(
-    after_help = "Example: arpeggia align-seqs GGACDEFGHIKGG ACDEFGHIK --mode semi-global\nInputs are amino-acid strings, without whitespace, gaps, or stop symbols.\nSemi-global consumes the complete second sequence with free first-sequence tails.\nIdentity/coverage are ratios, reported using alignment and shorter-input lengths.\nUse --json for plain structured data; display controls do not affect alignment."
+    after_help = "Example: arpeggia align-seqs GGACDEFGHIKGG ACDEFGHIK --mode semi-global\n\nInputs are amino-acid strings, without whitespace, gaps, or stop symbols.\nSemi-global consumes the complete second sequence with free first-sequence tails.\nIdentity/coverage are ratios, reported using alignment and shorter-input lengths.\nUse --json for plain structured data; display controls do not affect alignment."
 )]
 pub(crate) struct Args {
     /// First unaligned protein sequence
