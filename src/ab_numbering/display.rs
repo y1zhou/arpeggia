@@ -442,6 +442,14 @@ impl NumberedAntibody {
             if let Some(matching) = matching {
                 let hit = &matching.hits[0];
                 let shown = &hit.references[0];
+                details.push_str(&format!(
+                    "{segment} input similarity (shown: {} {}): score {}; known identity {:.3}; germline/input coverage {:.3}/{:.3}\n",
+                    display_name(&shown.species), display_name(&gene_name(shown)),
+                    matching.score, hit.known_identity, hit.reference_coverage, hit.query_coverage,
+                ));
+                if matching.hits.len() == 1 && hit.references.len() == 1 {
+                    continue;
+                }
                 // Names may identify several accession records. Group display
                 // names by species while retaining every source in the result.
                 let mut names: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
@@ -468,11 +476,8 @@ impl NumberedAntibody {
                     })
                     .collect::<Vec<_>>()
                     .join("; ");
-                let record_label = if records == 1 { "record" } else { "records" };
                 details.push_str(&format!(
-                    "{segment} input similarity (shown: {} {}): score {}; known identity {:.3}; germline/input coverage {:.3}/{:.3}\nTied {segment} references ({records} {record_label}): {names}\n",
-                    display_name(&shown.species), display_name(&gene_name(shown)),
-                    matching.score, hit.known_identity, hit.reference_coverage, hit.query_coverage,
+                    "Tied {segment} references ({records} records): {names}\n",
                 ));
             }
         }
@@ -629,10 +634,16 @@ mod tests {
                     .iter()
                     .flat_map(|h| &h.references)
                     .collect();
-                assert!(text.contains(&format!(
-                    "Tied {segment} references ({} record",
-                    references.len()
-                )));
+                assert_eq!(
+                    text.contains(&format!("Tied {segment} references")),
+                    references.len() > 1,
+                );
+                if references.len() > 1 {
+                    assert!(text.contains(&format!(
+                        "Tied {segment} references ({} records)",
+                        references.len()
+                    )));
+                }
                 for r in references {
                     assert!(text.contains(&r.species));
                     assert!(text.contains(&format!("{}*{}", r.gene, r.allele)));

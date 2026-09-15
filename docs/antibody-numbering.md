@@ -178,8 +178,10 @@ gene on the left and J gene on the right. Each wrapped block has this order:
 4. Operations relative to the input
 
 Only the representative V/J sequences are shown. The separate V/J summaries
-identify them and list every tied gene/allele name, grouped by species. Duplicate
-names collapse in the display; all source records remain in the result.
+identify them. A `Tied V/J references` line appears only when multiple source
+records share the best score; it includes the representative and all tied
+gene/allele names, grouped by species. Duplicate names collapse in that list;
+all source records remain in the result.
 
 The top legend and vertical bands use gray for CDR1, pink for CDR2 and cyan for
 CDR3. Bands cover markers, rulers and sequences, including gaps, but exclude
