@@ -19,7 +19,7 @@ struct NumberingArgs {
     /// Restrict references, comma-separated; unused with --no-germlines (default: all)
     #[arg(long, value_enum, value_delimiter = ',')]
     species: Vec<GermlineSpecies>,
-    /// Impute only supported missing beginnings of FR1 and ends of FR4
+    /// Impute supported FR1/FR4 termini and show the imputed-residue count, including zero
     #[arg(long)]
     impute: bool,
     /// Exact tied V reference ID to use for imputation (from --json)

@@ -200,6 +200,8 @@ pub struct NumberedAntibody {
     pub diagnostics: Vec<String>,
     /// Whether V/J matching ran, even if neither segment had a qualifying match.
     pub germlines_searched: bool,
+    /// Whether imputation was attempted, including attempts that added no residues.
+    pub imputation_attempted: bool,
     /// Best qualifying V similarities, or none when skipped or evidence is insufficient.
     pub v_match: Option<GermlineMatch>,
     /// Best qualifying J similarities, or none when skipped or evidence is insufficient.

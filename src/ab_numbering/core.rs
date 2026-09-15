@@ -289,6 +289,7 @@ pub(super) fn number(
         matched_profile_positions: matched,
         diagnostics,
         germlines_searched: options.match_germlines,
+        imputation_attempted: false,
         v_match: None,
         j_match: None,
     };

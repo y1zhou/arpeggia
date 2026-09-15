@@ -44,6 +44,7 @@ impl NumberedAntibody {
             .position
             .order(scheme.backend(), chain);
         let mut result = self.clone();
+        result.imputation_attempted = true;
         for (matching, selector, region) in [
             (&self.v_match, v_reference, "FR1"),
             (&self.j_match, j_reference, "FR4"),

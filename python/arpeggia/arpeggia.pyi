@@ -812,6 +812,10 @@ class NumberedAntibody:
         """Whether V/J matching ran, even if no reference qualified."""
 
     @property
+    def imputation_attempted(self) -> bool:
+        """Whether imputation was attempted, including attempts that added no residues."""
+
+    @property
     def v_match(self) -> GermlineMatch | None:
         """Best qualifying V similarities, or none when skipped or evidence is insufficient."""
 
@@ -864,7 +868,8 @@ class NumberedAntibody:
         Returns:
             NumberedAntibody: Original input/span preserved, with source IDs
                 and input_index=None for added residues. Internal gaps and
-                unknown input residues remain unchanged.
+                unknown input residues remain unchanged. imputation_attempted is
+                True, even if no residues were added.
 
         Raises:
             ValueError: Germline matching was skipped, or the reference selector
@@ -883,7 +888,8 @@ class NumberedAntibody:
         Each block contains one CDR marker row, input ruler and sequence, germline
         ruler and sequence, then operations relative to the input. CDR1/2/3 bands
         are gray/pink/cyan across every row except operations. Yellow backgrounds mark
-        imputed residues and their summary count. All tied reference names appear
+        imputed residues and their summary count. The count appears only after
+        impute(), including when zero residues were added. All tied reference names appear
         in the summary; only representative V/J sequences are shown. If matching
         was skipped, show only the input, ruler and CDR markers, with a skipped
         summary message. Formatting never triggers matching.
@@ -940,7 +946,8 @@ class AntibodyAlignment:
 
         The selected reference defines the shared CDR bands and the convention
         summary. Each row retains its own original input coordinates. Imputed
-        residues have yellow backgrounds; the summary count totals all antibodies.
+        residues have yellow backgrounds. If any antibody underwent impute(), the
+        summary count totals all antibodies, including zero; otherwise it is omitted.
 
         Args:
             width (int | None): Total columns including labels; None detects

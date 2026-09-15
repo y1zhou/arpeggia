@@ -178,6 +178,7 @@ impl NumberedAntibody {
     ///         residues have input_index=None and imputed_from reference IDs.
     ///         Internal gaps, CDRs and unknown input residues remain unchanged.
     ///         Unsupported or conflicting reference evidence stays unresolved.
+    ///         imputation_attempted is True, even if no residues were added.
     ///
     /// Raises:
     ///     ValueError: Germline matching was skipped, or a selector is absent from
@@ -202,7 +203,8 @@ impl NumberedAntibody {
     /// Each block contains one CDR marker row, input ruler and sequence, germline
     /// ruler and sequence, then operations relative to the input. CDR1/2/3 bands
     /// are gray/pink/cyan across every row except operations. Yellow backgrounds mark
-    /// imputed residues and their summary count. All tied reference names appear
+    /// imputed residues and their summary count. The count appears only after
+    /// impute(), including when zero residues were added. All tied reference names appear
     /// in the summary; only representative V/J sequences are shown. If matching
     /// was skipped, show only the input, ruler and CDR markers, with a skipped
     /// summary message. Formatting never triggers matching.
@@ -248,7 +250,8 @@ impl AntibodyAlignment {
     ///
     /// The selected reference defines the shared CDR bands and the convention
     /// summary. Each row retains its own original input coordinates. Imputed
-    /// residues have yellow backgrounds; the summary count totals all antibodies.
+    /// residues have yellow backgrounds. If any antibody underwent impute(), the
+    /// summary count totals all antibodies, including zero; otherwise it is omitted.
     ///
     /// Args:
     ///     width (int | None): Total visible width, detected from the terminal

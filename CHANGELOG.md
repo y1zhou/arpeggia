@@ -39,7 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gene labels, gray uncovered junctions and blank outer padding. Per-sequence
   rulers preserve original input coordinates through imputation; reference-defined
   CDR bands span the marker, ruler and sequence rows, and yellow backgrounds identify
-  imputed residues and their count. Germline rulers count continuously through
+  imputed residues. Counts appear only after explicit imputation, including
+  attempts that add zero residues; results retain `imputation_attempted`.
+  Germline rulers count continuously through
   V then J, with endpoint and gene labels beside the visible sequence.
   Summaries provide colored CDR legends and show tied V/J names only when
   multiple reference records share the best score.

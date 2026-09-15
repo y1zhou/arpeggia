@@ -574,6 +574,27 @@ fn antibody_cli_ruler_flag_preserves_compact_reference_first_blocks() {
 }
 
 #[test]
+fn antibody_cli_imputation_summary_requires_impute() {
+    for command in ["number-antibody", "align-antibodies"] {
+        for impute in [false, true] {
+            let mut args = vec![command, ANTIBODY_SEQUENCE, "--color", "never"];
+            if impute {
+                args.push("--impute");
+            }
+            let output = arpeggia().args(args).output().unwrap();
+            assert!(output.status.success(), "{:?}", output);
+            let text = String::from_utf8(output.stdout).unwrap();
+            assert_eq!(text.contains("imputed residues:"), impute);
+            if impute {
+                assert!(text.contains("imputed residues: 0"));
+            }
+            assert!(text.contains("CDR regions:"));
+            assert!(!text.contains("Total CDR"));
+        }
+    }
+}
+
+#[test]
 fn antibody_cli_can_skip_germlines_without_disabling_numbering() {
     for command in ["number-antibody", "align-antibodies"] {
         let args = [

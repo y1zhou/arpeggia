@@ -92,6 +92,8 @@ unchanged. Reuse stored matches. Fill a position only when tied references agree
 on its presence and known amino acid, unless the caller selects an exact tied
 reference ID. Missing matches, unavailable endpoints and conflicts remain
 unresolved with diagnostics. Every inferred residue retains its source IDs.
+Retain `imputation_attempted`: zero added residues alone cannot distinguish an
+unrequested operation from an attempted imputation that added nothing.
 
 ## Antibody alignments and display
 

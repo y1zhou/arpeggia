@@ -679,6 +679,9 @@ def test_antibody_imputation_is_explicit_and_preserves_input():
     assert "".join(r.amino_acid for r in observed) == original
     assert all(r.imputed_from for r in completed.residues if r.input_index is None)
     assert all(r.input_index is not None for r in partial.residues)
+    assert not partial.imputation_attempted
+    assert completed.imputation_attempted
+    assert "imputed residues:" not in partial.format(color="never")
     assert "imputed residues:" in completed.format(color="never")
 
 
@@ -712,6 +715,11 @@ def test_antibody_display_and_reference_override(monkeypatch):
             assert len(rows) == 6
             assert rows[2].startswith(top_name)
             assert compact.splitlines() == [rows[i] for i in [0, 2, 4, 5]]
+        assert "imputed residues:" not in with_rulers
+    imputed = first.impute()
+    assert imputed.imputation_attempted and not first.imputation_attempted
+    assert all(r.input_index is not None for r in imputed.residues)
+    for result in [imputed, arpeggia.align_antibodies([first, imputed])]:
         assert "\x1b[43mimputed residues: 0\x1b[0m" in result.format(color="always")
     with pytest.raises(ValueError, match="reference_index"):
         alignment.format(reference_index=3)

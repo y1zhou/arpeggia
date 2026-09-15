@@ -159,7 +159,8 @@ Imputation returns a new object and fills only missing beginnings of FR1 or ends
 of FR4. It preserves the supplied input, domain span, existing positions, internal
 gaps, CDRs, and unknown input residues. Added residues have `input_index=None`
 and `.imputed_from` reference IDs. Scores and coverage still describe the
-supplied input.
+supplied input. The read-only `.imputation_attempted` flag is `False` on fresh
+numbering and `True` on the returned result, even when no residues were added.
 
 Tied references must agree on a position's presence and known amino acid.
 Conflicts or unavailable coverage remain unresolved with diagnostics. To choose
@@ -186,8 +187,9 @@ all source records remain in the result.
 The top legend and vertical bands use gray for CDR1, pink for CDR2 and cyan for
 CDR3. Bands cover markers, rulers and sequences, including gaps, but exclude
 operations and name gutters. Yellow backgrounds mark imputed residues and the
-`imputed residues` count, including zero. Imputation highlighting takes precedence
-over a CDR background at the same residue.
+`imputed residues` count. The count appears only after CLI `--impute` or Python
+`.impute()`, including when the operation adds zero residues. Imputation
+highlighting takes precedence over a CDR background at the same residue.
 
 Rulers show one-based residue positions, with every tenth position right-aligned
 above its residue. Endpoint numbers flank each row.
@@ -229,9 +231,9 @@ alignment. `.format(reference_index=...)` changes one display without changing
 stored rows, columns, or the default reference. The selected reference defines
 the CDR bands across every sequence and ruler; the summary names that reference,
 its numbering scheme and CDR definition. Each antibody retains its own region
-annotations. Rulers follow each original input. The header
-`Total imputed residues: N` sums imputation across every antibody in the alignment,
-including the reference.
+annotations. Rulers follow each original input. If any included antibody has
+undergone `.impute()`, the header `Total imputed residues: N` sums imputation
+across every antibody, including the reference; otherwise the count is omitted.
 
 ## Scope and qualification
 

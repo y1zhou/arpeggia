@@ -37,13 +37,19 @@ fn cdr_bands(mut regions: Vec<u8>) -> Vec<u8> {
     regions
 }
 
-fn summary(intro: &str, imputed: usize, details: &str, width: usize, color: bool) -> String {
-    let count = format!("imputed residues: {imputed}");
+fn summary(
+    intro: &str,
+    imputed: Option<usize>,
+    details: &str,
+    width: usize,
+    color: bool,
+) -> String {
+    let count = imputed.map_or_else(String::new, |n| format!("imputed residues: {n}\n"));
     wrap_styled_summary(
         [
             (intro, Style::new()),
             (count.as_str(), imputed_style()),
-            ("\nCDR regions: ", Style::new()),
+            ("CDR regions: ", Style::new()),
             ("1 = CDR1", region_style(1)),
             (", ", Style::new()),
             ("2 = CDR2", region_style(2)),
@@ -157,20 +163,26 @@ impl AntibodyAlignment {
             .collect();
         let body = render_rows(&rows, width, color, rulers, &cdr_bands(regions))?;
         let selected = &self.antibodies[reference];
+        let imputed = self
+            .antibodies
+            .iter()
+            .any(|a| a.imputation_attempted)
+            .then(|| {
+                self.antibodies
+                    .iter()
+                    .flat_map(|a| &a.residues)
+                    .filter(|r| r.input_index.is_none())
+                    .count()
+            });
         let intro = format!(
-            "{} antibodies; {} positions\nReference: {}; {} numbering; {} CDR definition\nTotal ",
+            "{} antibodies; {} positions\nReference: {}; {} numbering; {} CDR definition\n{}",
             self.antibodies.len(),
             self.positions.len(),
             display_name(&selected.name),
             selected.scheme,
             selected.cdr_definition,
+            if imputed.is_some() { "Total " } else { "" },
         );
-        let imputed = self
-            .antibodies
-            .iter()
-            .flat_map(|a| &a.residues)
-            .filter(|r| r.input_index.is_none())
-            .count();
         let mut output = summary(&intro, imputed, "", width, color);
         output.push_str(&body);
         Ok(output.trim_end_matches('\n').into())
@@ -429,11 +441,12 @@ impl NumberedAntibody {
             self.domain_span.0 + 1,
             self.domain_span.1,
         );
-        let imputed = self
-            .residues
-            .iter()
-            .filter(|r| r.input_index.is_none())
-            .count();
+        let imputed = self.imputation_attempted.then(|| {
+            self.residues
+                .iter()
+                .filter(|r| r.input_index.is_none())
+                .count()
+        });
         let mut details = String::new();
         if !self.germlines_searched {
             details.push_str("Germline matching: skipped\n");
@@ -581,6 +594,8 @@ mod tests {
                 ..Default::default()
             },
         )
+        .unwrap()
+        .impute(None, None)
         .unwrap();
         assert_eq!(
             ab.j_match
