@@ -16,7 +16,7 @@ struct NumberingArgs {
     /// Skip V/J matching; retain numbering and CDRs (incompatible with --impute)
     #[arg(long, conflicts_with = "impute")]
     no_germlines: bool,
-    /// Restrict references, comma-separated; unused with --no-germlines (default: all)
+    /// Restrict references by common or Latin name, comma-separated; unused with --no-germlines (default: all)
     #[arg(long, value_enum, value_delimiter = ',')]
     species: Vec<GermlineSpecies>,
     /// Impute supported FR1/FR4 termini and show the imputed-residue count, including zero

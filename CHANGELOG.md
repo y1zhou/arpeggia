@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Offline human, mouse, alpaca, llama, rat and rabbit V/J germline similarities, with explicit
   species restrictions, known-residue coverage, tied gene/allele references,
   and attributed IMGT release 202636-7 data plus a separate llama protein-display
-  supplement (six V and five J references). `llama` accepts the alias `Lama glama`.
+  supplement (six V and five J references). CLI and Python accept common and
+  Latin species names with identical reference coverage.
   `match_germlines=False` /
   `--no-germlines` skip matching without changing numbering or CDRs; matching
   remains enabled by default.

@@ -6,18 +6,23 @@ use std::sync::LazyLock;
 /// Species available in the bundled germline reference snapshot.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum)]
 pub enum GermlineSpecies {
-    /// Human H/K/L references.
+    /// Human (Homo sapiens) H/K/L references.
+    #[value(alias = "Homo sapiens")]
     Human,
-    /// Mouse H/K/L references, including strains and subspecies.
+    /// Mouse (Mus musculus) H/K/L references, including strains and subspecies.
+    #[value(alias = "Mus musculus")]
     Mouse,
-    /// Alpaca heavy-chain/VHH references.
+    /// Alpaca (Vicugna pacos) heavy-chain/VHH references.
+    #[value(alias = "Vicugna pacos")]
     Alpaca,
     /// Llama (Lama glama) heavy-chain references from IMGT protein displays.
     #[value(alias = "Lama glama")]
     Llama,
-    /// Rat H/K/L references, including strains.
+    /// Rat (Rattus norvegicus) H/K/L references, including strains.
+    #[value(alias = "Rattus norvegicus")]
     Rat,
-    /// Rabbit H/K/L references, including strains.
+    /// Rabbit (Oryctolagus cuniculus) H/K/L references, including strains.
+    #[value(alias = "Oryctolagus cuniculus")]
     Rabbit,
 }
 

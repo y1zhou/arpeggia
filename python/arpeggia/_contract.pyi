@@ -8,7 +8,18 @@ ProtonationMode: TypeAlias = Literal["all-charged", "heuristic", "explicit-only"
 NumberingScheme: TypeAlias = Literal["imgt", "martin", "chothia", "aho", "kabat"]
 CdrDefinition: TypeAlias = Literal["auto", "imgt", "martin", "chothia", "aho", "kabat"]
 GermlineSpecies: TypeAlias = Literal[
-    "human", "mouse", "alpaca", "llama", "Lama glama", "rat", "rabbit"
+    "human",
+    "Homo sapiens",
+    "mouse",
+    "Mus musculus",
+    "alpaca",
+    "Vicugna pacos",
+    "llama",
+    "Lama glama",
+    "rat",
+    "Rattus norvegicus",
+    "rabbit",
+    "Oryctolagus cuniculus",
 ]
 AlignmentMode: TypeAlias = Literal["global", "local", "semi-global"]
 AtomSubset: TypeAlias = Literal["ca", "backbone", "heavy", "all"]

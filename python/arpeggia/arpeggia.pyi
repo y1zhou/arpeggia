@@ -722,10 +722,13 @@ def number_antibody(
             Chothia aliases Martin numbering.
         cdr_definition (str): Auto follows the scheme. An explicit definition
             requires an explicit scheme; Chothia uses distinct consensus regions.
-        species (str | Sequence[str] | None): Human, mouse, alpaca, llama (alias
-            "Lama glama"), rat, rabbit, or a sequence of these names. None searches
-            all bundled references. Alpaca/llama references cover heavy chains.
-            Unused when match_germlines=False.
+        species (str | Sequence[str] | None): Restrict references by common or Latin
+            name: "human"/"Homo sapiens", "mouse"/"Mus musculus",
+            "alpaca"/"Vicugna pacos", "llama"/"Lama glama",
+            "rat"/"Rattus norvegicus", or "rabbit"/"Oryctolagus cuniculus".
+            Accepts one name or a sequence; aliases include the same strains/subspecies.
+            None searches all bundled references. Alpaca/llama references cover heavy
+            chains. Unused when match_germlines=False.
         match_germlines (bool): True (default) searches V/J references. False skips
             matching without changing numbering, CDRs or recognition. Reading,
             displaying and serializing the result never trigger matching.

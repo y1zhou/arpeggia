@@ -564,8 +564,19 @@ def test_antibody_api_and_germline_correspondence():
     alias = number_antibody(ANTIBODY_SEQUENCE, scheme="chothia", species=["human"])
     assert alias.scheme == alias.cdr_definition == "martin"
     for result, prefix in [
+        (number_antibody(ANTIBODY_SEQUENCE, species="Homo sapiens"), "Homo sapiens"),
+        (number_antibody(ANTIBODY_SEQUENCE, species=["Mus musculus"]), "Mus musculus"),
+        (number_antibody(ANTIBODY_SEQUENCE, species="Vicugna pacos"), "Vicugna pacos"),
         (number_antibody(ANTIBODY_SEQUENCE, species="rat"), "Rattus norvegicus"),
+        (
+            number_antibody(ANTIBODY_SEQUENCE, species="Rattus norvegicus"),
+            "Rattus norvegicus",
+        ),
         (number_antibody(ANTIBODY_SEQUENCE, species="rabbit"), "Oryctolagus cuniculus"),
+        (
+            number_antibody(ANTIBODY_SEQUENCE, species=["Oryctolagus cuniculus"]),
+            "Oryctolagus cuniculus",
+        ),
         (number_antibody(ANTIBODY_SEQUENCE, species="llama"), "Lama glama"),
         (number_antibody(ANTIBODY_SEQUENCE, species=["Lama glama"]), "Lama glama"),
     ]:

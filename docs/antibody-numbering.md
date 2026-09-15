@@ -118,7 +118,18 @@ for measured savings.
 Offline references cover human, mouse, rat and rabbit H/K/L and alpaca/llama
 heavy chains, including VHH references. Search uses all bundled species by default;
 restrict it with `species="llama"`, `species=["rat", "rabbit"]`, or CLI
-`--species rat,rabbit`. `"Lama glama"` aliases `"llama"` in both APIs.
+`--species rat,rabbit`. Both APIs accept these equivalent names, including the
+same strains/subspecies. Quote Latin names in the shell: `--species "Homo sapiens"`.
+
+| Common name | Latin alias |
+| --- | --- |
+| `human` | `Homo sapiens` |
+| `mouse` | `Mus musculus` |
+| `alpaca` | `Vicugna pacos` |
+| `llama` | `Lama glama` |
+| `rat` | `Rattus norvegicus` |
+| `rabbit` | `Oryctolagus cuniculus` |
+
 The llama supplement contains six V and five J references from IMGT protein
 displays; it is a limited historical set, separate from the bulk snapshot.
 The same generic H/K/L profiles number every input; the species option restricts
