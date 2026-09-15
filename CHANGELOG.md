@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preserve supported alternate residue identities during structure loading and
   report the conformer-selection warning.
+- Respect the current process's Linux cgroup limits in pairwise RMSD memory checks.
 
 Qualification and benchmark reports:
 [sequence alignment](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md),

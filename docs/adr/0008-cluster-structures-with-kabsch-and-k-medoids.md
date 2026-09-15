@@ -109,8 +109,9 @@ without duplicated coordinates or indexed atom access in the hot loop. Raw
 structures and non-reference identity tables are discarded after preparation.
 
 `sysinfo` provides available-memory queries across supported platforms and
-current-process cgroup limits on Linux. Only RAM and the needed process limits
-are refreshed. Available RAM, rather than total or
+current-process cgroup limits on Linux. Only RAM and the current process are
+refreshed, without task enumeration. Root cgroup limits are a fallback when
+process limits are unavailable. Available RAM, rather than total or
 merely free RAM, is the relevant estimate of reusable capacity. A matrix-only
 preflight precedes parsing; a second check includes coordinate storage after
 preparing the first structure. The guide records the estimates, exclusions,
