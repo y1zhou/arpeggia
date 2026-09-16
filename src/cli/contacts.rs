@@ -35,11 +35,11 @@ pub(crate) struct Args {
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
     output_format: DataFrameFileType,
 
-    /// Compensation factor for VdW radii dependent interaction types
+    /// VdW distance tolerance in Ångströms
     #[arg(short = 'c', long = "vdw-comp", default_value_t = 0.1)]
     vdw_comp: f64,
 
-    /// Distance cutoff when searching for neighboring atoms
+    /// Neighbor-search distance cutoff in Ångströms
     #[arg(short, long, default_value_t = 6.5)]
     dist_cutoff: f64,
 

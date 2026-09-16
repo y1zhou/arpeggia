@@ -35,19 +35,20 @@ pub(crate) struct Args {
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
     output_format: DataFrameFileType,
 
-    /// Model number to analyze (default: 0, the first model)
+    /// Model serial to analyze (0 selects the first model)
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Probe radius r (smaller r detects more surface details and reports a larger surface)
+    /// Solvent probe radius in Ångströms. Smaller probes access narrower crevices;
+    /// larger probes exclude them. Total SASA changes depend on the structure.
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.4)]
     probe_radius: f32,
 
-    /// Number of points on the sphere for sampling
+    /// Positive number of sample points per atomic sphere
     #[arg(short = 'n', long = "num-points", default_value_t = 100)]
     n_points: usize,
 
-    /// Number of threads to use for parallel processing
+    /// Worker count (0 uses available processors)
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
 

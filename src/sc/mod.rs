@@ -48,9 +48,6 @@ pub struct ScResult {
 ///
 /// SC measures geometric fit at protein-protein interfaces.
 /// Higher SC values indicate better shape complementarity.
-/// - Typical antibody-antigen: 0.64-0.68
-/// - Typical protein-protein: 0.5-0.7
-/// - SC > 0.7 indicates very good complementarity
 ///
 /// # Arguments
 ///

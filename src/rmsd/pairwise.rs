@@ -1,9 +1,12 @@
 //! Ensemble structure input and pairwise RMSD calculation.
 
-use crate::rmsd::{
-    AtomIdentity, PreparedCoordinates, ResidueSelector, kabsch_prepared_rmsd,
-    kabsch_prepared_selected_rmsd, prepare_coordinate_union, select_coordinate_union,
-    validate_rmsd_selections, validate_selection_keys,
+use super::kabsch::{
+    PreparedCoordinates, kabsch_prepared_rmsd, kabsch_prepared_selected_rmsd,
+    prepare_coordinate_union,
+};
+use super::selection::{
+    AtomIdentity, ResidueSelector, select_coordinate_union, validate_rmsd_selections,
+    validate_selection_keys,
 };
 use crate::utils::polars_calculation_error;
 use crate::{
@@ -781,9 +784,23 @@ fn effective_available_memory() -> Option<u64> {
     let mut system = sysinfo::System::new();
     system.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
     let host = system.available_memory();
+    // Root cgroup limits can miss a stricter nested limit on this process.
+    #[cfg(target_os = "linux")]
+    let cgroup = sysinfo::get_current_pid().ok().and_then(|pid| {
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[pid]),
+            false,
+            sysinfo::ProcessRefreshKind::nothing().without_tasks(),
+        );
+        system.process(pid)?.cgroup_limits()
+    });
+    #[cfg(not(target_os = "linux"))]
+    let cgroup = None;
     minimum_available_memory(
         host,
-        system.cgroup_limits().map(|limits| limits.free_memory),
+        cgroup
+            .or_else(|| system.cgroup_limits())
+            .map(|limits| limits.free_memory),
     )
 }
 
@@ -1055,7 +1072,11 @@ mod tests {
 
     #[test]
     fn memory_guard_has_a_bypass_and_fallback_warning() {
-        assert!(memory_warnings_or_error(90, Some(100), "test").is_err());
+        let available = minimum_available_memory(1_000, Some(100));
+        assert_eq!(available, Some(100));
+        assert!(memory_warnings_or_error(81, available, "test").is_err());
+        assert!(memory_warnings_or_error(80, available, "test").is_ok());
+        assert_eq!(minimum_available_memory(50, Some(100)), Some(50));
         assert!(check_memory(u64::MAX, true, "test").is_ok());
         assert_eq!(
             memory_warnings_or_error(FALLBACK_WARNING_BYTES + 1, None, "test").unwrap()[0].code,

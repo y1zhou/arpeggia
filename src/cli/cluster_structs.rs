@@ -1,3 +1,4 @@
+use super::rmsd::RESIDUE_SELECTION_HELP;
 use super::{DataFrameFileType, prepare_df_output_dir, write_df_to_file, write_df_to_new_file};
 use arpeggia::{
     ArpeggiaError, ArpeggiaResult, AtomSubset, ClusterOptions, ClusteringMethod,
@@ -9,7 +10,7 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
 #[derive(Parser, Debug, Clone)]
-#[command(version, about)]
+#[command(version, about, after_help = RESIDUE_SELECTION_HELP)]
 pub(crate) struct Args {
     /// Non-recursive directory of PDB or mmCIF structures
     #[arg(short, long)]
@@ -51,19 +52,19 @@ pub(crate) struct Args {
     #[arg(long, default_value_t = 100)]
     max_iterations: usize,
 
-    /// Model number to select (0 selects the first model)
+    /// Model serial to select (0 independently selects the first model of each structure)
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Residues used to determine the rigid-body transform
+    /// Fit residues: comma-separated chains/ranges, e.g. A:1-100,B (empty: all)
     #[arg(short = 's', long, default_value_t = String::new())]
     superpose_residues: String,
 
-    /// Residues evaluated after applying the rigid-body transform
+    /// Evaluation residues, e.g. A:101-120 (empty: all; independent of fit selection)
     #[arg(short = 'r', long, default_value_t = String::new())]
     rmsd_residues: String,
 
-    /// Atom population used for fitting and RMSD
+    /// Atom population for fit/evaluation: ca, backbone (N/CA/C/O/OXT), heavy, or all
     #[arg(short = 'a', long, default_value = "ca")]
     atoms: AtomSubset,
 

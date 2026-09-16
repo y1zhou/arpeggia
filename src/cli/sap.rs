@@ -7,9 +7,9 @@ use tracing::{debug, error, info, trace};
 /// Granularity level for SAP score calculation.
 #[derive(ValueEnum, Clone, Debug, Copy)]
 enum SapLevel {
-    /// Calculate SAP score for each individual atom
+    /// Signed SAP score for each calibrated side-chain atom
     Atom,
-    /// Aggregate SAP score by residue
+    /// Sum positive side-chain atom scores per residue
     Residue,
 }
 
@@ -32,15 +32,16 @@ pub(crate) struct Args {
     #[arg(short = 't', long, default_value_t = DataFrameFileType::Csv)]
     output_format: DataFrameFileType,
 
-    /// Model number to analyze (default: 0, the first model)
+    /// Model serial to analyze (0 selects the first model)
     #[arg(short = 'm', long = "model", default_value_t = 0)]
     model_num: usize,
 
-    /// Probe radius r for SASA calculation (smaller r detects more surface details)
+    /// Solvent probe radius in Ångströms. Smaller probes access narrower crevices;
+    /// larger probes exclude them. Total SASA changes depend on the structure.
     #[arg(short = 'r', long = "probe-radius", default_value_t = 1.1)]
     probe_radius: f32,
 
-    /// Number of points on the sphere for SASA sampling
+    /// Positive number of sample points per atomic sphere for SASA
     #[arg(short = 'n', long = "num-points", default_value_t = 100)]
     n_points: usize,
 
@@ -48,7 +49,7 @@ pub(crate) struct Args {
     #[arg(short = 's', long = "sap-radius", default_value_t = 5.0)]
     sap_radius: f32,
 
-    /// Number of threads to use for parallel processing
+    /// Worker count (0 uses available processors)
     #[arg(short = 'j', long = "num-threads", default_value_t = 1)]
     num_threads: usize,
 

@@ -63,9 +63,8 @@ CB--SG--SG--CB dihedral is 60--120 degrees, but whose residue pair lacks an
 _Avoid_: Disulfide bond, inferred disulfide bond
 
 **Resolved Explicit Bond**:
-An input bond declaration that matches two atoms in the selected model and
-Selected Conformer. Contact calculation represents it with compact selected-atom
-identities while retaining the qualified declaration as its evidence.
+An input bond declaration matched to two atoms in the selected model and
+Selected Conformer, retaining that declaration as evidence.
 _Avoid_: Distance-inferred bond, unqualified bond
 
 **Peptide-Adjacent Residues**:
@@ -92,8 +91,7 @@ _Avoid_: Van der Waals clash
 
 **Observed Sequence**:
 The ordered polymer residues present in atomic coordinates for a selected model
-and chain. Model `0` selects the first model; solvent, ligands, and polymer
-residues without coordinates are omitted.
+and chain, excluding solvent, ligands, and residues without coordinates.
 _Avoid_: Complete sequence, declared sequence, all-model sequence
 
 **Declared Sequence**:
@@ -150,9 +148,7 @@ _Avoid_: Preparation validation, structure completion
 
 **Calculation Failure**:
 A validly requested analysis for which Arpeggia cannot produce a scientifically
-meaningful complete value. Rust returns a typed error, Python raises an
-exception, and the CLI exits unsuccessfully; no null or partial scalar is
-reported.
+meaningful complete value; no null or partial scalar represents success.
 _Avoid_: Missing result, nullable score, partial success
 
 **Sampled SC Interface**:
@@ -191,19 +187,134 @@ chain-residue ranges and atom subset.
 _Avoid_: Atom filter, alignment
 
 **Superposition Selection**:
-The exactly corresponding atoms used to determine the rigid-body Kabsch
-transform between two Structure Observations.
+The paired atoms eligible to determine the rigid-body transform between two
+Structure Observations. Refinement may exclude outlying pairs from fitting.
 _Avoid_: Fit selection, alignment selection, sequence alignment
 
 **RMSD Selection**:
-The exactly corresponding atoms whose residual distances are evaluated after
-applying a transform determined solely by the Superposition Selection.
+The paired atoms whose residual distances are evaluated under the transform
+determined by the Superposition Selection and any refinement. Rejection from
+fitting does not remove a pair from this evaluation set.
 _Avoid_: Fit selection, superposition selection
 
 **Exact Atom Correspondence**:
 A one-to-one pairing in which two Structure Selections contain the same atom
-identities. It is the required correspondence for the current RMSD method.
+identities, including chain, author residue number, insertion code, residue
+name, and atom name.
 _Avoid_: Common atoms, atom intersection
+
+**Sequence Alignment**:
+A scored correspondence between two amino-acid sequences, including paired
+residues, gaps, and any unaligned terminal segments.
+_Avoid_: Superposition, antibody numbering
+
+**Semi-Global Sequence Alignment**:
+An alignment consuming the entire second sequence while allowing unaligned
+terminal segments of the first sequence without penalty.
+_Avoid_: Symmetric overlap, local alignment
+
+**Alignment Operation**:
+A match, substitution, insertion, or deletion along a chosen alignment, directed
+from the reference sequence to the query sequence. Unaligned terminal segments
+are outside these operations.
+_Avoid_: Minimum edit script, sequence edit distance
+
+**Similar Substitution**:
+A nonidentical residue pair with a strictly positive substitution-matrix score,
+including accepted scoring aliases. It remains a mismatch for sequence identity
+and does not establish chemical equivalence for atom correspondence.
+_Avoid_: Identical residue, chemically equivalent residue
+
+**Sequence Identity**:
+The identical-residue pair count divided by either alignment-column count
+(including gaps) or shorter full input length, with the denominator named.
+_Avoid_: Substitution score, sequence coverage
+
+**Paired-Residue Coverage**:
+The nongap residue-pair count, including substitutions, divided by either
+alignment-column count or shorter full input length, with the denominator named.
+_Avoid_: Sequence identity, aligned span
+
+**Sequence Edit Distance**:
+The minimum number of single-residue substitutions, insertions, and deletions
+needed to convert one complete input sequence into the other.
+_Avoid_: Protein alignment score, edits along a chosen alignment
+
+**Chain Correspondence**:
+The pairing of chains between two Structure Observations within which residue
+correspondence is established.
+_Avoid_: Chain order, equal chain identifiers
+
+**Sequence-Derived Residue Correspondence**:
+Nongap residue pairs from an alignment of observed chain sequences, including
+substitutions. Author numbering can differ between paired residues.
+_Avoid_: Identical residues, equal residue numbers, antibody numbering
+
+**Antibody Numbering Scheme**:
+A convention assigning equivalent positions and insertion labels to antibody
+variable-domain residues. It is distinct from the method assigning those labels.
+_Avoid_: Numbering engine, CDR definition, sequence alignment
+
+**Numbered Antibody**:
+One antibody variable domain with assigned numbered positions and its location
+in the supplied sequence. It does not denote a paired or multidomain antibody.
+_Avoid_: Whole antibody molecule, paired heavy and light chains
+
+**Antibody Numbered Position**:
+A position within an antibody numbering scheme, including any insertion label.
+Its order follows the scheme rather than ordinary text or numeric sorting.
+_Avoid_: Input sequence offset, author residue number, alignment column
+
+**Source Residue Position**:
+The ordinal position of an amino acid in its own ungapped source sequence.
+Alignment gaps and residues belonging to another source do not advance it.
+_Avoid_: Alignment column, antibody numbered position, terminal width
+
+**Variable-Domain Input Span**:
+The interval of the supplied sequence assigned to the numbered variable domain.
+Its boundaries describe supplied residues and do not expand through imputation.
+_Avoid_: Alignment width, completed sequence length, germline coverage
+
+**CDR Definition**:
+A convention delimiting the three complementarity-determining regions and the
+framework regions of an antibody variable domain.
+_Avoid_: Numbering scheme, experimentally determined antigen-contact residues
+
+**Antibody Alignment**:
+One or more Numbered Antibodies whose columns correspond to numbered positions
+in a shared numbering scheme. Rows are all heavy chains or all light chains;
+kappa and lambda may be mixed. Each row retains its own CDR Definition.
+_Avoid_: Multiple sequence alignment, automatic renumbering, paired antibody
+
+**Antibody Alignment Reference**:
+A selected member of an Antibody Alignment used as the comparison origin for
+the other rows. It is an input antibody, not necessarily a Germline Reference.
+_Avoid_: Inferred ancestor, germline assignment, numbering scheme
+
+**Germline Reference**:
+A catalogued unrearranged immunoglobulin gene-segment sequence, identified by
+species, gene and allele. A matching reference does not establish ancestry.
+_Avoid_: Reconstructed ancestral antibody, species of origin
+
+**Germline Imputation**:
+An estimate of missing sequence residues using an aligned Germline Reference.
+The added residues are inferred sequence, not observations or reconstructed
+atomic coordinates.
+_Avoid_: Observed sequence, ancestral reconstruction, structure completion
+
+**Core RMSD**:
+The RMSD of retained fitting pairs under their final fitted transform.
+_Avoid_: Full-selection RMSD, final evaluation RMSD
+
+**Evaluation RMSD**:
+The RMSD of the RMSD Selection under the final fitting transform, including
+selected pairs rejected from fitting.
+_Avoid_: Core RMSD, refitted evaluation region
+
+**Refinement Cycle**:
+One inspection of current fitting-pair residuals, rejection of outliers, and
+refitting of survivors. The initial fit precedes all refinement cycles.
+_Avoid_: Initial fit, sequence realignment, numerical solver iteration
 
 **Medoid Structure**:
 An observed structure selected as a cluster representative because it minimizes

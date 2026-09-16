@@ -1,3 +1,5 @@
+pub(crate) mod ab_numbering;
+pub(crate) mod align_seqs;
 pub(crate) mod cluster_structs;
 pub(crate) mod contacts;
 pub(crate) mod dsasa;

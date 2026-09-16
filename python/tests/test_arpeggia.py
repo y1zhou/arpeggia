@@ -16,20 +16,6 @@ def test_pdb_file():
     return str(test_file)
 
 
-def test_import():
-    """Test that the module can be imported."""
-    import arpeggia
-    from arpeggia import _contract
-
-    assert hasattr(arpeggia, "__version__")
-    assert hasattr(arpeggia, "contacts")
-    assert hasattr(arpeggia, "sasa")
-    assert hasattr(arpeggia, "seq")
-    assert hasattr(arpeggia, "rmsd")
-    assert hasattr(arpeggia, "cluster_structs")
-    assert arpeggia.__all__ == list(_contract.EXPORTED_FUNCTIONS)
-
-
 def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
     """Expose exact-correspondence RMSD and clustering through Python."""
     import arpeggia
@@ -42,7 +28,7 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
             test_pdb_file,
             superpose_residues="A:1-20",
             rmsd_residues="A:1-20",
-        )
+        ).rmsd
         < 1e-12
     )
     assert (
@@ -50,13 +36,13 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
             test_pdb_file,
             test_pdb_file,
             superpose_residues="A:1-20",
-        )
+        ).rmsd
         < 1e-12
     )
     with pytest.raises(ValueError, match="RMSD Selection"):
         arpeggia.rmsd(
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             rmsd_residues="A:",
         )
 
@@ -107,13 +93,13 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
     with pytest.raises(ValueError, match="atoms must be"):
         arpeggia.rmsd(
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             atoms=cast(Any, "invalid"),
         )
 
 
 def test_contacts(test_pdb_file):
-    """Test the contacts function returns expected DataFrame structure."""
+    """Preserve the contact schema and scientific warnings at the Python boundary."""
     import arpeggia
     from arpeggia import _contract
 
@@ -123,24 +109,10 @@ def test_contacts(test_pdb_file):
         pytest.warns(UserWarning, match=r"^\[MISSING_DONOR_HYDROGEN\]"),
     ):
         df = arpeggia.contacts(test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5)
-
-    # Check DataFrame is not empty
-    assert df.height > 0, "Contacts DataFrame should not be empty"
-
-    # Check expected columns exist
-    expected_columns = _contract.CONTACT_COLUMNS
-
-    for col in expected_columns:
-        assert col in df.columns, (
-            f"Column '{col}' should be present in contacts DataFrame"
-        )
-
-    # Check shape - should have 20 columns (all expected columns)
-    assert df.width == 20, f"Expected 20 columns, got {df.width}"
-
-    # Verify some basic properties
-    assert df["distance"].dtype.is_float(), "Distance column should be float type"
-    assert all(df["distance"] >= 0), "All distances should be non-negative"
+    assert df.height > 0
+    assert set(df.columns) == set(_contract.CONTACT_COLUMNS)
+    assert df["distance"].dtype.is_float()
+    assert (df["distance"] >= 0).all()
 
 
 def test_contacts_ignore_zero_occupancy(tmp_path):
@@ -164,44 +136,20 @@ def test_contacts_ignore_zero_occupancy(tmp_path):
 
 
 def test_sasa(test_pdb_file):
-    """Test the sasa function returns expected DataFrame structure."""
+    """Preserve atom output and forward the requested probe radius."""
     import arpeggia
     from arpeggia import _contract
 
     df = arpeggia.sasa(test_pdb_file, probe_radius=1.4, n_points=100, model_num=0)
+    assert df.height == 602
+    assert set(df.columns) == set(_contract.SASA_COLUMNS["atom"])
+    assert df["sasa"].dtype.is_float()
+    assert (df["sasa"] >= 0).all()
+    assert (df["sasa"] > 0).any()
 
-    # Check DataFrame is not empty
-    assert df.height == 602, "SASA DataFrame should not be empty"
-
-    # Check expected columns exist
-    expected_columns = _contract.SASA_COLUMNS["atom"]
-
-    for col in expected_columns:
-        assert col in df.columns, f"Column '{col}' should be present in SASA DataFrame"
-
-    assert df.shape[1] == 9
-
-    # Verify SASA values are reasonable
-    assert df["sasa"].dtype.is_float(), "SASA column should be float type"
-    assert all(df["sasa"] >= 0), "All SASA values should be non-negative"
-    assert any(df["sasa"] > 0), "At least some atoms should have non-zero SASA"
-
-
-def test_sasa_parameters(test_pdb_file):
-    """Test SASA with different parameters."""
-    import arpeggia
-
-    # Test with different probe radius
-    df1 = arpeggia.sasa(test_pdb_file, probe_radius=1.4, n_points=100)
-    df2 = arpeggia.sasa(test_pdb_file, probe_radius=2.0, n_points=100)
-
-    # Both should return data
-    assert len(df1) > 0
-    assert len(df2) > 0
-
-    # Different probe radius should give different SASA values
-    # (though the number of atoms should be the same)
-    assert len(df1) == len(df2)
+    larger_probe = arpeggia.sasa(test_pdb_file, probe_radius=2.0, n_points=100)
+    assert larger_probe.height == df.height
+    assert not larger_probe["sasa"].equals(df["sasa"])
 
 
 def test_sasa_and_sap_default_model_uses_first_explicit_model(test_pdb_file, tmp_path):
@@ -237,34 +185,15 @@ def test_sasa_and_sap_default_model_uses_first_explicit_model(test_pdb_file, tmp
 
 
 def test_seq(test_pdb_file):
-    """Test the seq function returns expected structure."""
+    """Recover the complete observed ubiquitin sequence."""
     import arpeggia
 
-    seqs = arpeggia.seq(test_pdb_file)
-
-    # Check return type
-    assert isinstance(seqs, list), "Sequences should return a list"
-    assert len(seqs) > 0, "Should have at least one chain"
-
-    # For 1ubq.pdb, we know it has 1 chain with a specific sequence
-    # Chain should be present
-    assert len(seqs) == 1, f"Expected 1 chain, got {len(seqs)}"
-
-    # Check sequence properties
-    for chain_id, seq in seqs:
-        assert isinstance(chain_id, str), "Chain ID should be string"
-        assert isinstance(seq, str), "Sequence should be string"
-        assert len(seq) > 0, "Sequence should not be empty"
-
-        # For 1ubq, the sequence should be 76 residues
-        # This is the known ubiquitin sequence
-        assert len(seq) == 76, f"Expected 76 residues for ubiquitin, got {len(seq)}"
-
-        # Check it starts with the expected sequence
-        expected_start = "MQIFVKTLTG"
-        assert seq.startswith(expected_start), (
-            f"Sequence should start with {expected_start}, got {seq[:10]}"
+    assert arpeggia.seq(test_pdb_file) == [
+        (
+            "A",
+            "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
         )
+    ]
 
 
 def test_seq_selects_one_model(tmp_path):
@@ -284,22 +213,6 @@ def test_seq_selects_one_model(tmp_path):
     assert arpeggia.seq(str(structure), model_num=9) == [("A", "G")]
     with pytest.raises(ValueError, match="model 3 does not exist"):
         arpeggia.seq(str(structure), model_num=3)
-
-
-def test_sequences_validity(test_pdb_file):
-    """Test that returned sequences contain valid amino acid codes."""
-    import arpeggia
-
-    seqs = arpeggia.seq(test_pdb_file)
-
-    # Valid single-letter amino acid codes
-    valid_codes = set("ACDEFGHIKLMNPQRSTVWYX")
-
-    for chain_id, seq in seqs:
-        # All characters should be valid amino acid codes
-        assert all(aa in valid_codes for aa in seq), (
-            f"Sequence for chain {chain_id} contains invalid amino acid codes"
-        )
 
 
 def test_python_errors_and_conformer_warning(tmp_path):
@@ -401,3 +314,342 @@ def test_dsasa_matches_components(tmp_path):
     assert arpeggia.dsasa(str(structure), groups="A/B") == components[0]
     assert components[0] > 0
     assert components[0] == pytest.approx(sum(components[1:]))
+
+
+def test_sequence_alignment_results():
+    """Expose mappings, defined denominators, alias warnings, and frozen fields."""
+    import arpeggia
+
+    alignment = arpeggia.align_seqs(
+        reference="GGACDEFGHIKGG", query="ACDEFGHIK", mode="semi-global"
+    )
+    assert isinstance(alignment, arpeggia.SeqAlignment)
+    assert alignment.reference_span == (2, 11)
+    assert alignment.aligned_reference == alignment.aligned_query == "ACDEFGHIK"
+    assert alignment.operations == " " * 9
+    assert alignment.edit_distance == 4
+    assert alignment.identity_alignment == alignment.identity_shorter == 1.0
+    with pytest.raises(AttributeError):
+        alignment.score = 0  # ty: ignore[invalid-assignment] -- verify runtime immutability
+    empty = arpeggia.align_seqs("AAAA", "WWWW", mode="local")
+    assert empty.identity_alignment is None
+    assert empty.coverage_alignment is None
+    assert empty.coverage_shorter == 0.0
+    with pytest.warns(UserWarning, match="SEQUENCE_SCORING_ALIAS"):
+        aliases = arpeggia.align_seqs("UO", "CK")
+    assert aliases.matches == 0
+    with pytest.raises(ValueError):
+        arpeggia.align_seqs("ACD", "ACD", gap_open=0.001)
+    with pytest.raises(ValueError):
+        arpeggia.align_seqs("ACD", "ACD", gap_extend=11.0)
+
+
+def test_sequence_derived_rmsd(test_pdb_file, tmp_path):
+    """Map changed chain IDs and author numbering through the Python API."""
+    import arpeggia
+
+    query = tmp_path / "renumbered.pdb"
+    lines = []
+    for line in Path(test_pdb_file).read_text().splitlines():
+        if line.startswith(("ATOM  ", "HETATM")):
+            line = line[:21] + "H" + f"{int(line[22:26]) + 100:4d}" + line[26:]
+        elif line.startswith(("TER", "CONECT", "SSBOND", "LINK")):
+            continue
+        lines.append(line)
+    query.write_text("\n".join(lines) + "\n")
+    result = arpeggia.rmsd(
+        test_pdb_file,
+        query=str(query),
+        align_seqs=True,
+        chain_map={"A": "H"},
+        superpose_residues="A:1-20",
+        rmsd_residues="A:21-40",
+        refine_cycles=2,
+    )
+    assert isinstance(result, arpeggia.RmsdResult)
+    assert result.rmsd < 1e-12
+    assert result.core_rmsd < 1e-12
+    assert result.initial_fit_atoms == result.retained_fit_atoms == 20
+    assert result.evaluation_atoms == 20
+    assert result.cycles == 0
+    assert result.chain_alignments[0].residue_pairs[0].query_number == 101
+    assert result.chain_alignments[0].alignment is not None
+    assert result.chain_alignments[0].alignment.reference_name == "Reference A"
+    assert result.chain_alignments[0].alignment.query_name == "Query H"
+    with pytest.raises(AttributeError):
+        result.rmsd = 5  # ty: ignore[invalid-assignment] -- verify runtime immutability
+
+
+def test_alignment_display_controls(monkeypatch):
+    """Display policies honor terminal capability without coloring stored data."""
+    import sys
+
+    import arpeggia
+
+    alignment = arpeggia.align_seqs("ACDEFGHIKLMN", "ACDYGHIKLMN")
+    assert (alignment.reference_name, alignment.query_name) == ("Reference", "Query")
+    named = arpeggia.align_seqs(
+        "ACDEFGHIKLMN", "ACDYGHIKLMN", reference_name="Wild type", query_name="Mutant"
+    )
+    assert named.score == alignment.score
+    assert named.aligned_reference == alignment.aligned_reference
+    assert named.operations == alignment.operations
+    assert "Wild type" in named.format(color="never")
+    assert "Mutant" in named.format(color="never")
+    plain = alignment.format(width=40, color="never", rulers=False)
+    assert "operations" not in plain and "-" in alignment.operations
+    assert "\x1b" not in plain
+    assert all(len(line) <= 40 for line in plain.splitlines())
+    assert "\x1b[31m" in alignment.format(color="always")
+    assert "\x1b[34m:\x1b[0m" in alignment.format(color="always")
+    assert alignment.operations == "   -:       "
+    assert alignment.mismatches == 1
+    ruled = alignment.format(width=80, color="never")
+    assert (
+        len(ruled.splitlines())
+        == len(alignment.format(width=80, color="never", rulers=False).splitlines()) + 2
+    )
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    assert "\x1b[31m" in repr(alignment)
+    assert str(alignment) == repr(alignment) == alignment.format()
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert "\x1b" not in repr(alignment)
+    assert "\x1b" in alignment.format(color="always")
+    monkeypatch.delenv("NO_COLOR")
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
+    assert "\x1b" not in repr(alignment)
+    with pytest.raises(ValueError, match="width"):
+        alignment.format(width=1)
+    with pytest.raises(ValueError, match="color"):
+        alignment.format(color="bad")  # ty: ignore[invalid-argument-type] -- verify runtime validation
+
+
+ANTIBODY_SEQUENCE = (
+    "QVQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGGVIPLLTITNYAPRFQ"
+    "GRITITADRSTSTAYLELNSLRPEDTAVYYCAREGTTGKPIGAFAHWGQGTLVTVSS"
+)
+
+
+def test_antibody_api_and_germline_correspondence():
+    """Expose immutable numbered residues and tied, attributed reference matches."""
+    import arpeggia
+    from arpeggia.ab_numbering import number_antibody
+
+    antibody = number_antibody(ANTIBODY_SEQUENCE, name="WT", species="human")
+    assert isinstance(antibody, arpeggia.NumberedAntibody)
+    assert antibody.chain == "H" and antibody.scheme == "imgt"
+    assert antibody.sequence == ANTIBODY_SEQUENCE
+    assert (
+        "".join([
+            antibody.fr1,
+            antibody.cdr1,
+            antibody.fr2,
+            antibody.cdr2,
+            antibody.fr3,
+            antibody.cdr3,
+            antibody.fr4,
+        ])
+        == antibody.sequence
+    )
+    assert antibody.residues[0].input_index == 0
+    assert str(antibody.residues[0].position) == "1"
+    assert antibody.v_match is not None and antibody.j_match is not None
+    hit = antibody.v_match.hits[0]
+    assert (
+        hit.alignment.query
+        == ANTIBODY_SEQUENCE[: antibody.j_match.hits[0].query_input_start]
+    )
+    assert hit.known_pairs >= 50 and 0 <= hit.known_identity <= 1
+    assert all(ref.species.startswith("Homo sapiens") for ref in hit.references)
+    with pytest.raises(AttributeError):
+        cast(Any, antibody).name = "changed"
+    with pytest.raises(AttributeError):
+        cast(Any, antibody.residues[0]).amino_acid = "X"
+    with pytest.raises(ValueError, match="explicit scheme"):
+        number_antibody(ANTIBODY_SEQUENCE, cdr_definition="chothia")
+    with pytest.raises(RuntimeError, match="multiple variable domains"):
+        number_antibody(ANTIBODY_SEQUENCE + "GGGGSGGGGS" + ANTIBODY_SEQUENCE)
+    chothia = number_antibody(ANTIBODY_SEQUENCE, scheme="chothia", species=["human"])
+    assert chothia.scheme == chothia.cdr_definition == "chothia"
+    for result, prefix in [
+        (number_antibody(ANTIBODY_SEQUENCE, species="Homo sapiens"), "Homo sapiens"),
+        (number_antibody(ANTIBODY_SEQUENCE, species=["Mus musculus"]), "Mus musculus"),
+        (number_antibody(ANTIBODY_SEQUENCE, species="Vicugna pacos"), "Vicugna pacos"),
+        (number_antibody(ANTIBODY_SEQUENCE, species="rat"), "Rattus norvegicus"),
+        (
+            number_antibody(ANTIBODY_SEQUENCE, species="Rattus norvegicus"),
+            "Rattus norvegicus",
+        ),
+        (number_antibody(ANTIBODY_SEQUENCE, species="rabbit"), "Oryctolagus cuniculus"),
+        (
+            number_antibody(ANTIBODY_SEQUENCE, species=["Oryctolagus cuniculus"]),
+            "Oryctolagus cuniculus",
+        ),
+        (number_antibody(ANTIBODY_SEQUENCE, species="llama"), "Lama glama"),
+        (number_antibody(ANTIBODY_SEQUENCE, species=["Lama glama"]), "Lama glama"),
+    ]:
+        assert result.v_match is not None and result.j_match is not None
+        for matching in [result.v_match, result.j_match]:
+            assert all(
+                ref.species.startswith(prefix)
+                for hit in matching.hits
+                for ref in hit.references
+            )
+
+
+def test_numbered_positions_are_value_keys():
+    """Use copied position labels for residue/column correspondence in Python."""
+    import arpeggia
+
+    antibody = arpeggia.number_antibody(
+        ANTIBODY_SEQUENCE, scheme="martin", match_germlines=False
+    )
+    positions = [r.position for r in antibody.residues]
+    assert positions == [r.position for r in antibody.residues]
+    assert any(p.insertion for p in positions)
+    assert len(set(positions)) == len(positions)
+    assert positions[0] != positions[1]
+    assert positions[0] != str(positions[0])
+    alignment = arpeggia.align_antibodies([antibody])
+    assert all(p in alignment.positions for p in positions)
+    columns = {p: i for i, p in enumerate(alignment.positions)}
+    assert [columns[p] for p in positions] == list(range(len(positions)))
+
+
+def test_antibody_germline_opt_out_is_explicit():
+    """Keep skipped matching observable without warnings or deferred computation."""
+    import warnings
+
+    import arpeggia
+
+    searched = arpeggia.number_antibody(ANTIBODY_SEQUENCE)
+    assert searched.germlines_searched
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        skipped = arpeggia.number_antibody(
+            ANTIBODY_SEQUENCE, name="WT", species="alpaca", match_germlines=False
+        )
+        assert not skipped.germlines_searched
+        assert skipped.diagnostics == []
+        for rulers in [True, False]:
+            text = skipped.format(width=80, color="never", rulers=rulers)
+            assert "Germline matching: skipped" in text
+            assert "unavailable" not in text and "input similarity" not in text
+            assert "\x1b" not in text
+            assert all(len(line) <= 80 for line in text.splitlines())
+            blocks = text.split("\n\n")[1:]
+            assert all(
+                len(block.splitlines()) == (3 if rulers else 2) for block in blocks
+            )
+            assert (
+                "".join(block.splitlines()[-1].split()[2] for block in blocks)
+                == ANTIBODY_SEQUENCE
+            )
+        assert "\x1b" in skipped.format(color="always")
+        assert str(skipped) == repr(skipped)
+        assert skipped.v_match is None and skipped.j_match is None
+        assert not skipped.germlines_searched
+        comparison = arpeggia.align_antibodies([searched, skipped])
+        assert comparison.aligned_sequences == [ANTIBODY_SEQUENCE, ANTIBODY_SEQUENCE]
+        assert not comparison.antibodies[1].germlines_searched
+    with pytest.raises(AttributeError):
+        cast(Any, skipped).germlines_searched = True
+    with pytest.raises(ValueError, match="imputation requires germline matching"):
+        skipped.impute()
+
+
+def test_python_warning_filters_and_new_imputation_diagnostics():
+    """Emit new diagnostics once and let Python filters promote warnings to errors."""
+    import warnings
+
+    import arpeggia
+
+    original = ANTIBODY_SEQUENCE[5:-3]
+    with pytest.warns(UserWarning, match="PARTIAL_DOMAIN") as notices:
+        partial = arpeggia.number_antibody(original, species="alpaca")
+    assert len(notices) == 1
+    with pytest.warns(UserWarning, match="IMPUTATION_REFERENCE_COVERAGE") as notices:
+        partial.impute()
+    assert len(notices) == 1
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        with pytest.raises(UserWarning, match="SEQUENCE_SCORING_ALIAS"):
+            arpeggia.align_seqs("U", "C")
+        with pytest.raises(UserWarning, match="PARTIAL_DOMAIN"):
+            arpeggia.number_antibody(original, match_germlines=False)
+        with pytest.raises(UserWarning, match="IMPUTATION_REFERENCE_COVERAGE"):
+            partial.impute()
+
+
+def test_antibody_imputation_is_explicit_and_preserves_input():
+    """Preserve observations when terminal imputation adds inferred residues."""
+    import arpeggia
+
+    original = ANTIBODY_SEQUENCE[5:-3]
+    with pytest.warns(UserWarning, match="PARTIAL_DOMAIN"):
+        partial = arpeggia.number_antibody(original, species="human")
+    assert partial.v_match is not None and partial.j_match is not None
+    completed = partial.impute(
+        v_reference=partial.v_match.hits[0].references[0].id,
+        j_reference=partial.j_match.hits[0].references[0].id,
+    )
+    assert completed.input_sequence == partial.input_sequence == original
+    assert completed.domain_span == partial.domain_span
+    assert len(completed.sequence) > len(original)
+    observed = [r for r in completed.residues if r.input_index is not None]
+    assert "".join(r.amino_acid for r in observed) == original
+    assert all(r.imputed_from for r in completed.residues if r.input_index is None)
+    assert all(r.input_index is not None for r in partial.residues)
+    assert not partial.imputation_attempted
+    assert completed.imputation_attempted
+    assert "imputed residues:" not in partial.format(color="never")
+    assert "imputed residues:" in completed.format(color="never")
+
+
+def test_antibody_display_and_reference_override(monkeypatch):
+    """Keep presentation choices separate from stored rows and reference selection."""
+    import io
+    import sys
+
+    import arpeggia
+
+    first = arpeggia.number_antibody(ANTIBODY_SEQUENCE, name="first")
+    second = arpeggia.number_antibody(ANTIBODY_SEQUENCE, name="second")
+    alignment = arpeggia.align_antibodies([first, second], reference_index=0)
+    assert alignment.aligned_sequences[0].replace("-", "") == first.sequence
+    plain = alignment.format(width=60, color="never", rulers=False, reference_index=1)
+    assert plain.index("second") < plain.index("first")
+    assert "IGHV" not in plain and "IGHJ" not in plain
+    assert alignment.reference_index == 0 and alignment.antibodies[0].name == "first"
+    assert all(len(line) <= 60 for line in plain.splitlines())
+    assert "\x1b[" in alignment.format(color="always")
+    assert "CDR1" in first.format(color="never")
+    assert "IGHJ" in first.format(color="never")
+    assert first.v_match is not None
+    germline_name = first.v_match.hits[0].alignment.reference_name
+    for result, top_name in [(first, germline_name), (alignment, "first")]:
+        with_rulers = result.format(width=60, color="never")
+        without_rulers = result.format(width=60, color="never", rulers=False)
+        blocks = with_rulers.split("\n\n")[1:]
+        compact_blocks = without_rulers.split("\n\n")[1:]
+        assert len(blocks) == len(compact_blocks)
+        for full, compact in zip(blocks, compact_blocks, strict=True):
+            rows = full.splitlines()
+            assert len(rows) == 6
+            assert rows[2].startswith(top_name)
+            assert compact.splitlines() == [rows[i] for i in [0, 2, 4, 5]]
+        assert "imputed residues:" not in with_rulers
+    imputed = first.impute()
+    assert imputed.imputation_attempted and not first.imputation_attempted
+    assert all(r.input_index is not None for r in imputed.residues)
+    for result in [imputed, arpeggia.align_antibodies([first, imputed])]:
+        assert "\x1b[43mimputed residues: 0\x1b[0m" in result.format(color="always")
+    with pytest.raises(ValueError, match="reference_index"):
+        alignment.format(reference_index=3)
+    with pytest.raises(ValueError, match="width"):
+        first.format(width=1)
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    assert "\x1b" not in repr(first)
+    assert "\x1b" not in repr(alignment)

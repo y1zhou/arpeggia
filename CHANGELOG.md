@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pairwise protein sequence alignment with global, local and semi-global modes,
+  alignment statistics and styled displays. See the
+  [sequence-alignment guide](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md).
+- Antibody numbering with IMGT, Chothia, Martin, AHo and Kabat; explicit CDR
+  conventions, offline V/J matching for six species, terminal imputation and
+  numbered-position alignments. See the
+  [antibody guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+  for conventions, species coverage and parallel Python usage.
+- Optional sequence correspondence and rejection/refitting for two-structure
+  RMSD. See the
+  [RMSD guide](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md#establish-structural-correspondence).
+
+### Changed
+
+- **Breaking:** Python `rmsd()` returns `RmsdResult` instead of a scalar; use
+  `.rmsd` for full evaluation or `.core_rmsd` for retained fitting atoms.
+  Rust `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`.
+  CLI RMSD supports detailed text and JSON output.
+- Consolidated redundant surface/API tests while retaining schema, numerical,
+  warning and input-validation coverage.
+- Expanded CLI help and Python docstrings; consolidated documentation and
+  restored detailed [Python/CLI examples](https://github.com/y1zhou/arpeggia/blob/master/docs/examples.md).
+- Bundled germline attribution appears in the README, linking the
+  [source credits and provenance](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
+- Corrected scientific/API descriptions of SASA, SAP, SC, output schemas and
+  clustering limits; see the [scientific conventions](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md).
+
+### Fixed
+
+- Preserve supported alternate residue identities during structure loading and
+  report the conformer-selection warning.
+- Respect the current process's Linux cgroup limits in pairwise RMSD memory checks.
+
+Qualification and benchmark reports:
+[sequence alignment](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md),
+[antibody numbering](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md).
+
 ## [0.9.2] - 2026-09-08
 
 ### Changed
@@ -33,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and benchmark evidence, and reorganized README features and usage guidance.
   Removed machine-specific paths, unavailable benchmark commands, and repeated prose.
   Scientific conventions now include a contact-identification decision diagram
-  in a dedicated [document](docs/scientific-conventions.md).
+  in a dedicated [document](https://github.com/y1zhou/arpeggia/blob/master/docs/scientific-conventions.md).
 
 ### Fixed
 
@@ -55,11 +94,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   threads and retained identical outputs. A synthetic 5,632-ring case reduced
   peak process RSS from about 249 MiB to 7 MiB. These are ring-classification
   measurements, not end-to-end contact-analysis speedups; details are in the
-  [cleanup audit](docs/research/v0.9.2-cleanup-audit.md#ring-ring-enumeration-benchmark).
-- The [5B8C benchmark and cleanup audit](docs/research/v0.9.2-cleanup-audit.md)
+  [contact benchmarks](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/contacts.md#ring-ring-enumeration-benchmark).
+- The [5B8C benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/contacts.md#5b8c-contacts-lazy-versus-eager-ndjson)
   records essentially unchanged contact generation (+0.8–1.2%) and unchanged
   or faster NDJSON loading on a 2,574-row contacts table after removing the
   lazy engine. These measurements do not establish performance for all inputs.
+  [Package-size measurements](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/package-size.md)
+  record the dependency reduction and archive checks.
 
 ## [0.9.1] - 2026-09-02
 

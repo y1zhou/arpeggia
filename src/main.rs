@@ -17,13 +17,19 @@ struct Cli {
 
 #[derive(Subcommand, Clone)]
 enum Commands {
-    /// Superpose two structures and print their RMSD in Angstroms
+    /// Number one antibody variable domain and compare its V/J germline references
+    NumberAntibody(crate::cli::ab_numbering::NumberArgs),
+    /// Align antibody sequences by numbered positions
+    AlignAntibodies(crate::cli::ab_numbering::AlignArgs),
+    /// Align two unaligned protein sequences
+    AlignSeqs(crate::cli::align_seqs::Args),
+    /// Superpose two structures and report fitting and evaluation RMSD
     Rmsd(crate::cli::rmsd::Args),
     /// Cluster a directory of exactly corresponding protein structures
     ClusterStructs(crate::cli::cluster_structs::Args),
     /// Analyze atomic and ring contacts in a PDB or mmCIF file
     Contacts(crate::cli::contacts::Args),
-    /// Calculate the solvent accessible surface area (SASA) of each atom in a PDB or mmCIF file
+    /// Calculate solvent accessible surface area (Å²) per atom, residue, or chain
     Sasa(crate::cli::sasa::Args),
     /// Calculate the buried surface area (dSASA) at the interface between chain groups
     Dsasa(crate::cli::dsasa::Args),
@@ -33,7 +39,7 @@ enum Commands {
     Sap(crate::cli::sap::Args),
     /// Calculate Shape Complementarity (SC) between two chain groups
     Sc(crate::cli::sc::Args),
-    /// Print the sequences of all chains in a PDB or mmCIF file
+    /// Print coordinate-observed protein sequences by chain
     Seq(crate::cli::pdb2seq::Args),
     /// Print declared SEQRES/entity-polymer sequences
     Seqres(crate::cli::pdb2seq::DeclaredArgs),
@@ -53,6 +59,9 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
     let result: ArpeggiaResult<()> = match &cli.command {
+        Commands::NumberAntibody(args) => crate::cli::ab_numbering::run_number(args),
+        Commands::AlignAntibodies(args) => crate::cli::ab_numbering::run_alignment(args),
+        Commands::AlignSeqs(args) => crate::cli::align_seqs::run(args),
         Commands::Rmsd(args) => crate::cli::rmsd::run(args),
         Commands::ClusterStructs(args) => crate::cli::cluster_structs::run(args),
         Commands::Contacts(args) => crate::cli::contacts::run(args),

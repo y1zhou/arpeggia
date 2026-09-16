@@ -2,16 +2,20 @@
 
 Arpeggia uses a serial `f64` Kabsch kernel and a packed pairwise RMSD matrix
 with k-medoids clustering. The public selection grammar, table schemas, input
-formats, cache behavior, and measured performance are documented in the
-[structure-clustering guide](../benchmarks/structure-clustering.md).
+formats and cache behavior are documented in the
+[structure-comparison guide](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md).
+
+[ADR 0009](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) extends
+two-structure RMSD with optional sequence correspondence and refinement; the
+exact-correspondence collection behavior below remains unchanged.
 
 ## Correspondence and superposition
 
 Selected atoms must correspond exactly after model and conformer selection.
 Their identities include chain, author residue number, insertion code, residue
 name, and atom name. A mismatch fails rather than silently intersecting atom
-sets. Sequence/structural alignment and weighting remain deferred at the
-correspondence boundary in [the RMSD module](../../src/rmsd.rs).
+sets. Sequence/structural alignment and weighting remain deferred for
+collection comparisons.
 
 The Superposition Selection determines one proper rigid-body transform; the
 RMSD Selection is evaluated with that transform without recentering or
@@ -43,7 +47,7 @@ Sources: [Kabsch 1976](https://doi.org/10.1107/S0567739476001873),
 [Kabsch 1978](https://doi.org/10.1107/S0567739478001680),
 [Theobald 2005](https://doi.org/10.1107/S0108767305015266), and
 [Liu, Agrafiotis, and Theobald 2010](https://pmc.ncbi.nlm.nih.gov/articles/PMC2958452/).
-See the [superposition research](../research/structure-superposition.md) for
+See the [superposition research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/structure-superposition.md) for
 solver comparisons, QCP timing limitations, and dependency evidence. Plane fitting
 uses SVD on a different matrix and does not justify a shared solver abstraction.
 
@@ -76,7 +80,7 @@ is applied. Positive uniform scaling preserves the objective; a distance range
 that collapses relative to its maximum instead produces a calculation error.
 The adapter avoids a square matrix copy and retains raw distances for ordinary
 inputs. These numerical and convergence invariants are documented and tested
-in [the clustering module](../../src/clustering.rs).
+in [the clustering module](https://github.com/y1zhou/arpeggia/blob/master/src/clustering.rs).
 
 Iteration exhaustion is a calculation failure. FasterPAM's cumulative swap
 count sometimes requires a diagnostic pass to distinguish final-pass convergence
@@ -93,7 +97,7 @@ and the [kmedoids adapter API](https://docs.rs/kmedoids/0.5.5/kmedoids/arrayadap
 Average linkage remains a possible extension for a concrete hierarchy or
 RMSD-cutoff requirement. Density, spectral, and affinity methods introduce
 parameters or output semantics outside the fixed/automatic-count contract.
-The [clustering research](../research/structure-clustering.md) retains the
+The [clustering research](https://github.com/y1zhou/arpeggia/blob/master/docs/research/structure-clustering.md) retains the
 alternative-method comparison, additional crate survey, and supporting sources.
 
 ## Storage and execution boundaries
@@ -105,8 +109,9 @@ without duplicated coordinates or indexed atom access in the hot loop. Raw
 structures and non-reference identity tables are discarded after preparation.
 
 `sysinfo` provides available-memory queries across supported platforms and
-current-process cgroup limits on Linux. Only RAM and the needed process limits
-are refreshed. Available RAM, rather than total or
+current-process cgroup limits on Linux. Only RAM and the current process are
+refreshed, without task enumeration. Root cgroup limits are a fallback when
+process limits are unavailable. Available RAM, rather than total or
 merely free RAM, is the relevant estimate of reusable capacity. A matrix-only
 preflight precedes parsing; a second check includes coordinate storage after
 preparing the first structure. The guide records the estimates, exclusions,
@@ -123,7 +128,7 @@ reductions. Nested atom-level parallelism is deferred until measured need.
 
 FasterPAM and DynMSC stay serial. Enabling parallel k-medoids would add
 `ndarray` and randomization without providing parallel DynMSC. The
-[local measurements](../benchmarks/structure-clustering.md#local-structure-clustering-benchmark)
+[local measurements](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/structure-clustering.md#local-structure-clustering-benchmark)
 support keeping pairwise RMSD as the parallel boundary.
 
 ## Persistence and validation
@@ -136,8 +141,9 @@ caches use no-clobber creation.
 
 Readers project required columns and reject wrong-size caches before complete
 table materialization. The original lazy NDJSON reader was replaced by an eager
-reader with a bounded row-count preflight after the
-[v0.9.2 cleanup size and performance audit](../research/v0.9.2-cleanup-audit.md).
+reader with a bounded row-count preflight after measuring the
+[package-size reduction](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/package-size.md)
+and [NDJSON performance](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/contacts.md#5b8c-contacts-lazy-versus-eager-ndjson).
 CSV and Parquet use eager readers. XLSX remains excluded because it adds unrelated
 reader/writer dependencies.
 
@@ -146,10 +152,11 @@ bit in the same direction; reverse-direction and analytical checks use narrow
 numerical tolerances. The independent-selection change retained its existing
 coordinate payload for equal selections, with runtime gates of 5% for one
 worker and 10% for eight, and a 10% peak-RSS gate. Overlapping selections must
-save exactly `24n(f+r-u)` coordinate bytes. The guide retains the measurements;
-regressions live with the implementation.
+save exactly `24n(f+r-u)` coordinate bytes. The
+[benchmark report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/structure-clustering.md)
+retains these measurements; regressions live with the implementation.
 
 Exact correspondence, one shared atom preset, quadratic matrix storage,
 heuristic memory protection, and caller-managed cache provenance remain the
-principal limits. Broader polymer/ligand selection, alignment, weights, other
+principal collection limits. Broader polymer/ligand selection, alignment, weights, other
 clustering methods, and public transforms require separate decisions.

@@ -25,7 +25,7 @@ intrinsic-pKa histidine heuristics cannot model the local molecular environment
 and that selecting one alternate conformer does not represent an
 occupancy-weighted conformational ensemble.
 
-All calculations select one alternate conformer consistently: an unambiguous
+Coordinate-based calculations select one alternate conformer: an unambiguous
 blank/default conformer, otherwise the highest-occupancy conformer with `A` as a
 deterministic tie-breaker. Automatic selection emits a warning rather than
 silently mixing mutually exclusive coordinates.

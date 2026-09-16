@@ -20,7 +20,7 @@ fn rmsd_rejects_selection_before_structure_io() {
         .args([
             "rmsd",
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             "--superpose-residues",
             "A:",
         ])
@@ -35,7 +35,7 @@ fn rmsd_rejects_selection_before_structure_io() {
         .args([
             "rmsd",
             "missing-reference.pdb",
-            "missing-mobile.pdb",
+            "missing-query.pdb",
             "--rmsd-residues",
             "A:",
         ])
@@ -209,7 +209,7 @@ fn sc_calculation_failure_exits_without_a_score() {
 }
 
 #[test]
-fn rmsd_prints_one_scalar() {
+fn rmsd_reports_detailed_json() {
     let input = format!("{}/test-data/1ubq.pdb", env!("CARGO_MANIFEST_DIR"));
     let output = arpeggia()
         .args([
@@ -220,6 +220,7 @@ fn rmsd_prints_one_scalar() {
             "A:1-20",
             "--rmsd-residues",
             "A:1-20",
+            "--json",
         ])
         .output()
         .unwrap();
@@ -228,12 +229,11 @@ fn rmsd_prints_one_scalar() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let value = String::from_utf8(output.stdout)
-        .unwrap()
-        .trim()
-        .parse::<f64>()
-        .unwrap();
-    assert!(value < 1e-12);
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(result["rmsd"].as_f64().unwrap() < 1e-12);
+    assert_eq!(result["core_rmsd"], 0.0);
+    assert_eq!(result["evaluation_atoms"], 20);
+    assert_eq!(result["retained_fit_atoms"], 20);
 }
 
 #[test]
@@ -375,4 +375,309 @@ fn cluster_structs_preserves_pairwise_work_and_rejects_bad_cache() {
         .unwrap();
     assert!(!malformed.status.success());
     assert!(String::from_utf8_lossy(&malformed.stderr).contains("remove it to recalculate"));
+}
+
+#[test]
+fn sequence_cli_reports_metrics_and_empty_local_json() {
+    let result = arpeggia()
+        .args([
+            "align-seqs",
+            "GGACDEFGHIKGG",
+            "ACDEFGHIK",
+            "--mode",
+            "semi-global",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let data: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(data["reference_span"], serde_json::json!([2, 11]));
+    assert_eq!(data["identity_shorter"], 1.0);
+    assert_eq!(data["edit_distance"], 4);
+    let result = arpeggia()
+        .args(["align-seqs", "AAAA", "WWWW", "--mode", "local", "--json"])
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    let data: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(data["identity_alignment"], serde_json::Value::Null);
+    assert_eq!(data["coverage_shorter"], 0.0);
+}
+
+#[test]
+fn alignment_display_flags_preserve_plain_json_and_wrapping() {
+    let run = |extra: &[&str]| {
+        arpeggia()
+            .args(["align-seqs", "ACDEFGHIKLMN", "ACDYGHIKLMN"])
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+    let plain = run(&["--width", "40", "--no-rulers"]);
+    assert!(plain.status.success());
+    let text = String::from_utf8(plain.stdout).unwrap();
+    assert!(!text.contains('\x1b'));
+    assert!(!text.contains("operations"));
+    assert!(text.lines().all(|line| line.len() <= 40));
+    let ruled = run(&["--width", "40"]);
+    assert_eq!(
+        String::from_utf8(ruled.stdout).unwrap().lines().count(),
+        text.lines().count() + 2
+    );
+    let colored = run(&["--color", "always"]);
+    let text = String::from_utf8(colored.stdout).unwrap();
+    assert!(text.contains("\x1b[31m") && text.contains("\x1b[34m:\x1b[0m"));
+    let json = run(&["--json", "--color", "always"]);
+    let data: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(data["reference_name"], "Reference");
+    assert_eq!(data["query_name"], "Query");
+    let named = run(&["--reference-name", "Wild type", "--query-name", "Mutant"]);
+    assert!(named.status.success());
+    let text = String::from_utf8(named.stdout).unwrap();
+    assert!(text.contains("Wild type") && text.contains("Mutant"));
+    let named_json = run(&[
+        "--reference-name",
+        "Wild type",
+        "--query-name",
+        "Mutant",
+        "--json",
+    ]);
+    let named_data: serde_json::Value = serde_json::from_slice(&named_json.stdout).unwrap();
+    assert_eq!(named_data["reference_name"], "Wild type");
+    assert_eq!(named_data["query_name"], "Mutant");
+    assert_eq!(named_data["score"], data["score"]);
+    assert_eq!(data["aligned_query"], "ACD-YGHIKLMN");
+    assert_eq!(data["operations"], "   -:       ");
+    assert_eq!(data["mismatches"], 1);
+    assert!(!run(&["--width", "1"]).status.success());
+}
+
+const ANTIBODY_SEQUENCE: &str = "QVQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGGVIPLLTITNYAPRFQGRITITADRSTSTAYLELNSLRPEDTAVYYCAREGTTGKPIGAFAHWGQGTLVTVSS";
+
+#[test]
+fn antibody_cli_preserves_names_and_structured_numbering() {
+    let output = arpeggia()
+        .args([
+            "number-antibody",
+            ANTIBODY_SEQUENCE,
+            "--name",
+            "WT",
+            "--scheme",
+            "chothia",
+            "--species",
+            "llama,Lama glama",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["name"], "WT");
+    assert_eq!(result["scheme"], "chothia");
+    assert_eq!(result["cdr_definition"], "chothia");
+    assert!(result["residues"].as_array().unwrap().len() > 100);
+    for segment in ["v_match", "j_match"] {
+        for hit in result[segment]["hits"].as_array().unwrap() {
+            for reference in hit["references"].as_array().unwrap() {
+                assert_eq!(reference["species"], "Lama glama");
+            }
+        }
+    }
+    assert!(!output.stdout.contains(&0x1b));
+    let output = arpeggia()
+        .args([
+            "align-antibodies",
+            ANTIBODY_SEQUENCE,
+            ANTIBODY_SEQUENCE,
+            ANTIBODY_SEQUENCE,
+            "--names",
+            "WT,,Mutant",
+            "--reference-index",
+            "2",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(result["reference_index"], 2);
+    assert_eq!(result["antibodies"][0]["name"], "WT");
+    assert_eq!(result["antibodies"][1]["name"], "Seq002");
+    assert_eq!(result["antibodies"][2]["name"], "Mutant");
+}
+
+#[test]
+fn antibody_cli_ruler_flag_preserves_compact_reference_first_blocks() {
+    for command in ["number-antibody", "align-antibodies"] {
+        let run = |rulers: bool| {
+            let mut args = vec![command, ANTIBODY_SEQUENCE];
+            if command == "number-antibody" {
+                args.extend(["--name", "WT"]);
+            } else {
+                args.extend([
+                    ANTIBODY_SEQUENCE,
+                    "--names",
+                    "Mutant,WT",
+                    "--reference-index",
+                    "1",
+                ]);
+            }
+            args.extend(["--width", "80", "--color", "never"]);
+            if !rulers {
+                args.push("--no-rulers");
+            }
+            let output = arpeggia().args(args).output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8(output.stdout).unwrap()
+        };
+        let full = run(true);
+        let compact = run(false);
+        let input_row = if command == "number-antibody" { 4 } else { 2 };
+        let role = if command == "number-antibody" {
+            "Query"
+        } else {
+            "Reference"
+        };
+        assert!(full.contains(&format!("{role}: WT")));
+        assert!(!full.contains('\x1b'));
+        assert!(full.lines().all(|l| l.len() <= 80));
+        let full_blocks: Vec<_> = full.split("\n\n").skip(1).collect();
+        let compact_blocks: Vec<_> = compact.split("\n\n").skip(1).collect();
+        assert!(!full_blocks.is_empty());
+        assert_eq!(full_blocks.len(), compact_blocks.len());
+        for (full, compact) in full_blocks.iter().zip(compact_blocks) {
+            let rows: Vec<_> = full.lines().collect();
+            assert_eq!(rows.len(), 6);
+            assert!(rows[input_row].starts_with("WT "));
+            if command == "number-antibody" {
+                assert!(rows[2].starts_with("IGHV"));
+            }
+            assert_eq!(
+                compact.lines().collect::<Vec<_>>(),
+                [rows[0], rows[2], rows[4], rows[5]]
+            );
+        }
+    }
+}
+
+#[test]
+fn antibody_cli_imputation_summary_requires_impute() {
+    for command in ["number-antibody", "align-antibodies"] {
+        for impute in [false, true] {
+            let mut args = vec![command, ANTIBODY_SEQUENCE, "--color", "never"];
+            if impute {
+                args.push("--impute");
+            }
+            let output = arpeggia().args(args).output().unwrap();
+            assert!(output.status.success(), "{:?}", output);
+            let text = String::from_utf8(output.stdout).unwrap();
+            assert_eq!(text.contains("imputed residues:"), impute);
+            if impute {
+                assert!(text.contains("imputed residues: 0"));
+            }
+            assert!(text.contains("CDR regions:"));
+            assert!(!text.contains("Total CDR"));
+        }
+    }
+}
+
+#[test]
+fn antibody_cli_can_skip_germlines_without_disabling_numbering() {
+    for command in ["number-antibody", "align-antibodies"] {
+        let args = [
+            command,
+            ANTIBODY_SEQUENCE,
+            "--no-germlines",
+            "--species",
+            "rat,rabbit",
+        ];
+        let output = arpeggia().args(args).arg("--json").output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output.stderr.is_empty());
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let result = if command == "number-antibody" {
+            &value
+        } else {
+            &value["antibodies"][0]
+        };
+        assert_eq!(result["germlines_searched"], false);
+        assert!(result["v_match"].is_null() && result["j_match"].is_null());
+        assert!(result["diagnostics"].as_array().unwrap().is_empty());
+        assert_eq!(
+            result["residues"].as_array().unwrap().len(),
+            ANTIBODY_SEQUENCE.len()
+        );
+        let conflict = arpeggia().args(args).arg("--impute").output().unwrap();
+        assert!(!conflict.status.success());
+        let error = String::from_utf8_lossy(&conflict.stderr);
+        assert!(error.contains("--no-germlines") && error.contains("--impute"));
+    }
+}
+
+#[test]
+fn antibody_cli_escapes_names_in_diagnostics() {
+    let output = arpeggia()
+        .args([
+            "align-antibodies",
+            &ANTIBODY_SEQUENCE[5..],
+            "--names",
+            "partial\nforged\rname",
+            "--no-germlines",
+            "--color",
+            "never",
+        ])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains(r#""partial\nforged\rname": PARTIAL_DOMAIN"#),
+        "{stderr}"
+    );
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    assert!(!stderr.contains('\r'), "{stderr}");
+}
+
+#[test]
+fn antibody_cli_rejects_invalid_names_and_conventions() {
+    for options in [
+        vec!["align-antibodies", ANTIBODY_SEQUENCE, "--names", "one,two"],
+        vec![
+            "number-antibody",
+            ANTIBODY_SEQUENCE,
+            "--cdr-definition",
+            "chothia",
+        ],
+        vec![
+            "align-antibodies",
+            ANTIBODY_SEQUENCE,
+            "--reference-index",
+            "1",
+        ],
+    ] {
+        let output = arpeggia().args(options).output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("invalid argument"));
+    }
 }

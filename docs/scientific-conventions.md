@@ -1,11 +1,5 @@
 # Scientific conventions
 
-- Contact rows use `Disulfide` for resolved PDB `SSBOND` or mmCIF disulfide
-  declarations and `Covalent` for other resolved `LINK`, `CONECT`, or
-  `_struct_conn` bonds. Undeclared CYS pairs matching the original distance and
-  CB--SG--SG--CB dihedral rule produce `PotentialDisulfide`; other contacts in
-  the covalent-distance band produce `PotentialCovalent`. Clash and van der
-  Waals regions are separately named.
 - Explicit hydrogen-bond geometry uses only hydrogens associated with the donor
   atom. Missing donor hydrogens produce warnings; Arpeggia does not protonate
   input structures.
@@ -14,23 +8,39 @@
   a pH-dependent intrinsic-pKa prior, while `ExplicitOnly` never guesses.
   Inferred histidine charge produces potential ionic, repulsion, and cation-pi
   labels rather than definitive ones.
-- All analyses deterministically choose the highest-occupancy alternate
+- Coordinate-based analyses deterministically choose the highest-occupancy alternate
   conformer, with `A` as the tie-breaker, and warn when selection occurs.
 - Standard atom, residue, and chain SASA use one atom population and ProtOr
-  radii with elemental fallback. Polar/hydrophobic columns follow Rosetta's
-  legacy `SasaFilter` atom partition; numerical areas remain Shrake–Rupley.
+  radii with elemental fallback. File loading retains supported protein residues
+  and ACE/NH2 caps; other ligands contribute neither SASA nor occlusion. Caps
+  contribute to atom output and residue/chain totals. Polar/hydrophobic columns
+  follow Rosetta's legacy `SasaFilter` atom partition; numerical areas remain
+  Shrake–Rupley.
+  Residue SASA sums atomic areas in Å²; `relative_sasa()` divides each standard
+  residue's area by its reference maximum.
+- Smaller solvent probes access narrower crevices; larger probes exclude them.
+  Total SASA can increase or decrease with probe radius. An isolated atom has
+  area `4π(atom_radius + probe_radius)²`, illustrating why smaller probes do not
+  always give larger areas. See the [SASA geometry definition](https://freesasa.github.io/doxygen/Geometry.html).
 - dSASA is the two-sided buried area
   `SASA(group 1) + SASA(group 2) - SASA(complex)`. Divide by two only when a
   one-sided interface-area convention is required.
 - SAP uses the Rosetta-compatible full-atom Reduce-radius exposure definition
-  with a 1.1 Å default probe and sums positive score contributions while
-  reporting complete side-chain SASA. Arpeggia does not add missing atoms, so
+  with a 1.1 Å default probe. Atom scores use side-chain atom neighborhoods;
+  residue scores sum positive atom scores while reporting complete side-chain
+  SASA. Arpeggia does not add missing atoms, so
   direct Rosetta comparison requires the same caller-prepared full-atom input.
   Monomers without a Rosetta calibration are omitted with a warning.
 - RMSD uses uniform-weight Kabsch superposition with proper rotations and exact
-  selected-atom correspondence. Structure clustering uses the resulting
+  selected-atom correspondence by default. Optional [sequence correspondence and
+  refinement](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md) preserve a separate evaluation population.
+  Structure clustering uses the resulting
   pairwise RMSD matrix and observed medoid structures; it does not perform
   sequence alignment or add missing atoms.
+- [Antibody numbering](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+  distinguishes numbered positions from CDR definitions. Separate V/J similarities
+  retain tied references; explicit imputation fills only supported terminal
+  framework residues and records their provenance.
 
 ## Contact-identification decision path
 
@@ -126,9 +136,45 @@ unusable ring geometry produce a warning and omit that ring's interactions.
 | Two rings | Center distance ≤ 6.0 Å: classify relative ring-plane and center-vector angles as sandwich, displaced, parallel-in-plane, tilted, L, or T stacking. T stacking additionally requires distance ≤ 5.0 Å. |
 
 The implementation details and atom-typing tables live in the
-[candidate and label assembly](../src/contacts/complex.rs),
-[bond/distance rules](../src/contacts/vdw.rs),
-[hydrogen-bond rules](../src/contacts/hbond.rs),
-[charge rules](../src/contacts/ionic.rs),
-[hydrophobic rules](../src/contacts/hydrophobic.rs), and
-[aromatic geometry rules](../src/contacts/aromatic.rs).
+[candidate and label assembly](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/complex.rs),
+[bond/distance rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/vdw.rs),
+[hydrogen-bond rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/hbond.rs),
+[charge rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/ionic.rs),
+[hydrophobic rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/hydrophobic.rs), and
+[aromatic geometry rules](https://github.com/y1zhou/arpeggia/blob/master/src/contacts/aromatic.rs).
+
+## Contact-table examples
+
+Count hydrogen-bond rows by residue pair, retaining model, chain, residue number
+and insertion code so distinct residues are not merged. A count measures contact
+rows; a pair can have multiple interaction types.
+
+```python
+import arpeggia
+import polars as pl
+
+contacts = arpeggia.contacts("structure.pdb", groups="A/B")
+hydrogen_bonds = contacts.filter(
+    pl.col("interaction").is_in(["HydrogenBond", "WeakHydrogenBond"])
+)
+residue_pairs = hydrogen_bonds.group_by([
+    "model", "from_chain", "from_resi", "from_insertion", "from_resn",
+    "to_chain", "to_resi", "to_insertion", "to_resn",
+]).len()
+print(residue_pairs)
+```
+
+For all contacting interface residues, combine both endpoints: `from` and `to`
+can follow interaction roles rather than chain-group order. Filter the resulting
+`chain` column for one partner.
+
+```python
+identity = ["chain", "resi", "insertion", "resn"]
+interface_residues = pl.concat([
+    contacts.select("model", *[
+        pl.col(f"{side}_{field}").alias(field) for field in identity
+    ])
+    for side in ("from", "to")
+]).unique()
+print(interface_residues)
+```
