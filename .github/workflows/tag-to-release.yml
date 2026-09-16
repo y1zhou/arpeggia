@@ -46,10 +46,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The archive action flattens included paths; keep both README contents.
-      - name: Stage germline attribution
-        shell: bash
-        run: cp data/germlines/README.md IMGT-GERMLINES.md
       - uses: taiki-e/upload-rust-binary-action@f0d45ae91ee7b8ee928de7a9d04d893a08bcbec6 # v1.30.2
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
@@ -64,7 +60,7 @@ jobs:
           locked: true
           # (optional) Comma-separated list of additional files to be included to archive.
           # Note that glob pattern is not supported yet.
-          include: LICENSE,README.md,IMGT-GERMLINES.md
+          include: LICENSE,README.md
           # (optional) Whether to create the leading directory in the archive or not. default to false.
           leading-dir: true
           # (required) GitHub token for uploading assets to GitHub Releases.

@@ -7,10 +7,19 @@ Attribution: IMGT®, the international ImMunoGeneTics information system®,
 Montpellier, France. The data retain this license independently of Arpeggia's
 source-code license.
 
+Source copyright: © 1995–2026 IMGT®. The
+[IMGT terms](https://www.imgt.org/about/termsofuse.php) retain warranty,
+liability and non-endorsement notices. This license statement follows their
+explicit data/metadata grant, checked 16 September 2026; the
+[download README](https://www.imgt.org/download/GENE-DB/README.txt) still contains
+older wording about private-company agreements.
+
 ## IMGT/GENE-DB bulk subset
 
 Source: [IMGT/GENE-DB](https://www.imgt.org/download/GENE-DB/), release
 **202636-7**, downloaded 10 September 2026.
+Database credit: Giudicelli, Chaume and Lefranc,
+[IMGT/GENE-DB (2005)](https://doi.org/10.1093/nar/gki010).
 
 The [gapped amino-acid source](https://www.imgt.org/download/GENE-DB/IMGTGENEDB-ReferenceSequences.fasta-AA-WithGaps-F%2BORF%2BinframeP)
 has SHA-256
@@ -49,6 +58,9 @@ protein displays, retrieved 15 September 2026. It retains six functional V
 references (AF305944–AF305949) and five J references (AF305952); no light chains
 are included. This small historical set is not a comprehensive llama repertoire.
 IGHJ5/6 end at IMGT 127, leaving position 128 unavailable for imputation.
+
+Display authors: François Ehrenmann, Patrice Duroux and Chantal Ginestoux;
+scientific officer: Marie-Paule Lefranc.
 
 [prepare_llama.py](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/prepare_llama.py)
 removes HTML and layout spaces, preserves IMGT dots and retains functional rows.

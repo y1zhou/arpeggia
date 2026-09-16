@@ -121,6 +121,12 @@ files immediately but retain the compiled extension until rebuilt.
 
 GNU General Public License v3.0 - see [LICENSE](https://github.com/y1zhou/arpeggia/blob/master/LICENSE) for details.
 
+Bundled germline data are © 1995–2026 IMGT®, the international ImMunoGeneTics
+information system®, Montpellier, France, licensed separately under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Arpeggia filters GENE-DB release 202636-7 and reformats llama protein displays;
+see the [source credits, notices and preparation record](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
+
 ## Credit
 
 - [Arpeggio](https://github.com/PDBeurope/arpeggio/): Original Python library for protein-protein interaction analysis.
