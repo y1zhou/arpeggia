@@ -114,18 +114,15 @@ fn reference_groups() -> Vec<ReferenceGroup> {
         let (header, sequence) = record.split_once('\n').unwrap();
         let fields: Vec<_> = header.split('|').collect();
         let gapped = sequence.trim().as_bytes();
-        let species = if fields[2].starts_with("Homo sapiens") {
-            GermlineSpecies::Human
-        } else if fields[2].starts_with("Mus musculus") {
-            GermlineSpecies::Mouse
-        } else if fields[2].starts_with("Rattus norvegicus") {
-            GermlineSpecies::Rat
-        } else if fields[2].starts_with("Oryctolagus cuniculus") {
-            GermlineSpecies::Rabbit
-        } else if fields[2] == "Lama glama" {
-            GermlineSpecies::Llama
-        } else {
-            GermlineSpecies::Alpaca
+        // Ordered by frequency in the bundled snapshot; prefixes include strains.
+        let species = match fields[2] {
+            s if s.starts_with("Mus musculus") => GermlineSpecies::Mouse,
+            s if s.starts_with("Homo sapiens") => GermlineSpecies::Human,
+            s if s.starts_with("Rattus norvegicus") => GermlineSpecies::Rat,
+            s if s.starts_with("Oryctolagus cuniculus") => GermlineSpecies::Rabbit,
+            s if s.starts_with("Vicugna pacos") => GermlineSpecies::Alpaca,
+            "Lama glama" => GermlineSpecies::Llama,
+            _ => unreachable!("bundled germline reference has a supported species"),
         };
         let chain = match fields[1].as_bytes()[2] {
             b'H' => Chain::IGH,

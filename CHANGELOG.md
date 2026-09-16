@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Clarified bundled species handling and Python thread-pool usage for antibody numbering.
 - Grouped RMSD selection, fitting, correspondence, and pairwise calculations
   under one module, and sequence alignment with its matrix data and display.
   Existing crate-root exports and inline unit-test organization are preserved.

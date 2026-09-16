@@ -21,6 +21,46 @@ limit, terminal imputation and rejection of mixed-scheme antibody alignments.
 These qualify adapter behavior; Chothia was not part of the original
 three-engine positional-agreement comparison below.
 
+## Python pool scaling
+
+On 16 September 2026, a locked release build at `2156be5` (antibody code identical
+to `3ad8fe6`) ran under CPython 3.13.13 and Rust 1.96.0 on a Ryzen 9 9950X3D,
+restricted to eight distinct physical cores. The panel interleaved the first
+ten accepted H, K and L numbering fixtures used by the earlier matching benchmarks.
+All six bundled species were searched. Each timed run numbered 240 inputs with
+matching or 2,400 without; each configuration reports five-repeat medians.
+
+Pools were warmed before timing. Serial, thread and spawned-process workers
+returned identical `(chain, domain_span, sequence)` summaries; result collection
+is included, formatting and startup are excluded. Speedups compare with a direct
+serial loop: 1,321 ms with matching and 327 ms without matching. Task sizes of
+one and 30 inputs alternated between repetitions.
+
+| Matching | Workers | Threads, one input/task | Processes, one input/task | Threads, 30/task | Processes, 30/task |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Enabled | 1 | 1.00× | 1.00× | 1.00× | 1.00× |
+| Enabled | 2 | 1.99× | 1.98× | 2.00× | 2.00× |
+| Enabled | 4 | 3.92× | 3.89× | 3.97× | 3.96× |
+| Enabled | 8 | 7.44× | 7.32× | 7.74× | 7.72× |
+| Disabled | 1 | 0.97× | 0.92× | 1.00× | 1.00× |
+| Disabled | 2 | 1.91× | 1.78× | 1.98× | 1.98× |
+| Disabled | 4 | 3.58× | 3.30× | 3.72× | 3.87× |
+| Disabled | 8 | 6.24× | 4.26× | 6.90× | 6.85× |
+
+A separate five-repeat measurement of process startup, public-package import
+and one heavy-chain warm-up per worker took 44–55 ms with matching or 32–34 ms
+without. All workers initialized before the measurement ended; shutdown was
+excluded. These are local workload measurements, not guaranteed scaling.
+
+The immutable `OnceLock`/`LazyLock` caches synchronize initialization only.
+PyO3 detaches during native computation, and call-local buffers permit parallel
+work. Keep those caches and prefer threads for this API. `NumberedAntibody`
+cannot be pickled: process-pool callers must return ordinary Python data or
+consume the objects inside workers. Larger serialized results can change the
+process overhead observed here. See
+[PyO3 parallelism](https://pyo3.rs/v0.29.0/parallelism.html) and
+[Python's process-pool requirements](https://docs.python.org/3.13/library/concurrent.futures.html#processpoolexecutor).
+
 ## Versions and settings
 
 | Engine | Tested version | Configuration |

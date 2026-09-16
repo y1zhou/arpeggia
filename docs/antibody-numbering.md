@@ -114,6 +114,30 @@ usual imputation diagnostics. See the
 [numbering-only benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#optional-germline-matching)
 for measured savings.
 
+## Parallel numbering in Python
+
+Numbering releases the GIL during Rust computation, so independent inputs can
+use a thread pool. With `sequences` containing unaligned antibody strings:
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor(max_workers=8) as pool:
+    antibodies = list(pool.map(arpeggia.number_antibody, sequences))
+```
+
+Profiles and germline references initialize once and are then shared read-only;
+each call owns its alignment buffers. Threads may wait during first initialization,
+but normal calls do not hold a global computation lock. Eight threads achieved
+7.44× throughput with matching in the
+[release benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#python-pool-scaling).
+Choose the worker count for the available cores and workload.
+
+`NumberedAntibody` is not pickleable, so process workers cannot return it directly.
+Consume results inside each worker or return ordinary Python values, such as
+`(antibody.chain, antibody.cdr3)`. Process startup and result serialization add
+overhead; batching helps when germline matching is disabled.
+
 ## Germline similarities
 
 Offline references cover human, mouse, rat and rabbit H/K/L and alpaca/llama
