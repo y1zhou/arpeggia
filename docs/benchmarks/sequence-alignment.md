@@ -76,17 +76,13 @@ distance two. Timings include alignment, metrics, and Python result handling.
 | Compressed wheel | 9,487,996 | 9,596,012 | 1.14% |
 | Native extension | 34,653,584 | 34,910,936 | 0.74% |
 
-Growth includes the complete feature, bindings, and serialization. Validation
-passed 205 Rust tests (including CLI and doctests), 17 Python tests against the
-fresh wheel with warnings treated as errors, Python type checking, and all
-pre-commit checks.
+Growth includes the alignment engine, bindings and serialization.
 
 ## Gapped results and display validation
 
 The artifact measurements above cover the alignment engine and API before display
 rendering and expanded help; they are not final release-size measurements.
-The display-stage build passed 211 Rust tests and 18 Python tests against the rebuilt editable
-extension, with Python warnings treated as errors. Regressions cover gapped
+Display regressions cover gapped
 strings and recovered residue indices, insertion/deletion orientation,
 positive-score substitution markers without changing identity, independent
 rulers across gaps, named Unicode labels, narrow wrapping, gray clipping, empty local results, and plain

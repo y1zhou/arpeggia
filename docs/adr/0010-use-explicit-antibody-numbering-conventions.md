@@ -78,13 +78,11 @@ its species/gene/allele/accession metadata, with identity and coverage separate
 from score. Identical sequence-and-coverage references may share alignment work.
 An unsupported segment returns no match and a diagnostic without losing numbering.
 
-Rust/Python `match_germlines=false` / `False` and CLI `--no-germlines` skip matching
-without changing numbering, CDRs or recognition; `species` is then unused.
-`germlines_searched` distinguishes skipped searches from completed searches
-without hits. Skipping leaves both matches absent, with no skip warning.
-Reading, rendering and serialization never initiate matching. Imputation of an
-unsearched result is an argument error; CLI `--no-germlines` conflicts with
-`--impute`. Already-numbered objects with either search state can be aligned.
+Matching is eager by default, with an explicit opt-out. Record whether a search
+occurred to distinguish skipped matching from a search without qualifying hits.
+Property access, formatting and serialization never initiate matching; imputation
+requires a searched result. This keeps expensive work explicit and allows
+numbering-only results in antibody alignments.
 
 ## Terminal imputation
 
@@ -106,28 +104,17 @@ annotations. Require one numbering scheme and all-heavy or all-light inputs;
 kappa/lambda mixtures are allowed. Position correspondence is not a new MSA
 calculation and has no fabricated alignment score.
 
-A zero-based `reference_index` (default 0) controls comparison direction and
-reference-defined CDR bands. A per-format override changes presentation, never
-stored row order or columns. Show the reference first and hide germlines in
-this view, including for one antibody. The CLI accepts positional strings and
-comma-separated names, defaulting omitted/empty names by input position; excess
-names and invalid reference indices fail.
+A selected input reference controls comparison direction and CDR bands without
+changing stored row order or each antibody's own annotations. Numbered-position
+alignments show input antibodies only; a single numbered antibody instead shows
+its stitched V/J reference above the input query. These are distinct views.
 
-For one numbered antibody, show the stitched V/J reference above the input query,
-labeling both sources and listing additional tied gene/allele names in summaries.
-Use germline-to-input operations directly: input insertions are + and deletions are -.
-Keep every source record in the result. Unknown junctions
-and missing outer coverage must remain distinguishable from alignment gaps.
-Display padding changes never alter the local V/J matches or imputation evidence.
-
-Input rulers preserve original coordinates and leave imputed residues blank.
-The stitched germline ruler counts V then J continuously without gaps or junction
-cells; stored V/J alignments retain separate source coordinates. This counter
-does not imply a synthetic ancestor. Single-antibody CDR bands follow the numbered
-input; multi-antibody bands follow the selected reference. Bands align across
-rows, while imputation highlights retain each row's provenance. Shared sequence
-rendering handles names, wrapping, color and rulers; JSON remains unstyled.
-Exact layout and colors belong in the [display guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#display-and-antibody-alignments).
+Preserve source coordinates and imputation provenance independently of display
+padding. The stitched germline counter does not imply an inferred ancestor,
+and display changes never alter local V/J matches or imputation evidence.
+Reuse sequence rendering for names, wrapping, colors and rulers; keep JSON
+unstyled. The [display guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#display-and-antibody-alignments)
+defines layout, reference overrides, coordinate labels and tied-name summaries.
 
 ## Qualification and deferred scope
 

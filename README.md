@@ -116,9 +116,7 @@ invalid for those calculations.
 ## Development
 
 [BUILD.md](https://github.com/y1zhou/arpeggia/blob/master/BUILD.md) contains locked
-build and test commands. Rebuild the native extension after Rust changes or
-switching branches with native API changes; editable installs update Python
-files immediately but retain the compiled extension until rebuilt.
+build, test and native-extension rebuild instructions.
 
 ## License
 

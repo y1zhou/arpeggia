@@ -17,7 +17,8 @@ older wording about private-company agreements.
 ## IMGT/GENE-DB bulk subset
 
 Source: [IMGT/GENE-DB](https://www.imgt.org/download/GENE-DB/), release
-**202636-7**, downloaded 10 September 2026.
+**202636-7**, downloaded 10 September 2026; source files reported modification
+on 5 September and the gapped amino-acid file contained 3,332,989 bytes.
 Database credit: Giudicelli, Chaume and Lefranc,
 [IMGT/GENE-DB (2005)](https://doi.org/10.1093/nar/gki010).
 
@@ -28,9 +29,17 @@ The subset retains functional IGHV/IGKV/IGLV and IGHJ/IGKJ/IGLJ records for huma
 mouse, alpaca, rat and rabbit, including strain/subspecies names. Bracketed/parenthesized
 functional labels are included; stop-containing sequences are excluded.
 Original headers, partial sequences, ambiguity symbols and IMGT gaps are retained.
-There are 1,603 V and 91 J records. Human, mouse, rat and rabbit cover H/K/L;
-alpaca references cover heavy chains only. Rat contributes 268 V / 13 J records
-and rabbit 123 V / 20 J records.
+The five-species subset occupies 349,651 bytes. Human, mouse, rat and rabbit
+cover H/K/L; alpaca references cover heavy chains only.
+
+| Species | V references | J references |
+| --- | ---: | ---: |
+| Human | 511 | 33 |
+| Mouse, including strains/subspecies | 628 | 19 |
+| Alpaca | 73 | 6 |
+| Rat | 268 | 13 |
+| Rabbit | 123 | 20 |
+| Total | 1,603 | 91 |
 
 The subset SHA-256 is
 `e87e18cdfae839957b454edb47445d024b95d7eb2ac1b4b655796cad924d8698`.

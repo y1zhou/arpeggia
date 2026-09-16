@@ -281,8 +281,6 @@ positive domain spans are 80–139 residues; these inputs do not qualify
 extreme loop lengths, severe partial domains, multidomain rejection,
 germline matching or imputation. Runs used different interfaces and concurrent
 processes without repeated timing, so no comparative speed claim is made.
-Arpeggia owns the bindings and rendering under
-[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
 
 ## Arpeggia adapter qualification
 
@@ -377,9 +375,9 @@ takes 8.51 μs, each measured over 1,000 calls per batch. Neither operation repe
 V/J alignment. The full four-scheme quality run used concurrent processes and
 therefore supplies no additional comparative timing result.
 
-### Packaging and final checks
+### Package size
 
-The final `a9f1337` source and parent were built on the same machine with
+The `a9f1337` source and parent were built on the same machine with
 `maturin build --release --features python --locked` and
 `cargo build --release --locked`, without an additional strip step. Sizes are
 bytes; gzip measurements compress the executable alone at level 9 with zero mtime,
@@ -396,17 +394,9 @@ The three-species reference subset at this measurement was 255,885 bytes. The lo
 strum 0.27.2 and strum_macros 0.27.2 without upgrading existing dependencies.
 Immunum's default features are disabled; its CLI and Python layers are unused.
 
-The installed wheel numbers antibodies, finds V/J matches, and constructs an
-antibody alignment offline. It includes IMGT attribution; the source distribution
-includes both attribution and the reference FASTA. Both exclude `docs/`; the
-Rust package file list also retains the reference assets and excludes docs.
-The source distribution does not bundle benchmark fixtures.
-CLI release archives include the same attribution alongside the executable.
-
-Validation at `a9f1337` passed 199 Rust library tests, 3 binary tests, 17 CLI tests,
-8 doctests, 21 Python tests, Python type checking, and the repository's required
-format/lint checks. The [user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
-describes the supported scope and remaining limitations.
+Installed-wheel checks confirmed offline numbering, V/J matching and antibody
+alignment. Archive checks confirmed reference assets and attribution were retained
+while `docs/` was excluded. Benchmark fixtures were absent from the sdist.
 
 ## Rat and rabbit reference expansion
 
@@ -524,8 +514,7 @@ missing-reference diagnostics are omitted as expected.
 The 11 September 2026 display revision checked original-input rulers across gaps
 and wraps, continuous V/J counts, blank imputed coordinates, reference-defined
 CDR bands, yellow imputation highlights, tied names and Unicode width in Rust,
-CLI and Python. It passed 202 library tests, three binary tests, 18 CLI tests,
-eight doctests, 21 Python tests, type checking and pre-commit hooks.
+CLI and Python.
 
 Six representative AntPack full/truncated inputs were rendered before and after
 imputation under all four schemes: 48 displays preserved supplied and imputed

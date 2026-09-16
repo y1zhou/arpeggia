@@ -268,7 +268,7 @@ For reference labels, use structurally curated cases where a correspondence is d
 
 ## 9. Arpeggia implementation findings
 
-Accepted scope and API decisions from the completed design interview are recorded in
+Accepted scope and API decisions are recorded in
 [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md).
 The selected backend is Immunum's Rust core with default features disabled;
 Arpeggia supplies its own result objects, Python bindings and CLI rendering.
@@ -287,8 +287,8 @@ bounds and positions in input order. Arpeggia uses half-open spans. Its
 Profiles derive from human/mouse RepSeqIO 1.9 V/J sequences; there is no species
 filter or germline assignment. Alpaca accuracy needs separate qualification.
 Construction parses embedded profiles; an internal `RefCell` buffer prevents
-sharing one annotator across parallel workers without synchronization. Reusing
-instances per worker is a candidate for avoiding repeated construction.[^immunum-annotator][^immunum-profiles]
+sharing one annotator across parallel workers without synchronization. Arpeggia
+uses the raw alignment API below instead.[^immunum-annotator][^immunum-profiles]
 
 A standalone debug-build probe used the 122-residue IGH sequence in section 6:
 
@@ -344,47 +344,11 @@ realignment.[^immunum-annotator][^immunum-numbering]
 
 ### 9.2 Germline data and interpretation
 
-The IMGT terms retrieved on 10 September 2026 license data and metadata under
-CC BY 4.0; tools retain separate terms. The attributed source snapshot avoids
-reusing transformed datasets with older terms.[^imgt-terms]
-
-Downloaded IMGT/GENE-DB release **202636-7** on 10 September 2026; the release and
-amino-acid files reported last modification on 5 September. The gapped
-`IMGTGENEDB-ReferenceSequences.fasta-AA-WithGaps-F+ORF+inframeP` file was
-3,332,989 bytes, SHA-256
-`3cb6b0b8cb8940b3b2a9b105771a6a74aa67c06e3ca39eaea0d2030c90e7efd0`.[^imgt-download]
-
-The bundled subset retains IGHV/IGKV/IGLV and IGHJ/IGKJ/IGLJ, functional
-records including bracketed/parenthesized `F`, and species names with their
-strain/subspecies suffixes. It excludes stop-containing sequences and retains
-partial records, original IMGT gaps and duplicate source records:
-
-| Species | V references | J references | Total |
-|---|---:|---:|---:|
-| Human | 511 | 33 | 544 |
-| Mouse, including strains/subspecies | 628 | 19 | 647 |
-| Alpaca | 73 | 6 | 79 |
-| Rat | 268 | 13 | 281 |
-| Rabbit | 123 | 20 | 143 |
-
-The bulk five-species subset contains 1,603 V and 91 J records and occupies
-349,651 bytes raw. Its release, checksum, attribution and exact transformation
-are recorded with the [runtime data](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
-Strain/subspecies suffixes are retained; exact species-name matching would
-discard most mouse and rat references. The
-[expansion benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#rat-and-rabbit-reference-expansion)
-compares three- and five-species search costs on the same build.
-
-On 15 September 2026, the pinned bulk file and live GENE-DB V/J exports contained
-no `Lama glama` records. IMGT's protein displays supplied a separate supplement:
-six functional IGHV3S1–IGHV3S6 alleles (AF305944–AF305949) and five IGHJ2–IGHJ6
-alleles (AF305952), all `*01`. The displays retain IMGT V gaps; IGHJ5/6 end at
-IMGT 127 and cannot support imputation of 128. No light-chain references are
-included, and this historical set is not a comprehensive llama repertoire.
-The [data record](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md#llama-protein-display-supplement)
-pins the display URLs, checksums and extraction. Together the two files provide
-1,609 V and 96 J records. `llama` and `Lama glama` select the same references;
-they do not change the generic numbering profiles.
+The [runtime data record](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md)
+owns source versions, checksums, species counts, filtering and attribution,
+including the separately retrieved llama supplement. The
+[expansion benchmarks](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#rat-and-rabbit-reference-expansion)
+measure matching costs as the reference set grows.
 
 In the original human/mouse/alpaca subset of 1,212 V and 58 J records, all retained J
 references lack partial-record flags and are 12–20 amino acids long; the alpaca
@@ -411,12 +375,6 @@ Arpeggia therefore labels its amino-acid J comparison as similarity, not a
 unique gene call. Missing reference coverage must remain distinguishable from
 a true deletion.[^igblast]
 
-The accepted matching policy uses local BLOSUM62 with gap costs 10/0.5 in
-separate V and J windows, with known-residue coverage gates. This reuses
-Arpeggia's alignment contract without introducing uncalibrated E-values.
-See [ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md)
-for the windows, thresholds and missing-match behavior.
-
 Protein sequences cannot distinguish some alleles: for example, retained human
 IGHJ4*01/*02/*03 have identical amino-acid sequences. Reference identity and
 provenance must survive sequence deduplication. Selecting a display representative
@@ -431,22 +389,10 @@ sequence alignment calculation. Preserve input order and validate compatible
 schemes/chain classes. Its displayed germline merges V and J, favoring J where
 both cover a position; that convenience should not conceal junction provenance.[^antid-numbering]
 
-Rust can retain sequence bytes and typed position/input-offset records, deriving
-region slices and tabular views when requested. Avoid duplicated per-residue
-DataFrames. Position order must follow the scheme: for example, IMGT's inserted
-positions on the 112 side run in reverse insertion order.[^imgt]
-
-Arpeggia's `SeqAlignment` promises an optimal pairwise BLOSUM62 alignment.
-Numbering-based correspondence need not be that optimum. Reuse the sequence
-module's width handling, escaped names, rulers, foreground operation colors
-and upstream `Style` backgrounds through a small internal renderer. Do not
-construct a dummy `SeqAlignment` with misleading scores. Actual V/J pairwise
-comparisons can still call `align_seqs()`. CDR backgrounds require named region
-boundaries and handling of gap/blank cells. Region identification must remain
-possible without color.[^arpeggia-alignment]
-
-The implemented [display contract](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#display-and-antibody-alignments)
-keeps source coverage and provenance separate from the stitched display row.
+IMGT positions on the 112 side run in reverse insertion order, so numbered
+position unions must use scheme-aware ordering.[^imgt] The
+[alignment/display decision](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#antibody-alignments-and-display)
+separates this positional correspondence from pairwise alignment scores.
 
 ### 9.4 Comparing engines and CDR definitions
 
@@ -478,17 +424,14 @@ boundaries illustrated by Honegger and Plückthun, but is not universal across
 tools and differs from Immunum's unverified table. Public docstrings cite
 these sources.[^martin-loops][^aho-loops][^aho-original]
 
-Immunum's explicit Chothia CDR table follows the 2021 consensus: heavy
-26–32 / 52–56 / 96–101 and light 26–32 / 50–52 / 91–96. These differ from its
-Martin/AbM boundaries. Arpeggia exposes Chothia numbering separately from Martin;
-`cdr_definition="auto"` follows the selected scheme. An explicit override
-preserves intentional mixed conventions.[^immunum-chothia]
+The [CDR boundary table](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#numbering-and-cdr-conventions)
+records the selected definitions, including Immunum's 2021 Chothia consensus.
 
 The pinned Chothia rules place heavy FR3 insertions at H82, whereas Martin uses
 H72. Despite upstream's introductory claim of equivalent light numbering, its
 tables also differ for short light CDR1s: Chothia uses ANARCI-derived deletion
 ordering and Martin uses AntPack-derived ordering. These are upstream tool
-conventions, not evidence that one mapping is universally correct.
+conventions, not evidence that one mapping is universally correct.[^immunum-chothia]
 
 ### 9.5 Explicit germline imputation
 
@@ -502,16 +445,6 @@ length. With raw amino-acid input alone, distinguishing an internal biological
 deletion from omitted data requires information the string does not carry.[^imgt]
 
 These distinctions motivate [terminal-only, provenance-preserving imputation](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md#terminal-imputation).
-
-## Arpeggia integration
-
-The implementation uses Immunum's raw alignment and guarded conversion APIs,
-shared sequence rendering, and bundled IMGT references. Accepted behavior is in
-[ADR 0010](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0010-use-explicit-antibody-numbering-conventions.md);
-arguments and display controls are in the
-[user guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md).
-The [qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md#arpeggia-adapter-qualification)
-retains adapter checks, display validation, runtime and package measurements.
 
 ## References and implementation records
 
@@ -545,12 +478,9 @@ retains adapter checks, display validation, runtime and package measurements.
 [^immunum-aho]: Immunum **AHo numbering and unverified region table**: <https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering/aho.rs>.
 [^imgt-constant]: IMGT **unique numbering for C domains**: <https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVCsuperfamily.html>.
 [^immunum-core-api]: Immunum 1.3.1 public [alignment state and API](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/alignment.rs#L35) and [scheme conversion](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering.rs#L79).
-[^imgt-terms]: IMGT **terms of use**, retrieved 10 September 2026: <https://www.imgt.org/about/termsofuse.php>.
-[^imgt-download]: IMGT **GENE-DB downloads**: <https://www.imgt.org/download/GENE-DB/>; [release](https://www.imgt.org/download/GENE-DB/RELEASE); [gapped amino-acid references](https://www.imgt.org/download/GENE-DB/IMGTGENEDB-ReferenceSequences.fasta-AA-WithGaps-F%2BORF%2BinframeP).
 [^imgt-alpaca]: IMGT direct alpaca exports: [IGHV](https://www.imgt.org/genedb/GENElect?query=7.3+IGHV&species=Vicugna+pacos), [IGHJ](https://www.imgt.org/genedb/GENElect?query=7.6+IGHJ&species=Vicugna+pacos). Unfiltered exports contain 84 V and 7 J records; section 9 counts use the stated functional filter.
 [^igblast]: NCBI **IgBLAST introduction**, including separate amino-acid and nucleotide capabilities: <https://www.ncbi.nlm.nih.gov/igblast/intro.html>.
 [^antid-numbering]: antid **numbering objects, germline display and alignment**, inspected at `cbae1717f8bdb87fd504066dd6e3e3730de0dfe9`: <https://github.com/y1zhou/antid/blob/cbae1717f8bdb87fd504066dd6e3e3730de0dfe9/src/antid/numbering/antibody.py>.
-[^arpeggia-alignment]: Arpeggia [sequence-alignment contract](https://github.com/y1zhou/arpeggia/blob/master/docs/adr/0009-separate-sequence-correspondence-from-rmsd-evaluation.md) and [renderer](https://github.com/y1zhou/arpeggia/blob/master/src/seq_alignment/display.rs).
 [^immunum-alignment]: Immunum 1.3.1 [alignment implementation and 4k3e H coverage regression](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/alignment.rs#L486).
 [^martin-chapter]: Martin ACR, **Protein sequence and structure analysis of antibody variable domains**, Table 3.4: [author's chapter](https://citeseerx.ist.psu.edu/document?doi=ad292f8ef5c09a4ebb540a69e2c1e91366b1a3f2&repid=rep1&type=pdf).
 [^martin-loops]: Martin group, **Do antibody CDR loops change conformation upon binding?** (2024), Martin numbering with AbM CDR boundaries: <https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/>.

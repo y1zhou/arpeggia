@@ -1,11 +1,5 @@
 # Scientific conventions
 
-- Contact rows use `Disulfide` for resolved PDB `SSBOND` or mmCIF disulfide
-  declarations and `Covalent` for other resolved `LINK`, `CONECT`, or
-  `_struct_conn` bonds. Undeclared CYS pairs matching the original distance and
-  CB--SG--SG--CB dihedral rule produce `PotentialDisulfide`; other contacts in
-  the covalent-distance band produce `PotentialCovalent`. Clash and van der
-  Waals regions are separately named.
 - Explicit hydrogen-bond geometry uses only hydrogens associated with the donor
   atom. Missing donor hydrogens produce warnings; Arpeggia does not protonate
   input structures.

@@ -12,28 +12,19 @@ default; local and query-full semi-global modes are selectable. Semi-global
 consumes the entire second sequence with free first-sequence terminal overhangs.
 FASTA parsing and general multiple sequence alignment are outside this API.
 
-Use exact BLOSUM62 affine-gap optimization, charging
-`open + (length - 1) * extend`; defaults are 10 and 0.5. Costs must have at most
-two decimal places and satisfy opening ≥ extension ≥ 0.01. Scale matrix entries
-and costs together for integer scoring and report unscaled scores. Reject
-unsupported precision, nonfinite costs and unrepresentable scores.
+Use exact BLOSUM62 affine-gap optimization with matrix entries and gap costs
+scaled together for integer scoring; report unscaled scores. Return one
+deterministic optimum for the pinned backend. Structural RMSD never breaks
+sequence-alignment ties.
 
-Normalize lowercase; accept standard amino acids and `B/Z/X/U/O`. Preserve
-`U/O` for identity and edit distance while scoring them as `C/K`, with a warning.
-Reject empty inputs, gaps, stops, whitespace and unsupported symbols. Return one
-deterministic optimum for the pinned backend; structural RMSD never breaks ties.
+Preserve original symbols for identity and edit distance when `U/O` score as
+`C/K`. Report identity and coverage with both alignment-column and shorter-input
+denominators so gaps and clipping remain interpretable. Edit distance compares
+complete inputs independently of the chosen protein alignment. Similar
+substitutions affect display, not identity or chemical equivalence.
 
-For identical pairs `M`, nongap pairs `P`, alignment columns `A` and shorter full
-input length `S`, report identity as `M/A` and `M/S`, and coverage as `P/A` and
-`P/S`, retaining the counts. Clipped tails do not contribute to `A`. Empty local
-alignments have score zero, undefined alignment-length ratios and zero
-shorter-input ratios. Edit distance always compares complete inputs using unit
-substitutions, insertions and deletions, independently of the protein score.
-
-A similar substitution is a nonidentical pair with a positive BLOSUM62 score,
-including accepted scoring aliases. Identity takes precedence, even for `X/X`.
-Similarity affects display only: both substitution categories remain mismatches
-and neither implies chemical equivalence for atom pairing.
+The [alignment contract](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md#align-two-sequences)
+defines gap costs, alphabet validation, counts and empty-local-alignment results.
 
 ## Structural correspondence
 
@@ -96,13 +87,10 @@ spans, statistics and equal-length gapped strings plus ASCII operations. These
 recover residue-index pairs without a stored column vector. Names are metadata;
 structural alignments append chain IDs. Stored data and JSON remain unstyled.
 
-Share CLI/Python rendering, escaped names, terminal-width wrapping, operation
-styles and rulers. Sequence rulers count original residues, never gaps or
-padding; author numbering remains in structural residue maps. Color, width and
-ruler controls do not change data. The [display contract](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md#display-an-alignment)
-specifies markers, colors and clipped-tail layout. RMSD CLI output includes
-chain alignments; Python keeps the RMSD summary compact and exposes individual
-chain alignment objects for full displays.
+Share CLI/Python rendering while keeping stored data and JSON unstyled.
+The [display contract](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md#display-an-alignment)
+owns names, operations, rulers and wrapping. RMSD's CLI includes chain alignments;
+Python exposes them separately from its compact RMSD summary.
 
 ## Backend qualification
 

@@ -957,7 +957,6 @@ fn sap_score(
 /// Shape complementarity measures how well two molecular surfaces fit together,
 /// following Lawrence & Colman (1993) "Shape Complementarity at Protein/Protein Interfaces".
 /// Higher SC values (closer to 1.0) indicate better geometric fit between surfaces.
-/// Typical protein-protein interfaces have SC values between 0.5 and 0.7.
 ///
 /// Args:
 ///     input_file (str): Path to the PDB or mmCIF file
