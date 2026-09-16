@@ -483,8 +483,8 @@ fn antibody_cli_preserves_names_and_structured_numbering() {
     );
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(result["name"], "WT");
-    assert_eq!(result["scheme"], "martin");
-    assert_eq!(result["cdr_definition"], "martin");
+    assert_eq!(result["scheme"], "chothia");
+    assert_eq!(result["cdr_definition"], "chothia");
     assert!(result["residues"].as_array().unwrap().len() > 100);
     for segment in ["v_match", "j_match"] {
         for hit in result[segment]["hits"].as_array().unwrap() {

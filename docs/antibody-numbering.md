@@ -57,8 +57,9 @@ structured data, including tied references and imputation provenance.
 
 ## Numbering and CDR conventions
 
-IMGT is the default. `scheme` / `--scheme` also accepts `martin`, `aho`, and
-`kabat`; `chothia` is an alias for Martin/enhanced Chothia numbering.
+IMGT is the default. `scheme` / `--scheme` also accepts `chothia`, `martin`,
+`aho`, and `kabat`. Chothia and Martin/enhanced Chothia use distinct rules,
+including heavy FR3 insertion placement at H82 and H72, respectively.
 `cdr_definition="auto"` uses the associated boundaries below. To override them,
 explicitly provide both the numbering scheme and CDR definition.
 
@@ -68,14 +69,14 @@ explicitly provide both the numbering scheme and CDR definition.
 | Martin/AbM | 26–35 / 50–58 / 95–102 | 24–34 / 50–56 / 89–97 |
 | AHo structural loops | 25–40 / 58–77 / 109–137 | 25–40 / 58–77 / 109–137 |
 | Kabat | 31–35 / 50–65 / 95–102 | 24–34 / 50–56 / 89–97 |
-| Explicit Chothia | 26–32 / 52–56 / 96–101 | 26–32 / 50–52 / 91–96 |
+| Chothia (2021 consensus) | 26–32 / 52–56 / 96–101 | 26–32 / 50–52 / 91–96 |
 
 Ranges are inclusive in each definition's native numbering, including insertions
 at boundary positions. Mixed conventions transfer regions through the original
 residue correspondence; they do not apply these numbers directly to labels from
-another scheme. Thus `scheme="chothia"` uses Martin numbering and Martin/AbM
-regions, while `scheme="martin", cdr_definition="chothia"` uses the distinct
-Chothia regions.
+another scheme. Thus `scheme="chothia"` uses Chothia numbering and consensus
+regions, while `scheme="chothia", cdr_definition="martin"` retains Chothia labels
+and assigns Martin/AbM regions.
 
 Sources: [IMGT numbering](https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html),
 [Martin/AbM and Kabat definitions](https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/),

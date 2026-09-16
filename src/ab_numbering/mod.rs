@@ -13,15 +13,16 @@ use immunum::{Chain, Scheme};
 use serde::Serialize;
 use std::fmt::{Display, Formatter};
 
-/// Supported numbering convention. Chothia resolves to Martin.
+/// Supported antibody numbering convention.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NumberingScheme {
     /// IMGT unique numbering.
     #[default]
     Imgt,
+    /// Chothia structural numbering.
+    Chothia,
     /// Martin/enhanced Chothia numbering.
-    #[value(alias = "chothia")]
     Martin,
     /// AHo structural numbering.
     Aho,
@@ -33,6 +34,7 @@ impl NumberingScheme {
     pub(crate) fn backend(self) -> Scheme {
         match self {
             Self::Imgt => Scheme::IMGT,
+            Self::Chothia => Scheme::Chothia,
             Self::Martin => Scheme::Martin,
             Self::Aho => Scheme::Aho,
             Self::Kabat => Scheme::Kabat,
@@ -42,6 +44,7 @@ impl NumberingScheme {
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Imgt => "imgt",
+            Self::Chothia => "chothia",
             Self::Martin => "martin",
             Self::Aho => "aho",
             Self::Kabat => "kabat",
@@ -255,7 +258,7 @@ impl NumberedAntibody {
 
 /// Number one antibody variable domain with explicit numbering/CDR conventions.
 ///
-/// IMGT is the default; `chothia` is a CLI/Python alias for Martin numbering.
+/// IMGT is the default; Chothia, Martin, AHo and Kabat are also supported.
 /// Inputs may have tags or constant tails, but a second recognized domain fails.
 /// Only terminal FR1/FR4 truncations retaining the intervening core are supported.
 /// Profile coverage must span IMGT 23–118 to retain framework-anchor context

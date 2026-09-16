@@ -35,17 +35,17 @@ scheme or chain context.
 
 ## Numbering and CDR definitions
 
-IMGT is the default; Martin, AHo and Kabat are supported. Arpeggia deliberately
-aliases `chothia` numbering to Martin/enhanced Chothia, favoring structural
-corrections over historical Chothia output compatibility. The
-[original conventions](https://www.bioinf.org.uk/abs/abnum/) remain distinct.
+IMGT is the default; Chothia, Martin, AHo and Kabat are supported separately.
+Use upstream Chothia and Martin/enhanced Chothia rules directly, preserving
+their distinct insertion and deletion placement. The
+[original conventions](https://www.bioinf.org.uk/abs/abnum/) describe the distinction.
 
 `cdr_definition="auto"` follows the numbering scheme. An explicit CDR override
 requires an explicit scheme so mixed conventions are intentional. IMGT and Kabat
 use their matching definitions; Martin uses AbM boundaries from the
 [Martin group's study](https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/).
 AHo uses the published [structural-loop convention](https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f)
-instead of Immunum's unverified table. Explicit Chothia uses Immunum's distinct
+instead of Immunum's unverified table. Chothia uses Immunum's distinct
 [2021 consensus definition](https://github.com/ENPICOM/immunum/blob/45bb70d34802cc592ebd86e685cc9f551885a2d6/src/numbering/chothia.rs#L16).
 The [boundary table](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md#numbering-and-cdr-conventions)
 and public docstrings cite these sources.
@@ -132,7 +132,7 @@ Exact layout and colors belong in the [display guide](https://github.com/y1zhou/
 ## Qualification and deferred scope
 
 Pin Immunum with default features disabled. Its Rust integration and strongest
-fixture agreement across the four requested schemes support adoption; neither
+fixture agreement across the original four tested schemes support adoption; neither
 fixture consensus nor successful numbering establishes independent accuracy.
 The 26,365-input AntPack comparison retains rejections and distinguishes labels,
 domain coverage and failures. Adapter qualification covers conversion boundaries,

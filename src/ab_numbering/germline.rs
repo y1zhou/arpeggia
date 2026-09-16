@@ -469,6 +469,7 @@ mod tests {
                 let sequence = format!("{}ARGGG{}", v.sequence, j.sequence);
                 for scheme in [
                     NumberingScheme::Imgt,
+                    NumberingScheme::Chothia,
                     NumberingScheme::Martin,
                     NumberingScheme::Aho,
                     NumberingScheme::Kabat,

@@ -7,7 +7,7 @@ use clap::{Args, Parser};
 
 #[derive(Args, Debug, Clone)]
 struct NumberingArgs {
-    /// Numbering convention (default: imgt; chothia is an alias for martin)
+    /// Numbering convention (default: imgt)
     #[arg(long, value_enum)]
     scheme: Option<NumberingScheme>,
     /// Region convention; non-auto requires an explicit --scheme

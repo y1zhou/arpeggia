@@ -561,8 +561,8 @@ def test_antibody_api_and_germline_correspondence():
         number_antibody(ANTIBODY_SEQUENCE, cdr_definition="chothia")
     with pytest.raises(RuntimeError, match="multiple variable domains"):
         number_antibody(ANTIBODY_SEQUENCE + "GGGGSGGGGS" + ANTIBODY_SEQUENCE)
-    alias = number_antibody(ANTIBODY_SEQUENCE, scheme="chothia", species=["human"])
-    assert alias.scheme == alias.cdr_definition == "martin"
+    chothia = number_antibody(ANTIBODY_SEQUENCE, scheme="chothia", species=["human"])
+    assert chothia.scheme == chothia.cdr_definition == "chothia"
     for result, prefix in [
         (number_antibody(ANTIBODY_SEQUENCE, species="Homo sapiens"), "Homo sapiens"),
         (number_antibody(ANTIBODY_SEQUENCE, species=["Mus musculus"]), "Mus musculus"),

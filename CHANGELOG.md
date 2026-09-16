@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `number_antibody()` / `number-antibody` provide antibody variable-domain numbering with IMGT, Martin, AHo and Kabat,
+- `number_antibody()` / `number-antibody` provide antibody variable-domain numbering with IMGT, Chothia, Martin, AHo and Kabat,
   explicit CDR conventions, residue/input correspondence, and guards for weak
   matches, severe truncations, multiple domains and unsupported insertions.
   Partial domains must span the IMGT 23–118 framework-anchor interval to retain

@@ -182,6 +182,7 @@ mod tests {
     fn terminal_imputation_preserves_supplied_sequence_and_provenance() {
         for scheme in [
             NumberingScheme::Imgt,
+            NumberingScheme::Chothia,
             NumberingScheme::Martin,
             NumberingScheme::Aho,
             NumberingScheme::Kabat,

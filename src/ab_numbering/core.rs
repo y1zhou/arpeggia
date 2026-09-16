@@ -312,6 +312,7 @@ mod tests {
         for sequence in [HEAVY, KAPPA, LAMBDA] {
             for scheme in [
                 NumberingScheme::Imgt,
+                NumberingScheme::Chothia,
                 NumberingScheme::Martin,
                 NumberingScheme::Aho,
                 NumberingScheme::Kabat,
@@ -363,6 +364,7 @@ mod tests {
     fn domain_spans_and_regions_follow_the_requested_convention() {
         for scheme in [
             NumberingScheme::Imgt,
+            NumberingScheme::Chothia,
             NumberingScheme::Martin,
             NumberingScheme::Aho,
             NumberingScheme::Kabat,
@@ -373,6 +375,8 @@ mod tests {
                     ..Default::default()
                 };
                 let result = number_antibody(&format!("AAAAAA{sequence}AAAAAA"), &options).unwrap();
+                assert_eq!(result.scheme, scheme.name());
+                assert_eq!(result.cdr_definition, scheme.name());
                 assert_eq!(result.domain_span.0, 6);
                 assert_eq!(result.residues.len(), result.domain_span.1 - 6);
                 assert!(result.matched_profile_positions >= 80);
@@ -395,25 +399,52 @@ mod tests {
         let chothia = number_antibody(
             HEAVY,
             &NumberingOptions {
-                scheme: Some(NumberingScheme::Martin),
-                cdr_definition: CdrDefinition::Chothia,
+                scheme: Some(NumberingScheme::Chothia),
                 ..Default::default()
             },
         )
         .unwrap();
-        assert_eq!(
-            martin
-                .residues
-                .iter()
-                .map(|r| r.position)
-                .collect::<Vec<_>>(),
-            chothia
-                .residues
-                .iter()
-                .map(|r| r.position)
-                .collect::<Vec<_>>()
-        );
+        // Martin relocates heavy FR3 insertions from Chothia H82 to H72.
+        assert_eq!(martin.residues[73].position.to_string(), "72A");
+        assert_eq!(chothia.residues[73].position.to_string(), "73");
+        assert_eq!(martin.residues[83].position.to_string(), "80");
+        assert_eq!(chothia.residues[83].position.to_string(), "82A");
         assert!(martin.region_sequence("CDR1").len() > chothia.region_sequence("CDR1").len());
+        for (scheme, definition, numbered, regions) in [
+            (
+                NumberingScheme::Martin,
+                CdrDefinition::Chothia,
+                &martin,
+                &chothia,
+            ),
+            (
+                NumberingScheme::Chothia,
+                CdrDefinition::Martin,
+                &chothia,
+                &martin,
+            ),
+        ] {
+            let mixed = number_antibody(
+                HEAVY,
+                &NumberingOptions {
+                    scheme: Some(scheme),
+                    cdr_definition: definition,
+                    match_germlines: false,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            for ((residue, expected_label), expected_region) in mixed
+                .residues
+                .iter()
+                .zip(&numbered.residues)
+                .zip(&regions.residues)
+            {
+                assert_eq!(residue.position, expected_label.position);
+                assert_eq!(residue.region, expected_region.region);
+            }
+        }
+        assert!(align_antibodies(vec![martin, chothia], 0).is_err());
         assert!(
             number_antibody(
                 HEAVY,
@@ -456,6 +487,7 @@ mod tests {
         for sequence in [HEAVY, KAPPA, LAMBDA] {
             for scheme in [
                 NumberingScheme::Imgt,
+                NumberingScheme::Chothia,
                 NumberingScheme::Martin,
                 NumberingScheme::Aho,
                 NumberingScheme::Kabat,
@@ -531,16 +563,39 @@ mod tests {
             );
             assert_eq!(converted.is_ok(), extra == 52);
         }
+        for extra in [26, 27, 400] {
+            let mut states: Vec<_> = (104..=114).map(AlignedPosition::Aligned).collect();
+            states.extend(vec![AlignedPosition::Insertion(); extra]);
+            let converted = convert_states(&states, Scheme::Chothia, Chain::IGH);
+            assert_eq!(converted.is_ok(), extra == 26);
+        }
+    }
+
+    #[test]
+    fn short_light_cdr1_preserves_distinct_chothia_deletions() {
+        let states: Vec<_> = (27..=32).map(AlignedPosition::Aligned).collect();
+        for chain in [Chain::IGK, Chain::IGL] {
+            for (scheme, expected) in [
+                (Scheme::Chothia, [27, 28, 29, 30, 33, 34]),
+                (Scheme::Martin, [27, 28, 29, 32, 33, 34]),
+            ] {
+                let positions = convert_states(&states, scheme, chain).unwrap();
+                assert_eq!(
+                    positions.iter().map(|p| p.number).collect::<Vec<_>>(),
+                    expected
+                );
+            }
+        }
     }
 
     #[test]
     fn light_chain_conversion_retains_the_correct_terminal_span() {
         // AntPack COVID fixture 17116: upstream reports 107 residues but emits
-        // only 106 Martin/Kabat positions, leaving the terminal R unsupported.
+        // only 106 Chothia/Martin/Kabat positions; the terminal R is unsupported.
         let sequence = "DIQMTQSPSSLSASVGDRVTITCQASQDISNYLNWYQQKPGKAPKLLIYDASNLETGVPSRFSGSGSGTDFTFTISSLQPEDIATYYCQQYDNLPRFGPGTKVDIKR";
         let (_, mut alignment) = best_alignment(sequence, &mut AlignBuffer::new()).unwrap();
         assert_eq!(alignment.cons_end, 128);
-        for scheme in [Scheme::Martin, Scheme::Kabat] {
+        for scheme in [Scheme::Chothia, Scheme::Martin, Scheme::Kabat] {
             assert_eq!(
                 convert(&alignment, scheme, Chain::IGK, sequence.len())
                     .unwrap()

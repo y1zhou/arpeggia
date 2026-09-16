@@ -11,11 +11,11 @@ use pyo3::prelude::*;
 ///         Partial inputs must span IMGT profile positions 23–118, retaining
 ///         framework-anchor context for alignment and numbering/CDR conversion.
 ///     name (str): Display name, default "Seq001".
-///     scheme (str | None): "imgt" (default), "martin", "aho", or "kabat".
-///         "chothia" is an alias for Martin/enhanced Chothia numbering.
+///     scheme (str | None): "imgt" (default), "chothia", "martin", "aho", or "kabat".
+///         Chothia and Martin/enhanced Chothia use distinct numbering rules.
 ///     cdr_definition (str): "auto" (default) follows the numbering scheme.
 ///         Explicit "imgt", "martin", "aho", "kabat", or "chothia" requires
-///         an explicit scheme. Martin uses AbM; explicit Chothia uses the distinct
+///         an explicit scheme. Martin uses AbM; Chothia uses the distinct
 ///         2021 consensus boundaries. Mixed conventions retain the requested labels.
 ///     species (str | Sequence[str] | None): Restrict references by common or Latin
 ///         name: "human"/"Homo sapiens", "mouse"/"Mus musculus",
@@ -53,6 +53,7 @@ use pyo3::prelude::*;
 /// https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md
 /// IMGT: https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html
 /// Martin/AbM: https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/
+/// Chothia: https://www.bioinf.org.uk/abs/info.html
 /// AHo loops: https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f
 #[pyfunction]
 #[pyo3(signature=(sequence, *, name="Seq001", scheme=None, cdr_definition="auto", species=None, match_germlines=true))]
@@ -77,7 +78,7 @@ fn number_antibody(
         name: name.into(),
         match_germlines,
         scheme: scheme
-            .map(|s| value_enum(s, "scheme must be imgt, martin (or chothia), aho, or kabat"))
+            .map(|s| value_enum(s, "scheme must be imgt, chothia, martin, aho, or kabat"))
             .transpose()?,
         cdr_definition: value_enum(
             cdr_definition,

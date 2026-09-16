@@ -718,8 +718,8 @@ def number_antibody(
             Terminal FR1/FR4 truncations must span IMGT profile positions
             23–118 to preserve framework-anchor context for alignment and conversion.
         name (str): Display name, default Seq001.
-        scheme (str | None): IMGT by default; Martin, AHo and Kabat are supported.
-            Chothia aliases Martin numbering.
+        scheme (str | None): IMGT by default; Chothia, Martin, AHo and Kabat are supported.
+            Chothia and Martin/enhanced Chothia use distinct numbering rules.
         cdr_definition (str): Auto follows the scheme. An explicit definition
             requires an explicit scheme; Chothia uses distinct consensus regions.
         species (str | Sequence[str] | None): Restrict references by common or Latin
@@ -747,6 +747,7 @@ def number_antibody(
     https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md
     IMGT: https://www.imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html
     Martin/AbM: https://pmc.ncbi.nlm.nih.gov/articles/PMC10939163/
+    Chothia: https://www.bioinf.org.uk/abs/info.html
     AHo: https://pubs.rsc.org/en/content/articlehtml/2019/me/c9me00021f
     """
 

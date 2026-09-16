@@ -480,9 +480,15 @@ these sources.[^martin-loops][^aho-loops][^aho-original]
 
 Immunum's explicit Chothia CDR table follows the 2021 consensus: heavy
 26–32 / 52–56 / 96–101 and light 26–32 / 50–52 / 91–96. These differ from its
-Martin/AbM boundaries. Arpeggia exposes the distinct definition through explicit
-`cdr_definition="chothia"`; the numbering argument's `chothia` alias still
-resolves to Martin. This preserves intentional mixed conventions.[^immunum-chothia]
+Martin/AbM boundaries. Arpeggia exposes Chothia numbering separately from Martin;
+`cdr_definition="auto"` follows the selected scheme. An explicit override
+preserves intentional mixed conventions.[^immunum-chothia]
+
+The pinned Chothia rules place heavy FR3 insertions at H82, whereas Martin uses
+H72. Despite upstream's introductory claim of equivalent light numbering, its
+tables also differ for short light CDR1s: Chothia uses ANARCI-derived deletion
+ordering and Martin uses AntPack-derived ordering. These are upstream tool
+conventions, not evidence that one mapping is universally correct.
 
 ### 9.5 Explicit germline imputation
 

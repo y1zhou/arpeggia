@@ -5,6 +5,22 @@ On 10 September 2026, AntPack, Immunum and RIOT were compared on the same
 numbering labels in every tested scheme. RIOT rejected all negative controls.
 Neither result establishes an independent numbering-accuracy ranking.
 
+## Chothia adapter qualification
+
+On 16 September 2026, the release Python wheel numbered the same pinned 26,365
+inputs with distinct `scheme="chothia"`, automatic CDRs and germline matching.
+It accepted 25,474 inputs and rejected all 881 negative controls plus ten
+fragments lacking IMGT 23–118 anchor coverage. Every accepted result retained
+contiguous input correspondence, unique ordered labels and valid region names;
+all had a V match and five lacked qualifying J evidence.
+
+Regression checks distinguish heavy H82 insertions from Martin H72 insertions
+and the schemes' short light-CDR1 deletion ordering. They also cover mixed CDR
+definitions, the light-chain terminal-span correction, Chothia's 26-insertion
+limit, terminal imputation and rejection of mixed-scheme antibody alignments.
+These qualify adapter behavior; Chothia was not part of the original
+three-engine positional-agreement comparison below.
+
 ## Versions and settings
 
 | Engine | Tested version | Configuration |
