@@ -50,6 +50,9 @@ Arm64 Linux and macOS. Download the CLI from
 [GitHub Releases](https://github.com/y1zhou/arpeggia/releases/), or see
 [BUILD.md](https://github.com/y1zhou/arpeggia/blob/master/BUILD.md) to build either interface from source.
 
+See the [release notes](https://github.com/y1zhou/arpeggia/blob/master/CHANGELOG.md)
+for new features and API changes.
+
 ## Usage
 
 See [Python and CLI examples](https://github.com/y1zhou/arpeggia/blob/master/docs/examples.md)

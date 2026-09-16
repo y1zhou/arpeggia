@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-16
+
 ### Added
 
 - Pairwise protein sequence alignment with global, local and semi-global modes,
@@ -400,7 +402,8 @@ Qualification and benchmark reports:
 - Initial release
 - Detection of common protein-protein interactions in a PDB or mmCIF file
 
-[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/y1zhou/arpeggia/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/y1zhou/arpeggia/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/y1zhou/arpeggia/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/y1zhou/arpeggia/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/y1zhou/arpeggia/compare/v0.8.1...v0.9.0

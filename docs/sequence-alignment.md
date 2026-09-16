@@ -165,7 +165,7 @@ Rejection is permanent and atom-wise. It also works without sequence alignment,
 using the existing exact correspondence; it does not infer structural matches
 as PyMOL `super` does.
 
-`rmsd()` returns a read-only `RmsdResult`. When migrating from the scalar API, use
+Since v0.10.0, `rmsd()` returns a read-only `RmsdResult`. To migrate from the scalar API, use
 `result.rmsd`; Rust callers use `get_rmsd(reference, query, &RmsdOptions)` and
 read `analysis.value.rmsd`. Python callers using the old `mobile=` keyword
 should use `query=` for the second structure.
