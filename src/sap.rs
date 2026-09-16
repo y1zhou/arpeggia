@@ -614,57 +614,6 @@ END                                                                             
     }
 
     #[test]
-    fn test_per_atom_sap_returns_data() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
-        let df = df.unwrap().value;
-
-        // Check that we get results
-        assert!(df.height() > 0, "SAP DataFrame should not be empty");
-
-        // Check columns
-        let columns: Vec<String> = df
-            .get_column_names()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert!(columns.contains(&"chain".to_string()));
-        assert!(columns.contains(&"resn".to_string()));
-        assert!(columns.contains(&"resi".to_string()));
-        assert!(columns.contains(&"atomn".to_string()));
-        assert!(columns.contains(&"atomi".to_string()));
-        assert!(columns.contains(&"sasa".to_string()));
-        assert!(columns.contains(&"sap_score".to_string()));
-        assert_eq!(df.column("resi").unwrap().dtype(), &DataType::Int32);
-        assert_eq!(df.column("atomi").unwrap().dtype(), &DataType::UInt32);
-    }
-
-    #[test]
-    fn test_per_atom_sap_values_reasonable() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_per_atom_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
-        let df = df.unwrap().value;
-
-        // Get SAP scores
-        let sap_values: Vec<f32> = df
-            .column("sap_score")
-            .unwrap()
-            .f32()
-            .unwrap()
-            .iter()
-            .flatten()
-            .collect();
-
-        // SAP values should have both positive and negative values
-        // (hydrophobic and hydrophilic patches)
-        let has_positive = sap_values.iter().any(|&v| v > 0.0);
-        let has_negative = sap_values.iter().any(|&v| v < 0.0);
-
-        assert!(has_positive, "Should have some positive SAP scores");
-        assert!(has_negative, "Should have some negative SAP scores");
-    }
-
-    #[test]
     fn unsupported_sap_monomers_are_omitted_with_a_warning() {
         let input =
             b"ATOM      1  CB  SEC A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
@@ -683,28 +632,6 @@ END                                                                             
                 .iter()
                 .any(|warning| warning.code == WarningCode::UnsupportedMonomer)
         );
-    }
-
-    #[test]
-    fn test_per_residue_sap_returns_data() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
-        let df = df.unwrap().value;
-
-        // Check that we get results
-        assert!(df.height() > 0, "Residue SAP DataFrame should not be empty");
-
-        // Check columns
-        let columns: Vec<String> = df
-            .get_column_names()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert!(columns.contains(&"chain".to_string()));
-        assert!(columns.contains(&"resn".to_string()));
-        assert!(columns.contains(&"resi".to_string()));
-        assert!(columns.contains(&"sc_sasa".to_string()));
-        assert!(columns.contains(&"sap_score".to_string()));
     }
 
     #[test]
@@ -776,6 +703,34 @@ END                                                                             
         let atom = atom.unwrap().value;
         let residue = run_with_threads(1, || get_per_residue_sap_score(&pdb, 1.4, 100, 0, 5.0, ""));
         let residue = residue.unwrap().value;
+        for (frame, columns) in [
+            (
+                &atom,
+                &[
+                    "chain",
+                    "resn",
+                    "resi",
+                    "atomn",
+                    "atomi",
+                    "sasa",
+                    "sap_score",
+                ][..],
+            ),
+            (
+                &residue,
+                &["chain", "resn", "resi", "sc_sasa", "sap_score"][..],
+            ),
+        ] {
+            assert!(frame.height() > 0);
+            for column in columns {
+                assert!(frame.column(column).is_ok(), "missing {column}");
+            }
+        }
+        assert_eq!(atom.column("resi").unwrap().dtype(), &DataType::Int32);
+        assert_eq!(atom.column("atomi").unwrap().dtype(), &DataType::UInt32);
+        let scores = atom.column("sap_score").unwrap().f32().unwrap();
+        assert!(scores.into_no_null_iter().any(|v| v > 0.0));
+        assert!(scores.into_no_null_iter().any(|v| v < 0.0));
         let mut expected = BTreeMap::<(String, String, i32, String), (f32, f32)>::new();
 
         for row in 0..atom.height() {

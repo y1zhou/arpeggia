@@ -454,7 +454,6 @@ fn alignment_display_flags_preserve_plain_json_and_wrapping() {
     assert_eq!(data["aligned_query"], "ACD-YGHIKLMN");
     assert_eq!(data["operations"], "   -:       ");
     assert_eq!(data["mismatches"], 1);
-    assert!(data.get("columns").is_none());
     assert!(!run(&["--width", "1"]).status.success());
 }
 

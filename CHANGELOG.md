@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.rmsd` for full evaluation or `.core_rmsd` for retained fitting atoms.
   Rust `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`.
   CLI RMSD supports detailed text and JSON output.
+- Consolidated redundant surface/API tests while retaining schema, numerical,
+  warning and input-validation coverage.
 - Expanded CLI help and Python docstrings; consolidated documentation and
   restored detailed [Python/CLI examples](https://github.com/y1zhou/arpeggia/blob/master/docs/examples.md).
 - Bundled germline attribution appears in the README, linking the

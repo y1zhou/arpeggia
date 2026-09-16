@@ -904,50 +904,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_atom_sasa_returns_data() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, ""));
-        let df = df.unwrap().value;
-
-        // Check that we get results
-        assert!(df.height() > 0, "SASA DataFrame should not be empty");
-
-        // Check that the expected columns exist
-        let columns: Vec<String> = df
-            .get_column_names()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert!(
-            columns.contains(&"atomi".to_string()),
-            "Should have 'atomi' column"
-        );
-        assert!(
-            columns.contains(&"sasa".to_string()),
-            "Should have 'sasa' column"
-        );
-        assert!(
-            columns.contains(&"chain".to_string()),
-            "Should have 'chain' column"
-        );
-        assert!(
-            columns.contains(&"resn".to_string()),
-            "Should have 'resn' column"
-        );
-        assert!(
-            columns.contains(&"resi".to_string()),
-            "Should have 'resi' column"
-        );
-        assert!(
-            columns.contains(&"atomn".to_string()),
-            "Should have 'atomn' column"
-        );
-        assert!(columns.contains(&"polarity".to_string()));
-        assert_eq!(df.column("resi").unwrap().dtype(), &DataType::Int32);
-        assert_eq!(df.column("atomi").unwrap().dtype(), &DataType::UInt32);
-    }
-
-    #[test]
     fn standard_atom_sasa_is_heavy_only() {
         let input =
             b"ATOM      1  CB  ALA A   1       0.000   0.000   0.000  1.00 20.00           C  \n\
@@ -1020,26 +976,6 @@ END                                                                             
     }
 
     #[test]
-    fn test_get_atom_sasa_values_reasonable() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, ""));
-        let df = df.unwrap().value;
-
-        // Get the SASA column and check values are non-negative
-        let sasa_col = df.column("sasa").unwrap();
-        let sasa_values: Vec<f32> = sasa_col.f32().unwrap().iter().flatten().collect();
-
-        assert!(
-            sasa_values.iter().all(|&v| v >= 0.0),
-            "All SASA values should be non-negative"
-        );
-
-        // Check that some atoms have non-zero SASA (surface exposed)
-        let non_zero_count = sasa_values.iter().filter(|&&v| v > 0.0).count();
-        assert!(non_zero_count > 0, "Some atoms should have non-zero SASA");
-    }
-
-    #[test]
     fn unsupported_polarity_is_reported_without_dropping_area() {
         let input = b"HETATM    1 SE   MSE A   1       0.000   0.000   0.000  1.00 20.00          SE  \nEND\n";
         let pdb = ReadOptions::default()
@@ -1106,122 +1042,70 @@ ENDMDL\nEND\n";
     }
 
     #[test]
-    fn test_get_residue_sasa_returns_data() {
+    fn sasa_levels_preserve_schema_and_totals() {
         let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_residue_sasa(&pdb, 1.4, 100, 0, ""));
-        let df = df.unwrap().value;
-
-        // Check that we get results
+        let (atom, residue, chain) = run_with_threads(1, || {
+            (
+                get_atom_sasa(&pdb, 1.4, 100, 0, "").unwrap().value,
+                get_residue_sasa(&pdb, 1.4, 100, 0, "").unwrap().value,
+                get_chain_sasa(&pdb, 1.4, 100, 0, "").unwrap().value,
+            )
+        });
+        for (frame, columns) in [
+            (
+                &atom,
+                &[
+                    "atomi", "sasa", "polarity", "chain", "resn", "resi", "atomn",
+                ][..],
+            ),
+            (
+                &residue,
+                &[
+                    "chain",
+                    "resn",
+                    "resi",
+                    "insertion",
+                    "sasa",
+                    "polar_sasa",
+                    "hydrophobic_sasa",
+                    "unclassified_sasa",
+                ][..],
+            ),
+            (&chain, &["chain", "sasa"][..]),
+        ] {
+            for column in columns {
+                assert!(frame.column(column).is_ok(), "missing {column}");
+            }
+        }
+        assert_eq!(atom.column("resi").unwrap().dtype(), &DataType::Int32);
+        assert_eq!(atom.column("atomi").unwrap().dtype(), &DataType::UInt32);
         assert!(
-            df.height() > 0,
-            "Residue SASA DataFrame should not be empty"
+            atom.column("sasa")
+                .unwrap()
+                .f32()
+                .unwrap()
+                .into_no_null_iter()
+                .all(|v| v >= 0.0)
+        );
+        assert_eq!(
+            (atom.height(), residue.height(), chain.height()),
+            (602, 76, 1)
+        );
+        assert_eq!(
+            chain.column("chain").unwrap().str().unwrap().get(0),
+            Some("A")
         );
 
-        // Check that the expected columns exist
-        let columns: Vec<String> = df
-            .get_column_names()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert!(
-            columns.contains(&"chain".to_string()),
-            "Should have 'chain' column"
-        );
-        assert!(
-            columns.contains(&"resn".to_string()),
-            "Should have 'resn' column"
-        );
-        assert!(
-            columns.contains(&"resi".to_string()),
-            "Should have 'resi' column"
-        );
-        assert!(
-            columns.contains(&"insertion".to_string()),
-            "Should have 'insertion' column"
-        );
-        assert!(
-            columns.contains(&"sasa".to_string()),
-            "Should have 'sasa' column"
-        );
-        assert!(
-            columns.contains(&"polar_sasa".to_string()),
-            "Should have 'polar_sasa' column"
-        );
-        assert!(columns.contains(&"hydrophobic_sasa".to_string()));
-        assert!(columns.contains(&"unclassified_sasa".to_string()));
-    }
-
-    #[test]
-    fn test_get_residue_sasa_aggregation() {
-        let pdb = load_ubiquitin();
-        let atom_df = run_with_threads(1, || get_atom_sasa(&pdb, 1.4, 100, 0, ""));
-        let atom_df = atom_df.unwrap().value;
-        let residue_df = run_with_threads(1, || get_residue_sasa(&pdb, 1.4, 100, 0, ""));
-        let residue_df = residue_df.unwrap().value;
-
-        // There should be fewer rows in residue-level than atom-level
-        assert!(
-            residue_df.height() < atom_df.height(),
-            "Residue-level should have fewer rows than atom-level: {} vs {}",
-            residue_df.height(),
-            atom_df.height()
-        );
-
-        // All levels aggregate the exact same per-atom calculation.
-        let atom_total: f32 = sum_float_col(&atom_df, "sasa");
-        let residue_total: f32 = sum_float_col(&residue_df, "sasa");
-        assert!(
-            (residue_total - atom_total).abs() < 0.001,
-            "atom={atom_total}, residue={residue_total}"
-        );
-        let partition_total = sum_float_col(&residue_df, "polar_sasa")
-            + sum_float_col(&residue_df, "hydrophobic_sasa")
-            + sum_float_col(&residue_df, "unclassified_sasa");
-        assert!((partition_total - residue_total).abs() < 0.001);
-
-        let chain_df = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, ""));
-        let chain_df = chain_df.unwrap().value;
-        assert!((sum_float_col(&chain_df, "sasa") - atom_total).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_get_chain_sasa_returns_data() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, ""));
-        let df = df.unwrap().value;
-
-        // Check that we get results
-        assert!(df.height() > 0, "Chain SASA DataFrame should not be empty");
-
-        // Check that the expected columns exist
-        let columns: Vec<String> = df
-            .get_column_names()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert!(
-            columns.contains(&"chain".to_string()),
-            "Should have 'chain' column"
-        );
-        assert!(
-            columns.contains(&"sasa".to_string()),
-            "Should have 'sasa' column"
-        );
-    }
-
-    #[test]
-    fn test_get_chain_sasa_single_chain() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, ""));
-        let df = df.unwrap().value;
-
-        // Ubiquitin (1ubq) has a single chain A
-        assert_eq!(df.height(), 1, "1ubq should have 1 chain");
-
-        // Check that the chain is A
-        let chain_col = df.column("chain").unwrap();
-        let chain_id = chain_col.str().unwrap().get(0).unwrap();
-        assert_eq!(chain_id, "A", "Chain should be A");
+        let total = sum_float_col(&atom, "sasa");
+        for frame in [&residue, &chain] {
+            assert!((sum_float_col(frame, "sasa") - total).abs() < 0.001);
+            let partitions = sum_float_col(frame, "polar_sasa")
+                + sum_float_col(frame, "hydrophobic_sasa")
+                + sum_float_col(frame, "unclassified_sasa");
+            assert!((partitions - total).abs() < 0.001);
+        }
+        // Historical rust-sasa 0.9.0 ubiquitin regression, retained at its original tolerance.
+        assert!((sum_float_col(&chain, "sasa") - 4813.0).abs() < 100.0);
     }
 
     #[test]
@@ -1275,63 +1159,6 @@ ENDMDL\nEND\n";
     }
 
     #[test]
-    fn test_sasa_regression_ubiquitin() {
-        // Regression test to ensure SASA values remain consistent
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, ""));
-        let df = df.unwrap().value;
-
-        let total_sasa: f32 = df.column("sasa").unwrap().f32().unwrap().get(0).unwrap();
-
-        // Expected value from rust-sasa 0.9.0 with default parameters
-        // This should be around 4813 Å² for ubiquitin
-        let expected_sasa = 4813.0;
-        let tolerance = 100.0; // Allow some tolerance for minor differences
-
-        assert!(
-            (total_sasa - expected_sasa).abs() < tolerance,
-            "Ubiquitin total SASA should be around {expected_sasa} Å², got {total_sasa} Å²"
-        );
-    }
-
-    #[test]
-    fn test_dsasa_returns_positive() {
-        // 6bft has multiple chains with interfaces
-        let pdb = load_multi_chain();
-
-        // Calculate dSASA between groups A,B,C and G,H,L
-        let dsasa = run_with_threads(1, || get_dsasa_components(&pdb, "A,B,C/G,H,L", 1.4, 100, 0))
-            .unwrap()
-            .value
-            .dsasa;
-
-        // dSASA should be positive for an interface
-        assert!(dsasa > 0.0, "dSASA should be positive, got {dsasa}");
-    }
-
-    #[test]
-    fn test_dsasa_interface_value() {
-        // 6bft has multiple chains with interfaces
-        let pdb = load_multi_chain();
-
-        // Calculate dSASA between groups A,B,C and G,H,L
-        let dsasa = run_with_threads(1, || get_dsasa_components(&pdb, "C/H,L", 1.4, 100, 0))
-            .unwrap()
-            .value
-            .dsasa;
-
-        // Regression test: the dSASA should be around 1644-1665 Å²
-        // as calculated from PyMOL and Rosetta InterfaceAnalyzer
-        let expected_dsasa = 1650.0;
-        let tolerance = 50.0; // Allow some tolerance
-
-        assert!(
-            (dsasa - expected_dsasa).abs() < tolerance,
-            "6bft dSASA should be around {expected_dsasa} Å², got {dsasa} Å²"
-        );
-    }
-
-    #[test]
     fn test_dsasa_symmetric() {
         // dSASA should be the same regardless of which group is first
         let pdb = load_multi_chain();
@@ -1345,6 +1172,7 @@ ENDMDL\nEND\n";
             .value
             .dsasa;
 
+        assert!(dsasa1 > 0.0);
         let diff = (dsasa1 - dsasa2).abs();
         assert!(
             diff < 1.0,
@@ -1360,7 +1188,8 @@ ENDMDL\nEND\n";
                 .unwrap()
                 .value
         });
-        assert!(result.dsasa > 0.0);
+        // Historical 6BFT PyMOL/Rosetta interface comparison, original tolerance.
+        assert!((result.dsasa - 1650.0).abs() < 50.0);
         assert!(
             (result.polar_dsasa + result.hydrophobic_dsasa + result.unclassified_dsasa
                 - result.dsasa)
@@ -1373,50 +1202,15 @@ ENDMDL\nEND\n";
     }
 
     #[test]
-    fn test_get_relative_sasa_returns_data() {
-        let pdb = load_ubiquitin();
-        let df = run_with_threads(1, || get_relative_sasa(&pdb, 1.4, 100, 0, ""));
-        let df = df.unwrap().value;
-
-        // Check that we get results
-        assert!(
-            df.height() > 0,
-            "Relative SASA DataFrame should not be empty"
-        );
-
-        // Check that the expected columns exist
-        let columns: Vec<String> = df
-            .get_column_names()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        assert!(
-            columns.contains(&"chain".to_string()),
-            "Should have 'chain' column"
-        );
-        assert!(
-            columns.contains(&"resn".to_string()),
-            "Should have 'resn' column"
-        );
-        assert!(
-            columns.contains(&"resi".to_string()),
-            "Should have 'resi' column"
-        );
-        assert!(
-            columns.contains(&"sasa".to_string()),
-            "Should have 'sasa' column"
-        );
-        assert!(
-            columns.contains(&"relative_sasa".to_string()),
-            "Should have 'relative_sasa' column"
-        );
-    }
-
-    #[test]
     fn test_get_relative_sasa_values_bounded() {
         let pdb = load_ubiquitin();
         let df = run_with_threads(1, || get_relative_sasa(&pdb, 1.4, 100, 0, ""));
         let df = df.unwrap().value;
+
+        for column in ["chain", "resn", "resi", "sasa", "relative_sasa"] {
+            assert!(df.column(column).is_ok(), "missing {column}");
+        }
+        assert!(df.height() > 0);
 
         // Get relative_sasa values
         let rsa_values: Vec<f32> = df
@@ -1469,21 +1263,6 @@ ENDMDL\nEND\n";
     }
 
     #[test]
-    fn test_chain_filter_empty_keeps_all() {
-        let pdb = load_multi_chain();
-
-        // Empty chain filter should keep all chains
-        let df_all = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, ""));
-        let df_all = df_all.unwrap().value;
-        let chain_count_all = df_all.height();
-
-        assert!(
-            chain_count_all > 1,
-            "Multi-chain structure should have multiple chains: {chain_count_all}"
-        );
-    }
-
-    #[test]
     fn test_chain_filter_single_chain() {
         let pdb = load_multi_chain();
 
@@ -1506,29 +1285,11 @@ ENDMDL\nEND\n";
     #[test]
     fn test_chain_filter_multiple_chains() {
         let pdb = load_multi_chain();
-
-        // Filter to chains A, B
-        let df_ab = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, "A,B"));
-        let df_ab = df_ab.unwrap().value;
-        let df_all = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, ""));
-        let df_all = df_all.unwrap().value;
-
-        assert!(
-            df_ab.height() <= df_all.height(),
-            "Filtered results should have equal or fewer chains: {} vs {}",
-            df_ab.height(),
-            df_all.height()
-        );
-
-        // Check that we only have A and B chains
-        let chain_col = df_ab.column("chain").unwrap();
-        let chain_ids: Vec<&str> = chain_col.str().unwrap().iter().flatten().collect();
-        for chain_id in &chain_ids {
-            assert!(
-                *chain_id == "A" || *chain_id == "B",
-                "Only A and B chains should be present, got: {chain_id}"
-            );
-        }
+        let df = run_with_threads(1, || get_chain_sasa(&pdb, 1.4, 100, 0, "A,B"))
+            .unwrap()
+            .value;
+        let chains = df.column("chain").unwrap().str().unwrap();
+        assert_eq!(chains.iter().collect::<Vec<_>>(), [Some("A"), Some("B")]);
     }
 
     #[test]

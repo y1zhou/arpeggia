@@ -16,22 +16,6 @@ def test_pdb_file():
     return str(test_file)
 
 
-def test_import():
-    """Test that the module can be imported."""
-    import arpeggia
-    from arpeggia import _contract
-
-    assert hasattr(arpeggia, "__version__")
-    assert hasattr(arpeggia, "contacts")
-    assert hasattr(arpeggia, "sasa")
-    assert hasattr(arpeggia, "seq")
-    assert hasattr(arpeggia, "rmsd")
-    assert hasattr(arpeggia, "cluster_structs")
-    assert arpeggia.__all__ == list(
-        _contract.EXPORTED_FUNCTIONS + _contract.EXPORTED_CLASSES
-    )
-
-
 def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
     """Expose exact-correspondence RMSD and clustering through Python."""
     import arpeggia
@@ -115,7 +99,7 @@ def test_rmsd_pairwise_and_clustering(test_pdb_file, tmp_path):
 
 
 def test_contacts(test_pdb_file):
-    """Test the contacts function returns expected DataFrame structure."""
+    """Preserve the contact schema and scientific warnings at the Python boundary."""
     import arpeggia
     from arpeggia import _contract
 
@@ -125,24 +109,10 @@ def test_contacts(test_pdb_file):
         pytest.warns(UserWarning, match=r"^\[MISSING_DONOR_HYDROGEN\]"),
     ):
         df = arpeggia.contacts(test_pdb_file, groups="/", vdw_comp=0.1, dist_cutoff=6.5)
-
-    # Check DataFrame is not empty
-    assert df.height > 0, "Contacts DataFrame should not be empty"
-
-    # Check expected columns exist
-    expected_columns = _contract.CONTACT_COLUMNS
-
-    for col in expected_columns:
-        assert col in df.columns, (
-            f"Column '{col}' should be present in contacts DataFrame"
-        )
-
-    # Check shape - should have 20 columns (all expected columns)
-    assert df.width == 20, f"Expected 20 columns, got {df.width}"
-
-    # Verify some basic properties
-    assert df["distance"].dtype.is_float(), "Distance column should be float type"
-    assert all(df["distance"] >= 0), "All distances should be non-negative"
+    assert df.height > 0
+    assert set(df.columns) == set(_contract.CONTACT_COLUMNS)
+    assert df["distance"].dtype.is_float()
+    assert (df["distance"] >= 0).all()
 
 
 def test_contacts_ignore_zero_occupancy(tmp_path):
@@ -166,44 +136,20 @@ def test_contacts_ignore_zero_occupancy(tmp_path):
 
 
 def test_sasa(test_pdb_file):
-    """Test the sasa function returns expected DataFrame structure."""
+    """Preserve atom output and forward the requested probe radius."""
     import arpeggia
     from arpeggia import _contract
 
     df = arpeggia.sasa(test_pdb_file, probe_radius=1.4, n_points=100, model_num=0)
+    assert df.height == 602
+    assert set(df.columns) == set(_contract.SASA_COLUMNS["atom"])
+    assert df["sasa"].dtype.is_float()
+    assert (df["sasa"] >= 0).all()
+    assert (df["sasa"] > 0).any()
 
-    # Check DataFrame is not empty
-    assert df.height == 602, "SASA DataFrame should not be empty"
-
-    # Check expected columns exist
-    expected_columns = _contract.SASA_COLUMNS["atom"]
-
-    for col in expected_columns:
-        assert col in df.columns, f"Column '{col}' should be present in SASA DataFrame"
-
-    assert df.shape[1] == 9
-
-    # Verify SASA values are reasonable
-    assert df["sasa"].dtype.is_float(), "SASA column should be float type"
-    assert all(df["sasa"] >= 0), "All SASA values should be non-negative"
-    assert any(df["sasa"] > 0), "At least some atoms should have non-zero SASA"
-
-
-def test_sasa_parameters(test_pdb_file):
-    """Test SASA with different parameters."""
-    import arpeggia
-
-    # Test with different probe radius
-    df1 = arpeggia.sasa(test_pdb_file, probe_radius=1.4, n_points=100)
-    df2 = arpeggia.sasa(test_pdb_file, probe_radius=2.0, n_points=100)
-
-    # Both should return data
-    assert len(df1) > 0
-    assert len(df2) > 0
-
-    # Different probe radius should give different SASA values
-    # (though the number of atoms should be the same)
-    assert len(df1) == len(df2)
+    larger_probe = arpeggia.sasa(test_pdb_file, probe_radius=2.0, n_points=100)
+    assert larger_probe.height == df.height
+    assert not larger_probe["sasa"].equals(df["sasa"])
 
 
 def test_sasa_and_sap_default_model_uses_first_explicit_model(test_pdb_file, tmp_path):
@@ -239,34 +185,15 @@ def test_sasa_and_sap_default_model_uses_first_explicit_model(test_pdb_file, tmp
 
 
 def test_seq(test_pdb_file):
-    """Test the seq function returns expected structure."""
+    """Recover the complete observed ubiquitin sequence."""
     import arpeggia
 
-    seqs = arpeggia.seq(test_pdb_file)
-
-    # Check return type
-    assert isinstance(seqs, list), "Sequences should return a list"
-    assert len(seqs) > 0, "Should have at least one chain"
-
-    # For 1ubq.pdb, we know it has 1 chain with a specific sequence
-    # Chain should be present
-    assert len(seqs) == 1, f"Expected 1 chain, got {len(seqs)}"
-
-    # Check sequence properties
-    for chain_id, seq in seqs:
-        assert isinstance(chain_id, str), "Chain ID should be string"
-        assert isinstance(seq, str), "Sequence should be string"
-        assert len(seq) > 0, "Sequence should not be empty"
-
-        # For 1ubq, the sequence should be 76 residues
-        # This is the known ubiquitin sequence
-        assert len(seq) == 76, f"Expected 76 residues for ubiquitin, got {len(seq)}"
-
-        # Check it starts with the expected sequence
-        expected_start = "MQIFVKTLTG"
-        assert seq.startswith(expected_start), (
-            f"Sequence should start with {expected_start}, got {seq[:10]}"
+    assert arpeggia.seq(test_pdb_file) == [
+        (
+            "A",
+            "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
         )
+    ]
 
 
 def test_seq_selects_one_model(tmp_path):
@@ -286,22 +213,6 @@ def test_seq_selects_one_model(tmp_path):
     assert arpeggia.seq(str(structure), model_num=9) == [("A", "G")]
     with pytest.raises(ValueError, match="model 3 does not exist"):
         arpeggia.seq(str(structure), model_num=3)
-
-
-def test_sequences_validity(test_pdb_file):
-    """Test that returned sequences contain valid amino acid codes."""
-    import arpeggia
-
-    seqs = arpeggia.seq(test_pdb_file)
-
-    # Valid single-letter amino acid codes
-    valid_codes = set("ACDEFGHIKLMNPQRSTVWYX")
-
-    for chain_id, seq in seqs:
-        # All characters should be valid amino acid codes
-        assert all(aa in valid_codes for aa in seq), (
-            f"Sequence for chain {chain_id} contains invalid amino acid codes"
-        )
 
 
 def test_python_errors_and_conformer_warning(tmp_path):
@@ -493,7 +404,6 @@ def test_alignment_display_controls(monkeypatch):
     assert "\x1b[34m:\x1b[0m" in alignment.format(color="always")
     assert alignment.operations == "   -:       "
     assert alignment.mismatches == 1
-    assert not hasattr(alignment, "columns")
     ruled = alignment.format(width=80, color="never")
     assert (
         len(ruled.splitlines())

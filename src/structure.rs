@@ -426,20 +426,6 @@ END                                                                             
     }
 
     #[test]
-    fn removes_zero_occupancy_only_when_requested_by_callers() {
-        let root = env!("CARGO_MANIFEST_DIR");
-        let path = format!("{}/{}", root, "test-data/1ubq.pdb");
-
-        let mut pdb = load_model(&path).unwrap().value;
-        let initial_atom_count = pdb.atom_count();
-
-        pdb.remove_atoms_by(|atom| atom.occupancy() == 0.0);
-        let final_atom_count = pdb.atom_count();
-
-        assert_eq!(initial_atom_count, final_atom_count);
-    }
-
-    #[test]
     fn terminal_caps_are_retained_as_surface_occluders() {
         let input =
             b"HETATM    1  CH3 ACE A   0       0.000   0.000   0.000  1.00 20.00           C  \n\
