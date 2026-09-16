@@ -92,11 +92,13 @@ Qualification and benchmark reports:
   threads and retained identical outputs. A synthetic 5,632-ring case reduced
   peak process RSS from about 249 MiB to 7 MiB. These are ring-classification
   measurements, not end-to-end contact-analysis speedups; details are in the
-  [cleanup audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md#ring-ring-enumeration-benchmark).
-- The [5B8C benchmark and cleanup audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md)
+  [contact benchmarks](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/contacts.md#ring-ring-enumeration-benchmark).
+- The [5B8C benchmark](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/contacts.md#5b8c-contacts-lazy-versus-eager-ndjson)
   records essentially unchanged contact generation (+0.8–1.2%) and unchanged
   or faster NDJSON loading on a 2,574-row contacts table after removing the
   lazy engine. These measurements do not establish performance for all inputs.
+  [Package-size measurements](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/package-size.md)
+  record the dependency reduction and archive checks.
 
 ## [0.9.1] - 2026-09-02
 

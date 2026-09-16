@@ -109,3 +109,11 @@ with storing fit and score arrays independently, union storage saves
 overlapping selections, and zero for disjoint selections. These payload figures
 cover only coordinates; observed RSS also includes structure parsing, atom
 identities, the packed pair matrix, allocation overhead, and clustering.
+
+## Memory-guard validation
+
+Regression tests cover the smaller of host/cgroup available memory and the
+80% acceptance boundary. End-to-end exhaustion under a nested Linux cgroup
+has not been exercised; the timings above do not validate that behavior.
+See the [memory policy](https://github.com/y1zhou/arpeggia/blob/master/docs/structure-comparison.md#memory-and-threads)
+for estimates, exclusions and the explicit bypass.

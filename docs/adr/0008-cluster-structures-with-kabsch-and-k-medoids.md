@@ -141,8 +141,9 @@ caches use no-clobber creation.
 
 Readers project required columns and reject wrong-size caches before complete
 table materialization. The original lazy NDJSON reader was replaced by an eager
-reader with a bounded row-count preflight after the
-[v0.9.2 cleanup size and performance audit](https://github.com/y1zhou/arpeggia/blob/master/docs/research/v0.9.2-cleanup-audit.md).
+reader with a bounded row-count preflight after measuring the
+[package-size reduction](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/package-size.md)
+and [NDJSON performance](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/contacts.md#5b8c-contacts-lazy-versus-eager-ndjson).
 CSV and Parquet use eager readers. XLSX remains excluded because it adds unrelated
 reader/writer dependencies.
 

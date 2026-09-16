@@ -61,6 +61,11 @@ process overhead observed here. See
 [PyO3 parallelism](https://pyo3.rs/v0.29.0/parallelism.html) and
 [Python's process-pool requirements](https://docs.python.org/3.13/library/concurrent.futures.html#processpoolexecutor).
 
+On the same 30-input panel, imputation provenance lists contained 1–5 V reference
+IDs and 1–4 J reference IDs, with no duplicates observed. These are measured
+sizes, not API limits. Sorting and deduplicating once per segment retains
+deterministic output; a hash set would still require sorting.
+
 ## Versions and settings
 
 | Engine | Tested version | Configuration |
