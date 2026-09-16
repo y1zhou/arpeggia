@@ -52,6 +52,9 @@ Arm64 Linux and macOS. Download the CLI from
 
 ## Usage
 
+See [Python and CLI examples](https://github.com/y1zhou/arpeggia/blob/master/docs/examples.md)
+for chain-group syntax, surface options, table output and reusable RMSD calculations.
+
 ### Python API
 
 ```python

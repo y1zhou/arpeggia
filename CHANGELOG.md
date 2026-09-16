@@ -9,101 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `number_antibody()` / `number-antibody` provide antibody variable-domain numbering with IMGT, Chothia, Martin, AHo and Kabat,
-  explicit CDR conventions, residue/input correspondence, and guards for weak
-  matches, severe truncations, multiple domains and unsupported insertions.
-  Partial domains must span the IMGT 23–118 framework-anchor interval to retain
-  context for alignment, numbering and CDR conversion.
-  Inputs outside 30–10,000 residues fail before sequence encoding.
-  Python position labels compare and hash by number and insertion code for
-  residue/column lookup; CLI diagnostics escape control characters in input names.
-- Offline human, mouse, alpaca, llama, rat and rabbit V/J germline similarities, with explicit
-  species restrictions, known-residue coverage, tied gene/allele references,
-  and attributed IMGT release 202636-7 data plus a separate llama protein-display
-  supplement (six V and five J references). CLI and Python accept common and
-  Latin species names with identical reference coverage.
-  `match_germlines=False` /
-  `--no-germlines` skip matching without changing numbering or CDRs; matching
-  remains enabled by default.
-  `germlines_searched` distinguishes skipped searches from absent matches;
-  skipped results display only input annotations and require matching before
-  imputation. The main README carries germline attribution and links full provenance.
-- Explicit terminal FR1/FR4 imputation returns a new numbered antibody and
-  preserves original input indices and reference provenance. Tied references
-  must agree, with optional explicit reference selection; internal gaps, CDRs
-  and unknown input residues remain unchanged. Uncovered reference endpoints
-  produce explicit coverage diagnostics.
-- `align_antibodies()` / `align-antibodies` return `AntibodyAlignment` objects
-  for one or more numbered antibodies through the ordered
-  union of positions, preserving input row order and per-row CDR definitions.
-  Heavy/light mixing and incompatible schemes fail; K/L mixtures are supported.
-- Antibody displays place combined V/J references above the input query, with separate
-  gene labels, gray uncovered junctions and blank outer padding. Operations describe
-  the input relative to the germline: insertions are + and deletions are -. Per-sequence
-  rulers preserve original input coordinates through imputation; shared
-  CDR bands span the marker, ruler and sequence rows, and yellow backgrounds identify
-  imputed residues. Counts appear only after explicit imputation, including
-  attempts that add zero residues; results retain `imputation_attempted`.
-  Germline rulers count continuously through
-  V then J, with one space before the endpoint and two before the J gene label.
-  Summaries provide colored CDR legends and list additional tied V/J gene/allele
-  names, omitting the displayed assignment and hiding empty tie lists.
-  Multi-antibody views show the selected reference first and hide
-  germlines, with wrapping and color/ruler controls.
-- Pairwise protein sequence alignment through Rust/Python `align_seqs` and CLI
-  `align-seqs`: global, local, and query-full semi-global modes with BLOSUM62
-  and configurable affine gap costs with hundredth precision and a 0.01 minimum.
-  `SeqAlignment` includes gapped strings,
-  operations, input spans, identity/coverage ratios, gap statistics, and full-input
-  edit distance.
-- Shared CLI/Python alignment displays with blue `:` markers for positive-score
-  substitutions, colored edits and clipped tails,
-  custom sequence names, terminal-width wrapping, position rulers, and
-  width/color/ruler controls.
-- Optional observed-sequence correspondence before two-structure RMSD, with
-  reference-based selections, explicit chain maps or unique maximum-score
-  inference, and diagnostics for omitted atoms.
-  Indistinguishable reference chains require explicit mapping before pairwise scoring.
-- Optional atom-wise rejection and refitting. Final evaluation retains all mapped
-  selected pairs, including rejected fitting pairs. Unchanged fitting sets retain
-  their core RMSD; degenerate surviving fits fail.
+- Pairwise protein sequence alignment with global, local and semi-global modes,
+  alignment statistics and styled displays. See the
+  [sequence-alignment guide](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md).
+- Antibody numbering with IMGT, Chothia, Martin, AHo and Kabat; explicit CDR
+  conventions, offline V/J matching for six species, terminal imputation and
+  numbered-position alignments. See the
+  [antibody guide](https://github.com/y1zhou/arpeggia/blob/master/docs/antibody-numbering.md)
+  for conventions, species coverage and parallel Python usage.
+- Optional sequence correspondence and rejection/refitting for two-structure
+  RMSD. See the
+  [RMSD guide](https://github.com/y1zhou/arpeggia/blob/master/docs/sequence-alignment.md#establish-structural-correspondence).
 
 ### Changed
 
-- Clarified bundled species handling and Python thread-pool usage for antibody numbering.
-- Grouped RMSD selection, fitting, correspondence, and pairwise calculations
-  under one module, and sequence alignment with its matrix data and display.
-  Existing crate-root exports and inline unit-test organization are preserved.
-- Python `rmsd()` returns a read-only `RmsdResult` instead of a scalar; use `.rmsd`
-  for full evaluation RMSD and `.core_rmsd` for retained fitting pairs. Rust
-  `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`. CLI RMSD
-  output reports details by default and supports structured `--json` output.
-- Python sequence and antibody displays share `__repr__` through Python's
-  standard `str()` fallback, with `.format()` for explicit display controls.
-- Python structural and antibody diagnostics share warning emission, preserving
-  `UserWarning` filters and reporting only newly added imputation diagnostics.
-- Expanded CLI help and Google-style Python/IDE docstrings with reference
-  selection syntax, independent defaults, units, result semantics, and examples.
-  Probe-radius guidance explains crevice access and how SASA changes depend on
-  the structure. Consolidated structure-comparison usage in a dedicated guide,
-  linked repository files through GitHub for installed-package users, and
-  clarified Python/CLI names in README. Removed duplicated setup and completed
-  workplans, kept accepted contracts in ADRs, and retained research evidence and
-  dated benchmark results. Removed the redundant QUICKSTART guide, retaining
-  contact-table recipes in Scientific Conventions and surface examples in README.
-  Recipes preserve complete residue identities and use current Polars APIs;
-  removed uncited SAP/SC interpretation thresholds.
+- **Breaking:** Python `rmsd()` returns `RmsdResult` instead of a scalar; use
+  `.rmsd` for full evaluation or `.core_rmsd` for retained fitting atoms.
+  Rust `get_rmsd` accepts `RmsdOptions` and returns `Analysis<RmsdResult>`.
+  CLI RMSD supports detailed text and JSON output.
+- Expanded CLI help and Python docstrings; consolidated documentation and
+  restored detailed [Python/CLI examples](https://github.com/y1zhou/arpeggia/blob/master/docs/examples.md).
+- Bundled germline attribution appears in the README, linking the
+  [source credits and provenance](https://github.com/y1zhou/arpeggia/blob/master/data/germlines/README.md).
 
-### Validation
-
-- Compared Immunum, RIOT and AntPack on 26,365 protein inputs, separating fixture
-  agreement from independent accuracy. Qualified antibody recognition,
-  conversion, imputation and display, and measured reference expansion and
-  optional germline matching; see the
-  [antibody qualification report](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md).
-- Qualified Hyalite against 2,745 Biopython reference cases and checked structural
-  correspondence, refinement, and terminal displays. See the
-  [alignment validation and benchmarks](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md).
+Qualification and benchmark reports:
+[sequence alignment](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/sequence-alignment.md),
+[antibody numbering](https://github.com/y1zhou/arpeggia/blob/master/docs/benchmarks/antibody-numbering.md).
 
 ## [0.9.2] - 2026-09-08
 
