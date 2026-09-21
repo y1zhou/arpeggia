@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "arpeggia"
-version = "0.10.0"
+version = "0.10.1"
 source = { editable = "." }
 dependencies = [
     { name = "polars" },
@@ -20,7 +20,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.14" },
-    { name = "polars", specifier = "==1.38.1" },
+    { name = "polars", specifier = ">=1.44.2,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "ty", marker = "extra == 'dev'", specifier = "==0.0.70" },
 ]
@@ -100,7 +100,7 @@ wheels = [
 
 [[package]]
 name = "polars"
-version = "1.38.1"
+version = "1.44.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "polars-runtime-32" },
