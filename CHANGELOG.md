@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Allowed Python Polars 2.x (`polars>=1.44.2,<3`); the Rust crate is unchanged
+  since Rust Polars 0.55.2 already interoperates with Python Polars 2.0 and 2.1
+
+### Fixed
+
+- Regenerated a malformed `uv.lock` polars entry
+- Removed `core::f64` module imports that resolved `f64::NAN` to a deprecated
+  constant and broke the Rust build on current stable
+
 ## [0.10.1] - 2026-09.21
 
 ### Changed

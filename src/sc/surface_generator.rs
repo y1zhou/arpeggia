@@ -1,7 +1,6 @@
 //! Connolly molecular surface generator for SC calculations.
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
-use core::f64;
 use std::f64::consts::PI;
 use std::fmt;
 
