@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Regenerated a malformed `uv.lock` polars entry
+- Removed `core::f64` module imports that resolved `f64::NAN` to a deprecated
+  constant and broke the Rust build on current stable
 
 ## [0.10.1] - 2026-09.21
 
