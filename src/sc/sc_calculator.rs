@@ -1,7 +1,6 @@
 //! SC Calculator wrapping `SurfaceGenerator` with trimming and SC score calculation.
 //! Ported from <https://github.com/cytokineking/sc-rs>
 
-use core::f64;
 use std::collections::HashSet;
 
 use super::surface_generator::{SurfaceCalculatorError, SurfaceGenerator};
