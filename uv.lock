@@ -8,7 +8,7 @@ resolution-markers = [
 
 [[package]]
 name = "arpeggia"
-version = "0.10.1"
+version = "0.10.2"
 source = { editable = "." }
 dependencies = [
     { name = "polars", version = "2.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
